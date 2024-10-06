@@ -52,12 +52,6 @@ func (e *Endpoint) GetURL() string {
 	return e.URL
 }
 
-// func (e *Endpoint) ApplyAuth(req *http.Request) {
-// 	if e.Auth != nil {
-// 		e.Auth.Apply(req)
-// 	}
-// }
-
 func (e *Endpoint) Do(req *http.Request) []byte {
 	e.Auth.Apply(req)
 	resp, err := e.Gateway.Do(req)
@@ -71,18 +65,18 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 }
 
 type BasicAuth struct {
-	AuthMethod
+	// AuthMethod
 	Username string
 	Password string
 }
 
 type BearerAuth struct {
-	AuthMethod
+	// AuthMethod
 	Token string
 }
 
 type KeyAuth struct {
-	AuthMethod
+	// AuthMethod
 	Token string
 }
 

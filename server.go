@@ -49,5 +49,12 @@ func NewServer(id string, address string) *Server {
 		},
 	}
 	svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)
+	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
 	return svr
+}
+
+func (s *Server) addStat(key string, value float64) {
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.Stats[key] += value
 }
