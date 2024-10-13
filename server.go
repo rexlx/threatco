@@ -6,21 +6,25 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"go.etcd.io/bbolt"
 )
 
 var (
-	mispUrl = flag.String("misp-url", "https://misp:443", "MISP URL")
-	mispKey = flag.String("misp-key", "gGY5eIkAUOk917UHpU8XuaLbHhpJEkjH2TicUyoB", "MISP API key")
+	mispUrl    = flag.String("misp-url", "https://misp:443", "MISP URL")
+	mispKey    = flag.String("misp-key", "", "MISP API key")
+	dbLocation = flag.String("db", "insights.db", "Database location")
+	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
 type Server struct {
-	RequestCh chan *http.Request   `json:"-"`
-	Gateway   *http.ServeMux       `json:"-"`
-	Log       *log.Logger          `json:"-"`
-	Memory    *sync.RWMutex        `json:"-"`
-	Targets   map[string]*Endpoint `json:"targets"`
-	ID        string               `json:"id"`
-	Details   Details              `json:"details"`
+	DB      *bbolt.DB            `json:"-"`
+	Gateway *http.ServeMux       `json:"-"`
+	Log     *log.Logger          `json:"-"`
+	Memory  *sync.RWMutex        `json:"-"`
+	Targets map[string]*Endpoint `json:"targets"`
+	ID      string               `json:"id"`
+	Details Details              `json:"details"`
 }
 
 type Details struct {
@@ -29,26 +33,31 @@ type Details struct {
 	Stats     map[string]float64 `json:"stats"`
 }
 
-func NewServer(id string, address string) *Server {
-	reqch := make(chan *http.Request, 100)
+func NewServer(id string, address string, dbLocation string) *Server {
+	db, err := bbolt.Open(dbLocation, 0600, nil)
+	if err != nil {
+		log.Fatalf("could not open database: %v", err)
+	}
 	targets := make(map[string]*Endpoint)
 	memory := &sync.RWMutex{}
 	logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	svr := &Server{
-		RequestCh: reqch,
-		Gateway:   gateway,
-		Log:       logger,
-		Memory:    memory,
-		Targets:   targets,
-		ID:        id,
+		DB:      db,
+		Gateway: gateway,
+		Log:     logger,
+		Memory:  memory,
+		Targets: targets,
+		ID:      id,
 		Details: Details{
 			Address:   address,
 			StartTime: time.Now(),
 			Stats:     make(map[string]float64),
 		},
 	}
-	svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)
+	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)
+	svr.Gateway.Handle("/pipe", http.HandlerFunc(svr.ValidateToken(svr.ProxyHandler)))
+	svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
 	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
 	return svr
 }

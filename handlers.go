@@ -8,51 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rexlx/threatco/vendors"
 )
-
-type ProxyRequest struct {
-	To    string `json:"to"`
-	Route string `json:"route"`
-	Type  string `json:"type"`
-	Value string `json:"value"`
-}
-
-type GenericOut struct {
-	Value string `json:"value"`
-	Type  string `json:"type"`
-}
-
-type SummarizedEvent struct {
-	ID            string `json:"id"`
-	AttrCount     int    `json:"attr_count"`
-	Link          string `json:"link"`
-	ThreatLevelID string `json:"threat_level_id"`
-}
-
-type AttributeRequest struct {
-	Value   string `json:"value"`
-	Type    string `json:"type"`
-	EventID string `json:"event_id"`
-}
-type AddAttrSchema struct {
-	EventID        string `json:"event_id"`
-	ObjectID       string `json:"object_id"`
-	ObjectRelation string `json:"object_relation"`
-	Category       string `json:"category"`
-	Type           string `json:"type"`
-	Value          string `json:"value"`
-	ToIDS          bool   `json:"to_ids"`
-	UUID           string `json:"uuid"`
-	Timestamp      string `json:"timestamp"`
-	Distribution   string `json:"distribution"`
-	SharingGroupID string `json:"sharing_group_id"`
-	Comment        string `json:"comment"`
-	Deleted        bool   `json:"deleted"`
-	DisableCorr    bool   `json:"disable_correlation"`
-	FirstSeen      string `json:"first_seen"`
-	LastSeen       string `json:"last_seen"`
-}
 
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_event_requests", 1)
@@ -110,90 +66,120 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("add_user_requests", 1)
+	defer func(start time.Time) {
+		fmt.Println("AddUserHandler took", time.Since(start))
+	}(time.Now())
+	var nur NewUserRequest
+	err := json.NewDecoder(r.Body).Decode(&nur)
+	if err != nil {
+		fmt.Println("error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if nur.Email == "" {
+		fmt.Println("error", err)
+		http.Error(w, "missing 'email' field", http.StatusBadRequest)
+		return
+	}
+	user, err := NewUser(nur.Email, nur.Admin)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = s.AddUser(*user)
+	if err != nil {
+		fmt.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out, err := json.Marshal(user)
+	if err != nil {
+		fmt.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("called")
 	defer s.addStat("proxy_requests", 1)
 	defer func(start time.Time) {
 		fmt.Println("ProxyHandler took", time.Since(start))
 	}(time.Now())
+
 	var req ProxyRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if req.To == "" {
-		http.Error(w, "missing 'to' field", http.StatusBadRequest)
-		return
-	}
-	var output GenericOut
-	output.Type = req.Type
-	output.Value = req.Value
-	out, err := json.Marshal(output)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
-	ep, ok := s.Targets[req.To]
-	if !ok {
-		http.Error(w, "endpoint not found", http.StatusNotFound)
-		return
-	}
-	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
-	go s.addStat(url, float64(len(out)))
-	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	resp := ep.Do(request)
-	var response vendors.Response
-	err = json.Unmarshal(resp, &response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if len(response.Response) != 0 {
-		if len(response.Response) > 1 {
-			sum := SummarizedEvent{}
-			sum.ID = "multiple"
-			sum.AttrCount = len(response.Response)
-			sum.Link = fmt.Sprintf("%s/events/index", s.Details.Address)
-			sum.ThreatLevelID = "0"
-			resp, err = json.Marshal(sum)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		} else {
-			sum := SummarizedEvent{}
-			sum.ID = response.Response[0].Event.ID
-			sum.AttrCount = len(response.Response[0].Event.Attribute)
-			sum.Link = fmt.Sprintf("%s/events/view/%s", s.Details.Address, sum.ID)
-			sum.ThreatLevelID = response.Response[0].Event.ThreatLevelID
-			resp, err = json.Marshal(sum)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-	} else {
-		sum := SummarizedEvent{}
-		sum.ID = "none"
-		sum.AttrCount = 0
-		sum.Link = "none"
-		sum.ThreatLevelID = "0"
-		resp, err = json.Marshal(sum)
+	switch req.To {
+	case "misp":
+		resp, err := s.Misphelper(req)
 		if err != nil {
+			fmt.Println("bigtime error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Write(resp)
+	default:
+		http.Error(w, "unknown target", http.StatusNotFound)
+		return
 	}
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1
-	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0
-	w.Header().Set("Expires", "0")
-	w.Write(resp)
+
+}
+
+type NewUserRequest struct {
+	Email string `json:"email"`
+	Admin bool   `json:"admin"`
+}
+
+type ProxyRequest struct {
+	To    string `json:"to"`
+	Route string `json:"route"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
+	From  string `json:"from"`
+}
+
+type GenericOut struct {
+	Value string `json:"value"`
+	Type  string `json:"type"`
+}
+
+type SummarizedEvent struct {
+	Background    string `json:"background"`
+	From          string `json:"from"`
+	ID            string `json:"id"`
+	AttrCount     int    `json:"attr_count"`
+	Link          string `json:"link"`
+	ThreatLevelID string `json:"threat_level_id"`
+	Value         string `json:"value"`
+}
+
+type AttributeRequest struct {
+	Value   string `json:"value"`
+	Type    string `json:"type"`
+	EventID string `json:"event_id"`
+}
+type AddAttrSchema struct {
+	EventID        string `json:"event_id"`
+	ObjectID       string `json:"object_id"`
+	ObjectRelation string `json:"object_relation"`
+	Category       string `json:"category"`
+	Type           string `json:"type"`
+	Value          string `json:"value"`
+	ToIDS          bool   `json:"to_ids"`
+	UUID           string `json:"uuid"`
+	Timestamp      string `json:"timestamp"`
+	Distribution   string `json:"distribution"`
+	SharingGroupID string `json:"sharing_group_id"`
+	Comment        string `json:"comment"`
+	Deleted        bool   `json:"deleted"`
+	DisableCorr    bool   `json:"disable_correlation"`
+	FirstSeen      string `json:"first_seen"`
+	LastSeen       string `json:"last_seen"`
 }

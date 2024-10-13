@@ -12,10 +12,10 @@ import (
 
 func main() {
 	flag.Parse()
-	s := NewServer("1", ":8080")
+	s := NewServer("1", ":8080", *dbLocation)
 
 	bear := KeyAuth{Token: *mispKey}
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(150 * time.Second)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	misp := NewEndpoint(*mispUrl, &bear, true)
