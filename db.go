@@ -27,20 +27,6 @@ func (s *Server) GetUserByEmail(email string) (User, error) {
 	return user, err
 }
 
-// func (s *Server) AddUser(user User) error {
-// 	// s.Memory.Lock()
-// 	// defer s.Memory.Unlock()
-// 	// s.Details.Stats["user_adds"]++
-// 	return s.DB.Update(func(tx *bbolt.Tx) error {
-// 		b := tx.Bucket([]byte("users"))
-// 		v, err := user.MarshalJSON()
-// 		if err != nil {
-// 			return err
-// 		}
-// 		return b.Put([]byte(user.Email), v)
-// 	})
-// }
-
 func (s *Server) AddUser(u User) error {
 	fmt.Println("AddUser", u)
 	u.Updated = time.Now()

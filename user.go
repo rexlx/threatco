@@ -48,17 +48,8 @@ func NewUser(email string, admin bool) (*User, error) {
 		Selected: make(map[string]int),
 		Admin:    admin,
 	}
-	fmt.Println("NewUser--------------------------------------------------------------", u)
 	return u, nil
 }
-
-// func (u *User) MarshalJSON() ([]byte, error) {
-// 	return json.Marshal(u)
-// }
-
-// func (u *User) UnmarshalJSON(data []byte) error {
-// 	return json.Unmarshal(data, u)
-// }
 
 func (u *User) MarshalBinary() ([]byte, error) {
 	return json.Marshal(u)

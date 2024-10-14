@@ -20,6 +20,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte,
 				attrs = 0
 			}
 			return json.Marshal(SummarizedEvent{
+				Info:          "received multiple hits for the given value",
 				Background:    "has-background-primary-dark",
 				From:          req.To,
 				ID:            "multiple hits",
@@ -40,11 +41,13 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte,
 				AttrCount:     attrs,
 				ThreatLevelID: response[0].ThreatLevelID,
 				Value:         req.Value,
+				Info:          response[0].Info,
 			})
 		}
 	}
 	return json.Marshal(SummarizedEvent{
 		Background:    "has-background-warning",
+		Info:          "no hits for the given value",
 		From:          req.To,
 		ID:            "no hits",
 		AttrCount:     0,
@@ -54,10 +57,10 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte,
 }
 
 func ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]byte, error) {
-	// fmt.Println("ParseCorrectMispResponse")
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
 			return json.Marshal(SummarizedEvent{
+				Info:          "received multiple hits for the given value",
 				Background:    "has-background-primary-dark",
 				From:          req.To,
 				ID:            "multiple",
@@ -68,6 +71,7 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]by
 		} else {
 			return json.Marshal(SummarizedEvent{
 				Background:    "has-background-primary-dark",
+				Info:          response.Response[0].Event.Info,
 				From:          req.To,
 				ID:            response.Response[0].Event.ID,
 				Value:         req.Value,
@@ -78,12 +82,14 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]by
 	}
 	return json.Marshal(SummarizedEvent{
 		Background: "has-background-warning",
+		Info:       "no hits for the given value",
 		From:       req.To,
 		ID:         "no hits",
+		Value:      req.Value,
 	})
 }
 
-func (s *Server) Misphelper(req ProxyRequest) ([]byte, error) {
+func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	var output GenericOut
 	output.Type = req.Type
 	output.Value = req.Value
@@ -112,7 +118,6 @@ func (s *Server) Misphelper(req ProxyRequest) ([]byte, error) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	resp := ep.Do(request)
-	// fmt.Println(string(resp))
 
 	var response vendors.Response
 	err = json.Unmarshal(resp, &response)
@@ -120,14 +125,12 @@ func (s *Server) Misphelper(req ProxyRequest) ([]byte, error) {
 	if err != nil {
 		var e []vendors.Event
 		err := json.Unmarshal(resp, &e)
-
 		if err != nil {
 			fmt.Println("couldnt unmarshal response into vendors.Response or []vendors.Event")
 			return nil, err
 		}
 
 		resp, err = ParseOtherMispResponse(req, e)
-
 		if err != nil {
 			fmt.Println(err)
 			return nil, err
@@ -136,7 +139,7 @@ func (s *Server) Misphelper(req ProxyRequest) ([]byte, error) {
 	}
 	resp, err = ParseCorrectMispResponse(req, response)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("no hits", err)
 		badNews := SummarizedEvent{
 			Background: "has-background-warning",
 			From:       req.To,
@@ -148,4 +151,8 @@ func (s *Server) Misphelper(req ProxyRequest) ([]byte, error) {
 	return resp, nil
 }
 
-//
+func DeepMapCopy(x, y map[string]float64) {
+	for k, v := range x {
+		y[k] = v
+	}
+}

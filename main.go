@@ -25,9 +25,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				s.Memory.RLock()
-				s.Log.Printf("Stats: %v\n", s.Details.Stats)
-				s.Memory.RUnlock()
+				s.updateCache()
 			case <-sigs:
 				s.Log.Println("Shutting down")
 				ticker.Stop()

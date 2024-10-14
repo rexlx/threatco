@@ -66,6 +66,22 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	// defer s.addStat("get_stat_history_requests", 1)
+	defer func(start time.Time) {
+		fmt.Println("GetStatHistoryHandler took", time.Since(start))
+	}(time.Now())
+	s.Memory.RLock()
+	out, err := json.Marshal(s.Cache)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.Memory.RUnlock()
+		return
+	}
+	s.Memory.RUnlock()
+	w.Write(out)
+}
+
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_user_requests", 1)
 	defer func(start time.Time) {
@@ -115,10 +131,9 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	switch req.To {
 	case "misp":
-		resp, err := s.Misphelper(req)
+		resp, err := s.MispHelper(req)
 		if err != nil {
 			fmt.Println("bigtime error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -129,7 +144,6 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown target", http.StatusNotFound)
 		return
 	}
-
 }
 
 type NewUserRequest struct {
@@ -151,6 +165,7 @@ type GenericOut struct {
 }
 
 type SummarizedEvent struct {
+	Error         bool   `json:"error"`
 	Background    string `json:"background"`
 	From          string `json:"from"`
 	ID            string `json:"id"`
@@ -158,6 +173,7 @@ type SummarizedEvent struct {
 	Link          string `json:"link"`
 	ThreatLevelID string `json:"threat_level_id"`
 	Value         string `json:"value"`
+	Info          string `json:"info"`
 }
 
 type AttributeRequest struct {

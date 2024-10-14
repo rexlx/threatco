@@ -7,11 +7,9 @@ import (
 
 func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// fmt.Println("ValidateToken")
 		token := r.Header.Get("Authorization")
 		parts := strings.Split(token, ":")
 		if token == "" || len(parts) != 2 {
-			// fmt.Println("Token is missing, malformed, or you are stupid.", token)
 			http.Error(w, "Token is missing, malformed, or you are stupid.", http.StatusUnauthorized)
 			return
 		}
