@@ -3,7 +3,13 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type AuthMethod interface {
@@ -11,14 +17,23 @@ type AuthMethod interface {
 }
 
 type Endpoint struct {
-	Auth    AuthMethod   `json:"-"`
-	Path    string       `json:"path"`
-	URL     string       `json:"url"`
-	Key     string       `json:"key"`
-	Gateway *http.Client `json:"-"`
+	Memory      *sync.RWMutex     `json:"-"`
+	RespCH      chan ResponseItem `json:"-"`
+	RateMark    time.Time         `json:"-"`
+	RateLimited bool              `json:"-"`
+	InFlight    int               `json:"-"`
+	MaxRequests int               `json:"-"`
+	RefillRate  time.Duration     `json:"-"`
+	Backlog     []*http.Request   `json:"-"`
+	Auth        AuthMethod        `json:"-"`
+	Path        string            `json:"path"`
+	URL         string            `json:"url"`
+	Key         string            `json:"key"`
+	Gateway     *http.Client      `json:"-"`
 }
 
-func NewEndpoint(url string, auth AuthMethod, insecure bool) *Endpoint {
+func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem) *Endpoint {
+	mem := &sync.RWMutex{}
 	if insecure {
 		client := &http.Client{
 			Transport: &http.Transport{
@@ -26,6 +41,8 @@ func NewEndpoint(url string, auth AuthMethod, insecure bool) *Endpoint {
 			},
 		}
 		return &Endpoint{
+			Memory:  mem,
+			RespCH:  respch,
 			URL:     url,
 			Gateway: client,
 			Auth:    auth,
@@ -33,6 +50,8 @@ func NewEndpoint(url string, auth AuthMethod, insecure bool) *Endpoint {
 	} else {
 		client := &http.Client{}
 		return &Endpoint{
+			Memory:  mem,
+			RespCH:  respch,
 			URL:     url,
 			Gateway: client,
 			Auth:    auth,
@@ -54,6 +73,33 @@ func (e *Endpoint) GetURL() string {
 
 func (e *Endpoint) Do(req *http.Request) []byte {
 	e.Auth.Apply(req)
+	if e.RateLimited {
+		uid := uuid.New().String()
+		if e.InFlight >= e.MaxRequests {
+			if e.RateMark.IsZero() || time.Since(e.RateMark) > e.RefillRate {
+				e.RateMark = time.Now()
+			}
+			e.Backlog = append(e.Backlog, req)
+			sumOut := SummarizedEvent{
+				ID:            uid,
+				Background:    "has-background-info",
+				Info:          "Request backlogged due to a rate limit",
+				ThreatLevelID: "0",
+				Link:          "coming soon!",
+			}
+			out, err := json.Marshal(sumOut)
+			if err != nil {
+				fmt.Println("ERROR", e, err)
+				return []byte(err.Error())
+			}
+			return []byte(out)
+		}
+		e.InFlight++
+		defer func() {
+			e.InFlight--
+			e.ProcessQueue(uid)
+		}()
+	}
 	resp, err := e.Gateway.Do(req)
 	if err != nil {
 		return []byte(err.Error())
@@ -62,6 +108,26 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
 	return buf.Bytes()
+}
+
+func (e *Endpoint) ProcessQueue(id string) {
+	if len(e.Backlog) == 0 {
+		return
+	}
+	if time.Since(e.RateMark) > e.RefillRate {
+		req := e.Backlog[0]
+		e.Backlog = e.Backlog[1:]
+		go func() {
+			res := e.Do(req)
+			ri := ResponseItem{
+				ID:   id,
+				Time: time.Now(),
+				Data: res,
+			}
+			e.RespCH <- ri
+		}()
+	}
+
 }
 
 type BasicAuth struct {

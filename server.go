@@ -18,6 +18,7 @@ var (
 )
 
 type Server struct {
+	RespCh  chan ResponseItem    `json:"-"`
 	Cache   *Cache               `json:"-"`
 	DB      *bbolt.DB            `json:"-"`
 	Gateway *http.ServeMux       `json:"-"`
@@ -35,11 +36,18 @@ type Details struct {
 }
 
 type Cache struct {
-	StatsHistory []StatItem `json:"stats_history"`
+	StatsHistory []StatItem              `json:"stats_history"`
+	Responses    map[string]ResponseItem `json:"responses"`
 }
 type StatItem struct {
 	Time int64              `json:"time"`
 	Data map[string]float64 `json:"data"`
+}
+
+type ResponseItem struct {
+	ID   string    `json:"id"`
+	Time time.Time `json:"time"`
+	Data []byte    `json:"data"`
 }
 
 func NewServer(id string, address string, dbLocation string) *Server {
@@ -54,7 +62,9 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	cache := &Cache{
 		StatsHistory: make([]StatItem, 0),
 	}
+	resch := make(chan ResponseItem, 200)
 	svr := &Server{
+		RespCh:  resch,
 		Cache:   cache,
 		DB:      db,
 		Gateway: gateway,
@@ -99,4 +109,23 @@ func (s *Server) updateCache() {
 	// set the size limit of the cache here by removing the oldest item if
 	// the length is greater than whatever you set
 	s.Cache.StatsHistory = append(s.Cache.StatsHistory, stat)
+}
+
+func (s *Server) ProcessTransientResponses() {
+	ticker := time.NewTicker(1 * time.Hour)
+	for {
+		select {
+		case resp := <-s.RespCh:
+			s.Memory.Lock()
+			s.Cache.Responses[resp.ID] = resp
+			s.Memory.Unlock()
+		case <-ticker.C:
+			s.Memory.Lock()
+			for k, v := range s.Cache.Responses {
+				if time.Since(v.Time) > 24*time.Hour {
+					delete(s.Cache.Responses, k)
+				}
+			}
+		}
+	}
 }

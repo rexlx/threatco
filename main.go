@@ -18,7 +18,7 @@ func main() {
 	ticker := time.NewTicker(150 * time.Second)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	misp := NewEndpoint(*mispUrl, &bear, true)
+	misp := NewEndpoint(*mispUrl, &bear, true, s.RespCh)
 	s.Targets["misp"] = misp
 
 	go func() {
@@ -38,6 +38,7 @@ func main() {
 		Addr:    s.Details.Address,
 		Handler: s.Gateway,
 	}
+	go s.ProcessTransientResponses()
 	s.Log.Printf("Server started at %s", s.Details.Address)
 	log.Fatal(svr.ListenAndServe())
 }

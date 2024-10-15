@@ -72,7 +72,7 @@ func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("GetStatHistoryHandler took", time.Since(start))
 	}(time.Now())
 	s.Memory.RLock()
-	out, err := json.Marshal(s.Cache)
+	out, err := json.Marshal(s.Cache.StatsHistory)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		s.Memory.RUnlock()
