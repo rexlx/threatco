@@ -141,8 +141,21 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(resp)
 	default:
-		http.Error(w, "unknown target", http.StatusNotFound)
-		return
+		sumOut := SummarizedEvent{
+			From:          req.To,
+			Error:         true,
+			Background:    "has-background-danger",
+			Info:          fmt.Sprintf("unknown target %s", req.To),
+			ThreatLevelID: "0",
+			Value:         req.Value,
+			ID:            "unknown target",
+		}
+		out, err := json.Marshal(sumOut)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(out)
 	}
 }
 
