@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type AuthMethod interface {
@@ -74,19 +72,22 @@ func (e *Endpoint) GetURL() string {
 func (e *Endpoint) Do(req *http.Request) []byte {
 	e.Auth.Apply(req)
 	if e.RateLimited {
-		uid := uuid.New().String()
+		// uid := uuid.New().String()
 		if e.InFlight >= e.MaxRequests {
-			if e.RateMark.IsZero() || time.Since(e.RateMark) > e.RefillRate {
-				e.Memory.Lock()
-				if time.Since(e.RateMark) > e.RefillRate {
-					e.InFlight = 0
-				}
+			e.Memory.Lock()
+			if e.RateMark.IsZero() {
 				e.RateMark = time.Now()
-				e.Memory.Unlock()
+			}
+			// log.Println("--------------------------------------------Rate limited")
+			if time.Since(e.RateMark) > e.RefillRate {
+				// log.Println("--------------------------------------------Refilling")
+				e.InFlight = 0
+				e.RateMark = time.Now()
 			}
 			e.Backlog = append(e.Backlog, req)
+			e.Memory.Unlock()
 			sumOut := SummarizedEvent{
-				ID:            uid,
+				ID:            "0",
 				Background:    "has-background-info",
 				Info:          "Request backlogged due to a rate limit",
 				ThreatLevelID: "0",
@@ -97,13 +98,13 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 				fmt.Println("ERROR", e, err)
 				return []byte(err.Error())
 			}
-			return []byte(out)
+			return out
 		}
 		e.InFlight++
-		defer func() {
-			// e.InFlight--
-			e.ProcessQueue(uid)
-		}()
+		// defer func() {
+		// 	// e.InFlight--
+		// 	e.ProcessQueue(uid)
+		// }()
 	}
 	resp, err := e.Gateway.Do(req)
 	if err != nil {
