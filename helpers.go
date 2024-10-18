@@ -27,7 +27,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 				AttrCount:     attrs,
 				ThreatLevelID: "0",
 				Value:         req.Value,
-				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
 			attrs, err := strconv.Atoi(response[0].AttributeCount)
@@ -43,7 +43,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 				ThreatLevelID: response[0].ThreatLevelID,
 				Value:         req.Value,
 				Info:          response[0].Info,
-				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
@@ -55,6 +55,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 		AttrCount:     0,
 		ThreatLevelID: "0",
 		Value:         req.Value,
+		Link:          req.TransactionID,
 	})
 }
 
@@ -69,7 +70,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 				Value:         req.Value,
 				AttrCount:     0,
 				ThreatLevelID: "1",
-				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
 			return json.Marshal(SummarizedEvent{
@@ -80,7 +81,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 				Value:         req.Value,
 				AttrCount:     len(response.Response[0].Event.Attribute),
 				ThreatLevelID: response.Response[0].Event.ThreatLevelID,
-				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
@@ -90,6 +91,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 		From:       req.To,
 		ID:         "no hits",
 		Value:      req.Value,
+		Link:       req.TransactionID,
 	})
 }
 
@@ -150,6 +152,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 			From:       req.To,
 			ID:         "no hits",
 			Value:      req.Value,
+			Link:       req.TransactionID,
 		}
 		return json.Marshal(badNews)
 	}

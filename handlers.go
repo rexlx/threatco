@@ -176,6 +176,27 @@ func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+type RawResponseRequest struct {
+	ID string `json:"id"`
+}
+
+func (s *Server) RawResponseHandler(w http.ResponseWriter, r *http.Request) {
+	var rr RawResponseRequest
+	err := json.NewDecoder(r.Body).Decode(&rr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	res, ok := s.Cache.Responses[rr.ID]
+	if !ok {
+		http.Error(w, "response not found", http.StatusNotFound)
+		return
+	}
+	w.Write(res.Data)
+}
+
 type NewUserRequest struct {
 	Email string `json:"email"`
 	Admin bool   `json:"admin"`
