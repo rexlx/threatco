@@ -19,6 +19,9 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	misp := NewEndpoint(*mispUrl, &bear, true, s.RespCh)
+	misp.RateLimited = true
+	misp.MaxRequests = 10
+	misp.RefillRate = 10 * time.Second
 	s.Targets["misp"] = misp
 
 	go func() {

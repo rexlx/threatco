@@ -77,7 +77,12 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 		uid := uuid.New().String()
 		if e.InFlight >= e.MaxRequests {
 			if e.RateMark.IsZero() || time.Since(e.RateMark) > e.RefillRate {
+				e.Memory.Lock()
+				if time.Since(e.RateMark) > e.RefillRate {
+					e.InFlight = 0
+				}
 				e.RateMark = time.Now()
+				e.Memory.Unlock()
 			}
 			e.Backlog = append(e.Backlog, req)
 			sumOut := SummarizedEvent{
@@ -96,7 +101,7 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 		}
 		e.InFlight++
 		defer func() {
-			e.InFlight--
+			// e.InFlight--
 			e.ProcessQueue(uid)
 		}()
 	}
@@ -111,23 +116,23 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 }
 
 func (e *Endpoint) ProcessQueue(id string) {
-	if len(e.Backlog) == 0 {
+	if len(e.Backlog) == 0 || e.InFlight >= e.MaxRequests {
 		return
 	}
-	if time.Since(e.RateMark) > e.RefillRate {
-		req := e.Backlog[0]
-		e.Backlog = e.Backlog[1:]
-		go func() {
-			res := e.Do(req)
-			ri := ResponseItem{
-				ID:   id,
-				Time: time.Now(),
-				Data: res,
-			}
-			e.RespCH <- ri
-		}()
-	}
-
+	e.Memory.Lock()
+	req := e.Backlog[0]
+	e.Backlog = e.Backlog[1:]
+	e.InFlight++
+	e.Memory.Unlock()
+	go func() {
+		res := e.Do(req)
+		ri := ResponseItem{
+			ID:   id,
+			Time: time.Now(),
+			Data: res,
+		}
+		e.RespCH <- ri
+	}()
 }
 
 type BasicAuth struct {

@@ -30,12 +30,15 @@ type Server struct {
 }
 
 type Details struct {
-	Address   string             `json:"address"`
-	StartTime time.Time          `json:"start_time"`
-	Stats     map[string]float64 `json:"stats"`
+	FQDN              string             `json:"fqdn"`
+	SupportedServices []ServiceType      `json:"supported_services"`
+	Address           string             `json:"address"`
+	StartTime         time.Time          `json:"start_time"`
+	Stats             map[string]float64 `json:"stats"`
 }
 
 type Cache struct {
+	Services     []ServiceType           `json:"services"`
 	StatsHistory []StatItem              `json:"stats_history"`
 	Responses    map[string]ResponseItem `json:"responses"`
 }
@@ -61,6 +64,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	gateway := http.NewServeMux()
 	cache := &Cache{
 		StatsHistory: make([]StatItem, 0),
+		Responses:    make(map[string]ResponseItem),
 	}
 	resch := make(chan ResponseItem, 200)
 	svr := &Server{
@@ -73,6 +77,12 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Targets: targets,
 		ID:      id,
 		Details: Details{
+			SupportedServices: []ServiceType{
+				{
+					Kind: "misp",
+					Type: []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"},
+				},
+			},
 			Address:   address,
 			StartTime: time.Now(),
 			Stats:     make(map[string]float64),
@@ -126,6 +136,17 @@ func (s *Server) ProcessTransientResponses() {
 					delete(s.Cache.Responses, k)
 				}
 			}
+			s.Memory.Unlock()
 		}
 	}
+}
+
+func (s *Server) AddResponse(uid string, data []byte) {
+	// uid := uuid.New().String()
+	resp := ResponseItem{
+		ID:   uid,
+		Time: time.Now(),
+		Data: data,
+	}
+	s.RespCh <- resp
 }

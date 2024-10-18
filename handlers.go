@@ -131,6 +131,8 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	uid := uuid.New().String()
+	req.TransactionID = uid
 	switch req.To {
 	case "misp":
 		resp, err := s.MispHelper(req)
@@ -159,17 +161,33 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("get_services_requests", 1)
+	defer func(start time.Time) {
+		fmt.Println("GetServicesHandler took", time.Since(start))
+	}(time.Now())
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	out, err := json.Marshal(s.Details.SupportedServices)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 type NewUserRequest struct {
 	Email string `json:"email"`
 	Admin bool   `json:"admin"`
 }
 
 type ProxyRequest struct {
-	To    string `json:"to"`
-	Route string `json:"route"`
-	Type  string `json:"type"`
-	Value string `json:"value"`
-	From  string `json:"from"`
+	To            string `json:"to"`
+	Route         string `json:"route"`
+	Type          string `json:"type"`
+	Value         string `json:"value"`
+	From          string `json:"from"`
+	TransactionID string `json:"transaction_id"`
 }
 
 type GenericOut struct {

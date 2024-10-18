@@ -10,7 +10,7 @@ import (
 	"github.com/rexlx/threatco/vendors"
 )
 
-func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte, error) {
+func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte, error) {
 	// fmt.Println("ParseOtherMispResponse")
 	if len(response) != 0 {
 		if len(response) > 1 {
@@ -27,6 +27,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte,
 				AttrCount:     attrs,
 				ThreatLevelID: "0",
 				Value:         req.Value,
+				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
 			attrs, err := strconv.Atoi(response[0].AttributeCount)
@@ -42,6 +43,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte,
 				ThreatLevelID: response[0].ThreatLevelID,
 				Value:         req.Value,
 				Info:          response[0].Info,
+				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
@@ -56,7 +58,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte,
 	})
 }
 
-func ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]byte, error) {
+func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]byte, error) {
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
 			return json.Marshal(SummarizedEvent{
@@ -67,6 +69,7 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]by
 				Value:         req.Value,
 				AttrCount:     0,
 				ThreatLevelID: "1",
+				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
 			return json.Marshal(SummarizedEvent{
@@ -77,6 +80,7 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]by
 				Value:         req.Value,
 				AttrCount:     len(response.Response[0].Event.Attribute),
 				ThreatLevelID: response.Response[0].Event.ThreatLevelID,
+				Link:          fmt.Sprintf("%s/%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
@@ -118,6 +122,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	resp := ep.Do(request)
+	go s.AddResponse(req.TransactionID, resp)
 
 	var response vendors.Response
 	err = json.Unmarshal(resp, &response)
@@ -130,14 +135,14 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 			return nil, err
 		}
 
-		resp, err = ParseOtherMispResponse(req, e)
+		resp, err = s.ParseOtherMispResponse(req, e)
 		if err != nil {
 			fmt.Println(err)
 			return nil, err
 		}
 		return resp, nil
 	}
-	resp, err = ParseCorrectMispResponse(req, response)
+	resp, err = s.ParseCorrectMispResponse(req, response)
 	if err != nil {
 		fmt.Println("no hits", err)
 		badNews := SummarizedEvent{
@@ -155,4 +160,17 @@ func DeepMapCopy(x, y map[string]float64) {
 	for k, v := range x {
 		y[k] = v
 	}
+}
+
+type ServiceType struct {
+	Kind string   `json:"kind"`
+	Type []string `json:"type"`
+}
+
+func (s *ServiceType) MarshalBinary() ([]byte, error) {
+	return json.Marshal(s)
+}
+
+func (s *ServiceType) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, s)
 }
