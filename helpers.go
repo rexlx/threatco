@@ -106,7 +106,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	// url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// go s.addStat(url, float64(len(out)))
 	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
-
+	// fmt.Println("url", url)
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {

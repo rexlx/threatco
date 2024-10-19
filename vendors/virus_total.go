@@ -31,7 +31,7 @@ type VirusTotalAttributes struct {
 	Tags                     []string                      `json:"tags"`
 	RegionalInternetRegistry string                        `json:"regional_internet_registry"`
 	ASN                      int                           `json:"asn"`
-	Categories               string                        `json:"categories"`
+	Categories               struct{}                      `json:"categories"`
 	WhoisRegistrar           string                        `json:"whois_registrar"`
 	WhoisCountry             string                        `json:"whois_country"`
 	LastDNSRecordsDate       int                           `json:"last_dns_records_date"`

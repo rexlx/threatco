@@ -138,12 +138,14 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		resp, err := s.MispHelper(req)
 		if err != nil {
 			fmt.Println("bigtime error", err)
+			// fmt.Println("bigtime error", err, string(resp))
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write(resp)
 		return
 	case "virustotal":
+		// fmt.Println("virustotal", req)
 		resp, err := s.VirusTotalHelper(req)
 		if err != nil {
 			fmt.Println("bigtime error", err)
