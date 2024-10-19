@@ -217,6 +217,7 @@ type GenericOut struct {
 }
 
 type SummarizedEvent struct {
+	Matched       bool   `json:"matched"`
 	Error         bool   `json:"error"`
 	Background    string `json:"background"`
 	From          string `json:"from"`

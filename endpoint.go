@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -86,19 +84,20 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 			}
 			e.Backlog = append(e.Backlog, req)
 			e.Memory.Unlock()
-			sumOut := SummarizedEvent{
-				ID:            "0",
-				Background:    "has-background-info",
-				Info:          "Request backlogged due to a rate limit",
-				ThreatLevelID: "0",
-				Link:          "coming soon!",
-			}
-			out, err := json.Marshal(sumOut)
-			if err != nil {
-				fmt.Println("ERROR", e, err)
-				return []byte(err.Error())
-			}
-			return out
+			// sumOut := SummarizedEvent{
+			// 	ID:            "0",
+			// 	Background:    "has-background-info",
+			// 	Info:          "Request backlogged due to a rate limit",
+			// 	ThreatLevelID: "0",
+			// 	Link:          "coming soon!",
+			// }
+			// out, err := json.Marshal(sumOut)
+			// if err != nil {
+			// 	fmt.Println("ERROR", e, err)
+			// 	return []byte(err.Error())
+			// }
+			// return out
+			return []byte{}
 		}
 		e.InFlight++
 		// defer func() {

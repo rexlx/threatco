@@ -124,6 +124,9 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("rate limited")
+	}
 	go s.AddResponse(req.TransactionID, resp)
 
 	var response vendors.Response
