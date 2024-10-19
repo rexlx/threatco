@@ -95,6 +95,50 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 	})
 }
 
+func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
+
+	// fmt.Println("VirusTotalHelper", req)
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		fmt.Println("target not found")
+		return nil, fmt.Errorf("target not found")
+	}
+	// url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
+	// go s.addStat(url, float64(len(out)))
+	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+
+	request, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		fmt.Println("request error", err)
+		return nil, err
+	}
+
+	// request.Header.Set("Content-Type", "application/json")
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("rate limited")
+	}
+	go s.addStat(url, float64(len(resp)))
+	go s.AddResponse(req.TransactionID, resp)
+
+	var response vendors.VirusTotalResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("couldnt unmarshal response into vendors.VirusTotalResponse")
+		return nil, err
+	}
+	sum := SummarizedEvent{
+		Background: "has-background-primary-dark",
+		From:       req.To,
+		Value:      response.Data.ID,
+		Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
+}
+
 func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	var output GenericOut
 	output.Type = req.Type

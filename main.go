@@ -15,13 +15,16 @@ func main() {
 	s := NewServer("1", ":8080", *dbLocation)
 
 	bear := KeyAuth{Token: *mispKey}
+	vtAuth := XAPIKeyAuth{Token: *vtKey}
 	ticker := time.NewTicker(150 * time.Second)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	misp := NewEndpoint(*mispUrl, &bear, true, s.RespCh)
-	misp.RateLimited = true
-	misp.MaxRequests = 10
-	misp.RefillRate = 10 * time.Second
+	vt := NewEndpoint("https://www.virustotal.com/api/v3", &vtAuth, false, s.RespCh)
+	vt.RateLimited = true
+	vt.MaxRequests = 4
+	vt.RefillRate = 61 * time.Second
+	s.Targets["virustotal"] = vt
 	s.Targets["misp"] = misp
 
 	go func() {

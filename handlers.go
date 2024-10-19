@@ -142,6 +142,16 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write(resp)
+		return
+	case "virustotal":
+		resp, err := s.VirusTotalHelper(req)
+		if err != nil {
+			fmt.Println("bigtime error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(resp)
+		return
 	default:
 		sumOut := SummarizedEvent{
 			From:          req.To,
@@ -159,6 +169,27 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(out)
 	}
+}
+
+func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("event_requests", 1)
+	defer func(start time.Time) {
+		fmt.Println("EventHandler took", time.Since(start))
+	}(time.Now())
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	id := r.URL.Path[len("/events/"):]
+	event, ok := s.Cache.Responses[id]
+	if !ok {
+		http.Error(w, "event not found", http.StatusNotFound)
+		return
+	}
+	// out, err := json.Marshal(event)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	w.Write(event.Data)
 }
 
 func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {

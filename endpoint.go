@@ -151,6 +151,15 @@ type KeyAuth struct {
 	Token string
 }
 
+type XAPIKeyAuth struct {
+	Token string `json:"token"`
+}
+
+func (x *XAPIKeyAuth) Apply(req *http.Request) {
+	req.Header.Set("x-apikey", x.Token)
+	req.Header.Set("Accept", "application/json")
+}
+
 func (b *BearerAuth) Apply(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+b.Token)
 }

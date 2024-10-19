@@ -31,6 +31,22 @@ type VirusTotalAttributes struct {
 	Tags                     []string                      `json:"tags"`
 	RegionalInternetRegistry string                        `json:"regional_internet_registry"`
 	ASN                      int                           `json:"asn"`
+	Categories               string                        `json:"categories"`
+	WhoisRegistrar           string                        `json:"whois_registrar"`
+	WhoisCountry             string                        `json:"whois_country"`
+	LastDNSRecordsDate       int                           `json:"last_dns_records_date"`
+	LastDNSRecords           []DNSRecord                   `json:"last_dns_records"`
+}
+
+//	{
+//		"type": "A",
+//		"ttl": 14400,
+//		"value": "159.203.188.91"
+//	}
+type DNSRecord struct {
+	Type  string `json:"type"`
+	TTL   int    `json:"ttl"`
+	Value string `json:"value"`
 }
 
 type VirusTotalLastAnalysisStats struct {
