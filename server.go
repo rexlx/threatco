@@ -87,6 +87,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)
 	svr.Gateway.HandleFunc("/stats", svr.GetStatHistoryHandler)
 	svr.Gateway.Handle("/pipe", http.HandlerFunc(svr.ValidateToken(svr.ProxyHandler)))
+	svr.Gateway.Handle("/user", http.HandlerFunc(svr.ValidateToken(svr.GetUserHandler)))
 	svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
 	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
 	svr.Gateway.Handle("/raw", http.HandlerFunc(svr.ValidateToken(svr.RawResponseHandler)))

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -214,6 +215,28 @@ func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
 
 type RawResponseRequest struct {
 	ID string `json:"id"`
+}
+
+func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("get_user_requests", 1)
+	defer func(start time.Time) {
+		fmt.Println("GetUserHandler took", time.Since(start))
+	}(time.Now())
+	// s.Memory.RLock()
+	// defer s.Memory.RUnlock()
+	parts := strings.Split(r.Header.Get("Authorization"), ":")
+	email := parts[0]
+	u, err := s.GetUserByEmail(email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out, err := json.Marshal(u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
 }
 
 func (s *Server) RawResponseHandler(w http.ResponseWriter, r *http.Request) {
