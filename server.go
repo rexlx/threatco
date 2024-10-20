@@ -78,15 +78,10 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Targets: targets,
 		ID:      id,
 		Details: Details{
-			SupportedServices: []ServiceType{
-				{
-					Kind: "misp",
-					Type: []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"},
-				},
-			},
-			Address:   address,
-			StartTime: time.Now(),
-			Stats:     make(map[string]float64),
+			SupportedServices: SupportedServices,
+			Address:           address,
+			StartTime:         time.Now(),
+			Stats:             make(map[string]float64),
 		},
 	}
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)

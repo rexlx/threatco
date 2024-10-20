@@ -99,11 +99,14 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing 'email' field", http.StatusBadRequest)
 		return
 	}
-	user, err := NewUser(nur.Email, nur.Admin)
+	s.Memory.Lock()
+	user, err := NewUser(nur.Email, nur.Admin, s.Details.SupportedServices)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.Memory.Unlock()
 		return
 	}
+	s.Memory.Unlock()
 	err = s.AddUser(*user)
 	if err != nil {
 		fmt.Println("error", err)

@@ -18,6 +18,7 @@ type User struct {
 	Created  time.Time      `json:"created"`
 	Updated  time.Time      `json:"updated"`
 	Selected map[string]int `json:"selected"`
+	Services []ServiceType  `json:"services"`
 	Admin    bool           `json:"admin"`
 }
 
@@ -32,7 +33,7 @@ func generateAPIKey() (string, error) {
 	return key, nil
 }
 
-func NewUser(email string, admin bool) (*User, error) {
+func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 	key, err := generateAPIKey()
 	if err != nil {
 		return nil, err
@@ -46,6 +47,7 @@ func NewUser(email string, admin bool) (*User, error) {
 		Created:  time.Now(),
 		Updated:  time.Now(),
 		Selected: make(map[string]int),
+		Services: services,
 		Admin:    admin,
 	}
 	return u, nil

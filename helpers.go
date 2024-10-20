@@ -211,16 +211,3 @@ func DeepMapCopy(x, y map[string]float64) {
 		y[k] = v
 	}
 }
-
-type ServiceType struct {
-	Kind string   `json:"kind"`
-	Type []string `json:"type"`
-}
-
-func (s *ServiceType) MarshalBinary() ([]byte, error) {
-	return json.Marshal(s)
-}
-
-func (s *ServiceType) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, s)
-}
