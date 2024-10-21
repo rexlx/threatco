@@ -11,10 +11,12 @@ import (
 )
 
 var (
-	mispUrl    = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
-	vtKey      = flag.String("vt-key", "", "VirusTotal API key")
-	mispKey    = flag.String("misp-key", "", "MISP API key")
-	dbLocation = flag.String("db", "insights.db", "Database location")
+	firstUserMode = flag.Bool("firstuse", false, "First user mode")
+	fqdn          = flag.String("fqdn", "http://localhost", "Fully qualified domain name")
+	mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
+	vtKey         = flag.String("vt-key", "", "VirusTotal API key")
+	mispKey       = flag.String("misp-key", "", "MISP API key")
+	dbLocation    = flag.String("db", "insights.db", "Database location")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
@@ -78,6 +80,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Targets: targets,
 		ID:      id,
 		Details: Details{
+			FQDN:              *fqdn,
 			SupportedServices: SupportedServices,
 			Address:           address,
 			StartTime:         time.Now(),
@@ -88,10 +91,14 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	svr.Gateway.HandleFunc("/stats", svr.GetStatHistoryHandler)
 	svr.Gateway.Handle("/pipe", http.HandlerFunc(svr.ValidateToken(svr.ProxyHandler)))
 	svr.Gateway.Handle("/user", http.HandlerFunc(svr.ValidateToken(svr.GetUserHandler)))
-	svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
 	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
 	svr.Gateway.Handle("/raw", http.HandlerFunc(svr.ValidateToken(svr.RawResponseHandler)))
 	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.EventHandler))
+	if *firstUserMode {
+		svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
+	} else {
+		svr.Gateway.Handle("/adduser", http.HandlerFunc(svr.ValidateToken(svr.AddUserHandler)))
+	}
 	return svr
 }
 
