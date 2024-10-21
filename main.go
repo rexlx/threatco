@@ -26,7 +26,6 @@ func main() {
 	vt.RefillRate = 61 * time.Second
 	s.Targets["virustotal"] = vt
 	s.Targets["misp"] = misp
-
 	go func() {
 		for {
 			select {

@@ -14,7 +14,7 @@ import (
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_event_requests", 1)
 	defer func(start time.Time) {
-		fmt.Println("AddEventHandler took", time.Since(start))
+		s.Log.Println("AddEventHandler took", time.Since(start))
 	}(time.Now())
 	var ar AttributeRequest
 	err := json.NewDecoder(r.Body).Decode(&ar)
