@@ -41,7 +41,7 @@ func main() {
 
 	svr := &http.Server{
 		Addr:    s.Details.Address,
-		Handler: s.Gateway,
+		Handler: s.Session.LoadAndSave(s.Gateway),
 	}
 	go s.ProcessTransientResponses()
 	s.Log.Printf("Server started at %s", s.Details.Address)

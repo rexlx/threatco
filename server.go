@@ -1,12 +1,18 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"errors"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
+	"github.com/google/uuid"
 	"go.etcd.io/bbolt"
 )
 
@@ -21,6 +27,7 @@ var (
 )
 
 type Server struct {
+	Session *scs.SessionManager  `json:"-"`
 	RespCh  chan ResponseItem    `json:"-"`
 	Cache   *Cache               `json:"-"`
 	DB      *bbolt.DB            `json:"-"`
@@ -70,7 +77,16 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Responses:    make(map[string]ResponseItem),
 	}
 	resch := make(chan ResponseItem, 200)
+	sessionMgr := scs.New()
+	sessionMgr.Lifetime = 24 * time.Hour
+	sessionMgr.IdleTimeout = 1 * time.Hour
+	sessionMgr.Cookie.Persist = true
+	sessionMgr.Cookie.Name = "token"
+	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
+	// sessionMgr.Cookie.Secure = true
+	sessionMgr.Cookie.HttpOnly = true
 	svr := &Server{
+		Session: sessionMgr,
 		RespCh:  resch,
 		Cache:   cache,
 		DB:      db,
@@ -145,6 +161,40 @@ func (s *Server) ProcessTransientResponses() {
 			s.Memory.Unlock()
 		}
 	}
+}
+
+func (t *SessionToken) CreateToken(userID string, ttl time.Duration) (*SessionToken, error) {
+	tk := &SessionToken{
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+	hotSauce := make([]byte, 64)
+	_, err := io.ReadFull(rand.Reader, hotSauce)
+	if err != nil {
+		return nil, err
+	}
+	tk.Token = uuid.New().String()
+	hash := sha256.Sum256([]byte(tk.Token))
+	tk.Hash = hash[:]
+	return tk, nil
+}
+
+func (s *Server) AddTokenToSession(r *http.Request, w http.ResponseWriter, tk *SessionToken) error {
+	s.Session.Put(r.Context(), "token", tk.Token)
+	return nil
+}
+
+func (s *Server) DeleteTokenFromSession(r *http.Request) error {
+	s.Session.Remove(r.Context(), "token")
+	return nil
+}
+
+func (s *Server) GetTokenFromSession(r *http.Request) (string, error) {
+	tk, ok := s.Session.Get(r.Context(), "token").(string)
+	if !ok {
+		return "", errors.New("error getting token from session")
+	}
+	return tk, nil
 }
 
 func (s *Server) AddResponse(uid string, data []byte) {

@@ -11,6 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
+func (s *Server) FileServer() http.Handler {
+	return http.FileServer(http.Dir("./static"))
+}
+
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_event_requests", 1)
 	defer func(start time.Time) {

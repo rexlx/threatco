@@ -7,4 +7,7 @@ require (
 	go.etcd.io/bbolt v1.3.11
 )
 
-require golang.org/x/sys v0.4.0 // indirect
+require (
+	github.com/alexedwards/scs/v2 v2.8.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+)

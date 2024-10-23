@@ -12,14 +12,15 @@ import (
 )
 
 type User struct {
-	ID       string         `json:"id"`
-	Email    string         `json:"email"`
-	Key      string         `json:"key"`
-	Created  time.Time      `json:"created"`
-	Updated  time.Time      `json:"updated"`
-	Selected map[string]int `json:"selected"`
-	Services []ServiceType  `json:"services"`
-	Admin    bool           `json:"admin"`
+	ID           string         `json:"id"`
+	Email        string         `json:"email"`
+	Key          string         `json:"key"`
+	Created      time.Time      `json:"created"`
+	Updated      time.Time      `json:"updated"`
+	Selected     map[string]int `json:"selected"`
+	Services     []ServiceType  `json:"services"`
+	Admin        bool           `json:"admin"`
+	SessionToken *SessionToken  `json:"session_token"`
 }
 
 func generateAPIKey() (string, error) {
@@ -59,4 +60,15 @@ func (u *User) MarshalBinary() ([]byte, error) {
 
 func (u *User) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, u)
+}
+
+type SessionToken struct {
+	Handle    string
+	ID        string
+	Email     string
+	UserID    string
+	Token     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	Hash      []byte
 }
