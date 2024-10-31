@@ -138,6 +138,65 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	// return resp, nil
 }
 
+func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		fmt.Println("target not found")
+		return nil, fmt.Errorf("target not found")
+	}
+
+	url := fmt.Sprintf("%s/get/ip4", ep.GetURL())
+
+	data := struct {
+		Value string `json:"value"`
+	}{
+		Value: req.Value,
+	}
+
+	out, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("json marshal error", err)
+		return nil, err
+	}
+
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
+	if err != nil {
+		fmt.Println("request error", err)
+		return nil, err
+	}
+
+	// request.Header.Set("Content-Type", "application/json")
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("rate limited")
+	}
+	go s.addStat(url, float64(len(resp)))
+	go s.AddResponse(req.TransactionID, resp)
+
+	response := struct {
+		Value   string `json:"value"`
+		Message string `json:"message"`
+	}{}
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("couldnt unmarshal response into vendors.DeepFyResponse")
+		return nil, err
+	}
+	var matched bool
+	if response.Message != "" {
+		matched = true
+	}
+	sum := SummarizedEvent{
+		Background: "has-background-primary-dark",
+		Info:       "that IP looks nosey!",
+		From:       req.To,
+		Value:      response.Value,
+		Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+		Matched:    matched,
+	}
+	return json.Marshal(sum)
+}
+
 func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	var output GenericOut
 	output.Type = req.Type
