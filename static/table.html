@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+    <html lang="en"> 
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="css/bulma.min.css">
+            <link rel="stylesheet" href="css/custom.css">
+        </head>
+        <body>
+           
+          <nav class="navbar has-background-black-ter" role="navigation" aria-label="dropdown navigation">
+            <div class="navbar-menu">
+              <div class="navbar-start">
+              
+                <div class="navbar-item has-dropdown" id="dropDownMenu">
+                  <a class="navbar-link has-text-primary" id="dropDownMenuLink">
+                    ThreatPunch
+                  </a>
+                  
+                  <div class="navbar-dropdown has-background-black-ter">
+                    <a href="./index.html" class="navbar-item has-background-black-ter has-text-primary">
+                      Add User
+                    </a>
+                    
+                    <a href="./table.html" class="navbar-item has-background-black-ter has-text-primary">
+                      Chat
+                    </a>
+                   
+                    <a class="navbar-item has-background-black-ter has-text-primary">
+                      Components
+                    </a>
+                    
+                  </div>
+                </div>
+              </div>
+              <!-- <div class="navbar-end">
+                <image src="./assets/greenfist2.jpg"></image>
+              </div> -->
+            </div>
+          </nav>
+         
+                <div class="table-container has-background-black-ter">
+                    <table class="table is-fullwidth is-narrow">
+                      <!-- Your table content -->
+                      <thead>
+                        <tr>
+                          <th><abbr title="">Pos</abbr></th>
+                          <th>Team</th>
+                          <th><abbr title="">Pld</abbr></th>
+                          <th><abbr title="">W</abbr></th>
+                          <th><abbr title="">D</abbr></th>
+                          <th><abbr title="">L</abbr></th>
+                          <th><abbr title="">GF</abbr></th>
+                          <th><abbr title="">GA</abbr></th>
+                          <th><abbr title="">GD</abbr></th>
+                          <th><abbr title="">Pts</abbr></th>
+                          <th>Qualification or relegation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <th>1</th>
+                          <td>
+                            <a
+                              href="https://en.wikipedia.org/wiki/Leicester_City_F.C."
+                              title="Leicester City F.C."
+                              >Leicester City</a
+                            >
+                            <strong>(C)</strong>
+                          </td>
+                          <td>38</td>
+                          <td>23</td>
+                          <td>12</td>
+                          <td>3</td>
+                          <td>68</td>
+                          <td>36</td>
+                          <td>+32</td>
+                          <td>81</td>
+                          <td>
+                            <button class="button is-link card-footer-item modal-button" data-target="#modal3">Open Modal</button> 
+                          </td>
+                        </tr>
+                        <tr>
+                            <th>1</th>
+                            <td>
+                              <a
+                                href="https://en.wikipedia.org/wiki/Leicester_City_F.C."
+                                title="Leicester City F.C."
+                                >Leicester City</a
+                              >
+                              <strong>(C)</strong>
+                            </td>
+                            <td>38</td>
+                            <td>23</td>
+                            <td>12</td>
+                            <td>3</td>
+                            <td>68</td>
+                            <td>36</td>
+                            <td>+32</td>
+                            <td>81</td>
+                            <td>
+                              <button class="button is-link card-footer-item modal-button" data-target="#modal3">Open Modal</button> 
+                            </td>
+                          </tr>
+                      
+                      </tbody>
+                    </table>
+                </div>
+                <!-- Modals -->
+            <div class="modal" id="modal1">
+                <div class="modal-background"></div>
+                <div class="modal-content">
+                    <div class="box">
+                        <h1 class="title">Modal Title 1</h1>
+                        <p>This is the content for Modal 1.</p>
+                        <button class="button is-primary modal-close">Close</button>
+                    </div>
+                </div>
+                <button class="modal-close is-large" aria-label="close"></button>
+            </div>
+        
+            <div class="modal" id="modal2">
+                <div class="modal-background"></div>
+                <div class="modal-content">
+                    <div class="box">
+                        <h1 class="title">Modal Title 2</h1>
+                        <p>This is the content for Modal 2.</p>
+                        <button class="button is-primary modal-close">Close</button>
+                    </div>
+                </div>
+                <button class="modal-close is-large" aria-label="close"></button>
+            </div>
+        
+            <div class="modal" id="modal3">
+                <div class="modal-background"></div>
+                <div class="modal-content">
+                    <div class="box">
+                        <h1 class="title">Modal Title 3</h1>
+                        <p>This is the content for Modal 3.</p>
+                        <button class="button is-primary modal-close">Close</button>
+                    </div>
+                </div>
+                <button class="modal-close is-large" aria-label="close"></button>
+            </div>
+        </div>
+               
+
+        </body>
+        <script type="module" src="./js/functions.js"></script>
+    </html>
+
+    <script>
+        // JavaScript for opening and closing modals
+        document.querySelectorAll('.modal-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const target = button.getAttribute('data-target');
+                document.querySelector(target).classList.add('is-active');
+            });
+        });
+    
+        document.querySelectorAll('.modal-close').forEach(closeButton => {
+            closeButton.addEventListener('click', () => {
+                closeButton.closest('.modal').classList.remove('is-active');
+            });
+        });
+    
+        // Close modal on background click
+        document.querySelectorAll('.modal-background').forEach(background => {
+            background.addEventListener('click', () => {
+                background.closest('.modal').classList.remove('is-active');
+            });
+        });
+
+          // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const cardItems = document.querySelectorAll('.card-item');
+
+    searchInput.addEventListener('input', () => {
+        const searchValue = searchInput.value.toLowerCase();
+        console.log(searchValue)
+        cardItems.forEach(card => {
+            const title = card.querySelector('.title').textContent.toLowerCase();  
+            console.log(title);  
+            if (title.includes(searchValue)) {
+                console.log('match'); 
+                card.style.display = 'block'; // Show card if it matches
+            } else {
+                console.log('non');
+                card.style.display = 'none'; // Hide card if it doesn't match
+            }
+        });
+    });
+    </script>
+  <!-- <button class="button is-link card-footer-item modal-button" data-target="#modal3">Open Modal</button> -->

@@ -1,0 +1,28 @@
+body {
+    background-color: #f5f5f5; /* Change this color as needed */
+}
+
+.navbar-link:not(.is-arrowless):after {
+    border-color: var(--bulma-primary-h);
+    inset-inline-end: 1.125em;
+    margin-top: -.375em;
+}
+
+.navbar-link:not(.is-arrowless) {
+    padding-inline-end: 9.5em;
+}
+.navbar-divider {
+    background-color: hsl(221, 14%, var(--bulma-navbar-divider-background-s));
+    border: none;
+    display: none;
+    height: var(--bulma-navbar-divider-height);
+    margin: .5rem 0;
+}
+
+.table-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Make the container full height for vertical centering */
+    padding: 0 5rem; /* Adds horizontal padding for whitespace */
+}
