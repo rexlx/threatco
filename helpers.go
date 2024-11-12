@@ -139,6 +139,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 }
 
 func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
+	fmt.Println("DeepFryHelper")
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		fmt.Println("target not found")
@@ -148,9 +149,12 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	url := fmt.Sprintf("%s/get/ip4", ep.GetURL())
 
 	data := struct {
-		Value string `json:"value"`
+		Message string `json:"message"`
+		Value   string `json:"value"`
+		Error   bool   `json:"error"`
 	}{
-		Value: req.Value,
+		Message: "",
+		Value:   req.Value,
 	}
 
 	out, err := json.Marshal(data)
@@ -158,7 +162,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 		fmt.Println("json marshal error", err)
 		return nil, err
 	}
-
+	fmt.Println(req, data)
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 	if err != nil {
 		fmt.Println("request error", err)
@@ -172,27 +176,40 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.addStat(url, float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
-
+	fmt.Println("DeepFryHelper", string(resp))
 	response := struct {
-		Value   string `json:"value"`
+		ID      int    `json:"id"`
 		Message string `json:"message"`
-	}{}
+		Value   string `json:"value"`
+		Error   bool   `json:"error"`
+	}{
+		Message: "",
+		Value:   "",
+	}
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		fmt.Println("couldnt unmarshal response into vendors.DeepFyResponse")
+		fmt.Println("couldnt unmarshal response into vendors.DeepFyResponse", string(resp))
 		return nil, err
 	}
 	var matched bool
-	if response.Message != "" {
+	var id string
+	bg := "has-background-dark"
+	if !response.Error {
 		matched = true
+		bg = "has-background-primary-dark"
+		id = strconv.Itoa(response.ID)
 	}
+	fmt.Println(response)
 	sum := SummarizedEvent{
-		Background: "has-background-primary-dark",
-		Info:       "that IP looks nosey!",
-		From:       req.To,
-		Value:      response.Value,
-		Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched:    matched,
+		AttrCount:     0,
+		ThreatLevelID: "1",
+		ID:            id,
+		Background:    bg,
+		Info:          "that IP looks nosey!",
+		From:          req.To,
+		Value:         response.Value,
+		Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+		Matched:       matched,
 	}
 	return json.Marshal(sum)
 }

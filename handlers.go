@@ -269,6 +269,62 @@ func (s *Server) RawResponseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(res.Data)
 }
 
+func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	tkn, _ := s.GetTokenFromSession(r)
+	if tkn != "" {
+		http.Error(w, "already logged in", http.StatusForbidden)
+		return
+	}
+	email := r.FormValue("username")
+	password := r.FormValue("password")
+	u, err := s.GetUserByEmail(email)
+	if err != nil || u.Email == "" {
+		fmt.Println("LoginHandler: user not found", email)
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	ok, err := u.PasswordMatches(password)
+	if err != nil {
+		fmt.Println("error checking password", err, email)
+		http.Error(w, "error checking password", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		fmt.Println("password does not match", email)
+		http.Error(w, "password does not match", http.StatusUnauthorized)
+		return
+	}
+	err = s.AddUser(u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tk, err := u.SessionToken.CreateToken(u.ID, 24*time.Hour)
+	if err != nil {
+		fmt.Println("error creating token", err)
+		http.Error(w, "error creating token", http.StatusInternalServerError)
+		return
+	}
+	tk.Email = u.Email
+	err = s.SaveToken(*tk)
+	if err != nil {
+		fmt.Println("error saving token", err)
+		http.Error(w, "error saving token", http.StatusInternalServerError)
+		return
+	}
+	err = s.AddTokenToSession(r, w, tk)
+	if err != nil {
+		fmt.Println("error adding token to session", err)
+		http.Error(w, "error adding token to session", http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("login successful", u.Email)
+	s.Memory.Lock()
+	s.Details.Stats["logins"]++
+	s.Memory.Unlock()
+	w.Write([]byte("login successful"))
+}
+
 type NewUserRequest struct {
 	Email string `json:"email"`
 	Admin bool   `json:"admin"`

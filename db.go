@@ -82,3 +82,41 @@ func (s *Server) AddService(st ServiceType) error {
 		return b.Put([]byte(st.Kind), v)
 	})
 }
+
+func (s *Server) GetTokenByValue(tk string) (Token, error) {
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.Stats["token_queries"]++
+	s.Log.Println("GetTokenByValue", tk)
+	var token Token
+	err := s.DB.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("tokens"))
+		v := b.Get([]byte(tk))
+		if v == nil {
+			s.Log.Println("GetTokenByValue: token not found")
+			s.Details.Stats["token_not_found"]++
+			return nil
+		}
+
+		return token.UnmarshalBinary(v)
+	})
+	return token, err
+}
+
+func (s *Server) SaveToken(t Token) error {
+	s.Log.Println("SaveToken", t)
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.Stats["token_saves"]++
+	return s.DB.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("tokens"))
+		if err != nil {
+			return err
+		}
+		v, err := t.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(t.Token), v)
+	})
+}

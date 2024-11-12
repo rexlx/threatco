@@ -163,8 +163,8 @@ func (s *Server) ProcessTransientResponses() {
 	}
 }
 
-func (t *SessionToken) CreateToken(userID string, ttl time.Duration) (*SessionToken, error) {
-	tk := &SessionToken{
+func (t *Token) CreateToken(userID string, ttl time.Duration) (*Token, error) {
+	tk := &Token{
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(ttl),
 	}
@@ -179,7 +179,7 @@ func (t *SessionToken) CreateToken(userID string, ttl time.Duration) (*SessionTo
 	return tk, nil
 }
 
-func (s *Server) AddTokenToSession(r *http.Request, w http.ResponseWriter, tk *SessionToken) error {
+func (s *Server) AddTokenToSession(r *http.Request, w http.ResponseWriter, tk *Token) error {
 	s.Session.Put(r.Context(), "token", tk.Token)
 	return nil
 }
