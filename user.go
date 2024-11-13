@@ -17,8 +17,8 @@ type User struct {
 	ID           string         `json:"id"`
 	Email        string         `json:"email"`
 	Key          string         `json:"key"`
-	Hash         []byte         `json:"-"`
-	Password     string         `json:"-"`
+	Hash         []byte         `json:"hash"`
+	Password     string         `json:"password"`
 	Created      time.Time      `json:"created"`
 	Updated      time.Time      `json:"updated"`
 	Selected     map[string]int `json:"selected"`
@@ -63,6 +63,7 @@ func (u *User) SetPassword(password string) error {
 	if err != nil {
 		return err
 	}
+	u.Hash = hash
 	u.Password = string(hash)
 	fmt.Println("SetPassword", u.Email)
 	return nil
@@ -77,7 +78,7 @@ func (u *User) UnmarshalBinary(data []byte) error {
 }
 
 func (u *User) PasswordMatches(input string) (bool, error) {
-	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(input))
+	err := bcrypt.CompareHashAndPassword(u.Hash, []byte(input))
 	if err != nil {
 		return false, err
 	}
