@@ -88,7 +88,7 @@ func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("add_user_requests", 1)
+	// defer s.addStat("add_user_requests", 1)
 	defer func(start time.Time) {
 		fmt.Println("AddUserHandler took", time.Since(start))
 	}(time.Now())
@@ -104,20 +104,28 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing 'email' field", http.StatusBadRequest)
 		return
 	}
-	s.Memory.Lock()
+	//
 	user, err := NewUser(nur.Email, nur.Admin, s.Details.SupportedServices)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		s.Memory.Unlock()
 		return
 	}
-	s.Memory.Unlock()
+	if nur.Password != "" {
+		err = user.SetPassword(nur.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	// s.Memory.Lock()
 	err = s.AddUser(*user)
 	if err != nil {
 		fmt.Println("error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// s.Memory.Unlock()
 		return
 	}
+	// s.Memory.Unlock()
 	out, err := json.Marshal(user)
 	if err != nil {
 		fmt.Println("error", err)
@@ -326,8 +334,9 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type NewUserRequest struct {
-	Email string `json:"email"`
-	Admin bool   `json:"admin"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Admin    bool   `json:"admin"`
 }
 
 type ProxyRequest struct {

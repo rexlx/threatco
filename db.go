@@ -27,7 +27,7 @@ func (s *Server) GetUserByEmail(email string) (User, error) {
 }
 
 func (s *Server) AddUser(u User) error {
-	s.Log.Println("AddUser", u)
+	// s.Log.Println("AddUser", u)
 	u.Updated = time.Now()
 	s.Memory.Lock()
 	defer s.Memory.Unlock()

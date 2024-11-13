@@ -17,8 +17,8 @@ type User struct {
 	ID           string         `json:"id"`
 	Email        string         `json:"email"`
 	Key          string         `json:"key"`
-	Hash         []byte         `json:"hash"`
-	Password     string         `json:"token"`
+	Hash         []byte         `json:"-"`
+	Password     string         `json:"-"`
 	Created      time.Time      `json:"created"`
 	Updated      time.Time      `json:"updated"`
 	Selected     map[string]int `json:"selected"`
@@ -43,7 +43,7 @@ func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("NewUser", email, admin)
+	// fmt.Println("NewUser", email, admin)
 	uid := uuid.New()
 	u := &User{
 		ID:       uid.String(),
@@ -58,12 +58,13 @@ func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 	return u, nil
 }
 
-func (u *User) SetPassword(user *User, password string) error {
+func (u *User) SetPassword(password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
 		return err
 	}
 	u.Password = string(hash)
+	fmt.Println("SetPassword", u.Email)
 	return nil
 }
 
