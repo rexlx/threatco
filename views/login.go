@@ -38,6 +38,7 @@ var LoginView string = `<!DOCTYPE html>
         <div class="box has-background-black">
           <h2 class="title is-2 has-text-primary">login</h2>
           <form action="/login" method="post" class="has-background-black">
+
             <div class="field">
               <label class="label has-text-white">username</label>
               <div class="control">

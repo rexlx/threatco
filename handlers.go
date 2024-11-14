@@ -105,7 +105,11 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//
-	user, err := NewUser(nur.Email, nur.Admin, s.Details.SupportedServices)
+	var b bool
+	if nur.Admin == "on" {
+		b = true
+	}
+	user, err := NewUser(nur.Email, b, s.Details.SupportedServices)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -336,7 +340,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	Admin    bool   `json:"admin"`
+	Admin    string `json:"admin"`
 }
 
 type ProxyRequest struct {
