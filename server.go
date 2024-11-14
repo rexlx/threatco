@@ -117,7 +117,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	if *firstUserMode {
 		svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
 	} else {
-		svr.Gateway.Handle("/adduser", http.HandlerFunc(svr.ValidateToken(svr.AddUserHandler)))
+		svr.Gateway.Handle("/adduser", http.HandlerFunc(svr.ValidateSessionToken(svr.AddUserHandler)))
 	}
 	return svr
 }

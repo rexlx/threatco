@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strings"
+	"time"
 )
 
 func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
@@ -20,6 +21,22 @@ func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if user.Key != parts[1] {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, err := s.GetTokenFromSession(r)
+		if err != nil {
+			http.Error(w, "Invalid session token", http.StatusUnauthorized)
+			return
+		}
+		tk, err := s.GetTokenByValue(token)
+		if err != nil || tk.ExpiresAt.Before(time.Now()) {
+			http.Error(w, "Invalid session token", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
