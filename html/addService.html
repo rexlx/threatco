@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Service</title>
+  <link rel="stylesheet" href="./static/bulma.min.css">
+  <style>
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-half">
+        <div class="box has-background-black">
+          <h2 class="title is-2 has-text-primary">Add New Service</h2>
+          <form id="addServiceForm" action="/addservice" method="post" class="has-background-black">
+            <div class="field">
+              <label class="label has-text-white">Service Kind</label>
+              <div class="control">
+                <input class="input is-outlined" type="text" name="kind" placeholder="Enter service kind">
+              </div>
+            </div>
+            <div class="field">
+              <label class="label has-text-white">Service Types</label>
+              <div class="control">
+                <input id="typesInput" class="input is-outlined" type="text" name="types" placeholder="Enter service types (comma-separated)">
+              </div>
+            </div>
+            <div>
+              <button class="button is-primary is-outlined" type="submit">Add Service</button>
+              <button id="routeMapButton" class="button is-secondary is-outlined" type="button">Create Route Map</button>
+            </div>
+          </form>
+          <div id="routeMapOutput" class="has-text-white"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('routeMapButton').addEventListener('click', function() {
+      const typesInput = document.getElementById('typesInput').value;
+      const typesArray = typesInput.split(',').map(type => type.trim());
+      const routeMap = typesArray.map((type, index) => ({ key: `route${index + 1}`, type: type }));
+
+      const routeMapOutput = document.getElementById('routeMapOutput');
+      routeMapOutput.innerHTML = '<pre>' + JSON.stringify(routeMap, null, 2) + '</pre>';
+    });
+  </script>
+</body>
+</html>
