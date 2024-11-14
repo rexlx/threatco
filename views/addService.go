@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+package views
+
+var AddServiceView string = `<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -52,7 +54,7 @@
         document.getElementById('routeMapButton').addEventListener('click', function () {
             const typesInput = document.getElementById('typesInput').value;
             const typesArray = typesInput.split(',').map(type => type.trim());
-            const routeMap = typesArray.map((type, index) => ({ route: `route${index + 1}`, type: type }));
+            const routeMap = typesArray.map((type, index) => ({ key: "route" + (index + 1), type: type }));
 
             const routeMapOutput = document.getElementById('routeMapOutput');
             //   routeMapOutput.innerHTML = '<pre>' + JSON.stringify(routeMap, null, 2) + '</pre>';
@@ -69,4 +71,4 @@
     </script>
 </body>
 
-</html>
+</html>`

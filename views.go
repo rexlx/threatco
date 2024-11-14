@@ -16,6 +16,10 @@ func (S *Server) CreateUserViewHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, views.AddUserView)
 }
 
+func (s *Server) AddServicesHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, views.AddServiceView)
+}
+
 func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
