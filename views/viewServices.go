@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+package views
+
+var ViewServicesView string = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,6 +10,7 @@
 </head>
 <body>
     <section class="section has-background-black" id="serviceViewer">
+		%v
     </section>
 </body>
-</html>
+</html>`
