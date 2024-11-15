@@ -71,6 +71,48 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("add_service_requests", 1)
+	// body, err := io.ReadAll(r.Body)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	// fmt.Println("body", string(body), "body")
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var svc ServiceType
+	var rm RouteMap
+	for k, v := range r.PostForm {
+		switch k {
+		case "kind":
+			svc.Kind = v[0]
+		case "types":
+			svc.Type = strings.Split(v[0], ",")
+		default:
+			fmt.Println("unknown key", k, len(svc.Type), svc.Type)
+			if len(svc.Type) == len(v) {
+				for i, t := range v {
+					rm.Route = t
+					rm.Type = svc.Type[i]
+					svc.RouteMap = append(svc.RouteMap, rm)
+				}
+			}
+
+		}
+	}
+
+	out, err := json.Marshal(svc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("get_stat_history_requests", 1)
 	defer func(start time.Time) {
