@@ -91,19 +91,31 @@ func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 		case "kind":
 			svc.Kind = v[0]
 		case "types":
-			svc.Type = strings.Split(v[0], ",")
+			tmp := strings.Split(v[0], ",")
+			for _, t := range tmp {
+				svc.Type = append(svc.Type, strings.TrimLeft(t, " "))
+			}
 		default:
-			fmt.Println("unknown key", k, len(svc.Type), svc.Type)
 			if len(svc.Type) == len(v) {
 				for i, t := range v {
 					rm.Route = t
 					rm.Type = svc.Type[i]
+					// rm.Type = strings.TrimLeft(svc.Type[i], " ")
 					svc.RouteMap = append(svc.RouteMap, rm)
 				}
 			}
 
 		}
 	}
+	err = s.AddService(svc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.SupportedServices = append(s.Details.SupportedServices, svc)
 
 	out, err := json.Marshal(svc)
 	if err != nil {
@@ -377,6 +389,37 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	s.Details.Stats["logins"]++
 	s.Memory.Unlock()
 	w.Write([]byte("login successful"))
+}
+
+func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("UpdateUserHandler")
+	var u User
+	err := json.NewDecoder(r.Body).Decode(&u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println("UpdateUserHandler", u)
+	user, err := s.GetUserByEmail(u.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.Services = u.Services
+	user.Updated = time.Now()
+	err = s.AddUser(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.Password = ""
+	user.Hash = nil
+	out, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
 }
 
 type NewUserRequest struct {
