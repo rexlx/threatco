@@ -9,6 +9,11 @@ var SupportedServices = []ServiceType{
 		RouteMap: make([]RouteMap, 0),
 	},
 	{
+		Kind:     "deepfry",
+		Type:     []string{"ipv4", "ipv6"},
+		RouteMap: make([]RouteMap, 0),
+	},
+	{
 		Kind: "virustotal",
 		Type: []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "url", "domain", "filepath", "filename"},
 		RouteMap: []RouteMap{

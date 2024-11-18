@@ -116,6 +116,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	svr.Gateway.HandleFunc("/login", svr.LoginHandler)
 	svr.Gateway.HandleFunc("/splash", svr.LoginViewHandler)
 	svr.Gateway.HandleFunc("/services", http.HandlerFunc(svr.ValidateSessionToken(svr.ViewServicesHandler)))
+	svr.Gateway.HandleFunc("/getservices", http.HandlerFunc(svr.ValidateSessionToken(svr.GetServicesHandler)))
 	svr.Gateway.HandleFunc("/add-service", http.HandlerFunc(svr.ValidateSessionToken(svr.AddServicesHandler)))
 	svr.Gateway.Handle("/static/", http.StripPrefix("/static/", svr.FileServer()))
 	if *firstUserMode {
