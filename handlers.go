@@ -246,6 +246,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			ThreatLevelID: "0",
 			Value:         req.Value,
 			ID:            "unknown target",
+			Link:          req.TransactionID,
 		}
 		out, err := json.Marshal(sumOut)
 		if err != nil {
@@ -257,10 +258,8 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("--------------------------------------EventHandler")
 	defer s.addStat("event_requests", 1)
-	defer func(start time.Time) {
-		fmt.Println("EventHandler took", time.Since(start))
-	}(time.Now())
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	id := r.URL.Path[len("/events/"):]

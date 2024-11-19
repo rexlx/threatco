@@ -112,7 +112,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	svr.Gateway.HandleFunc("/addservice", svr.AddServiceHandler)
 	svr.Gateway.Handle("/raw", http.HandlerFunc(svr.ValidateToken(svr.RawResponseHandler)))
 	svr.Gateway.HandleFunc("/createuser", svr.CreateUserViewHandler)
-	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.EventHandler))
+	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.ValidateSessionToken(svr.EventHandler)))
 	svr.Gateway.HandleFunc("/login", svr.LoginHandler)
 	svr.Gateway.HandleFunc("/splash", svr.LoginViewHandler)
 	svr.Gateway.HandleFunc("/services", http.HandlerFunc(svr.ValidateSessionToken(svr.ViewServicesHandler)))
