@@ -234,31 +234,35 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		switch svc.AuthType {
 		case "key":
 			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.RateLimited, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
-			s.Targets[svc.Name] = thisEndpoint
+			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		case "token":
 			thisAuthType := &KeyAuth{Token: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.RateLimited, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
-			s.Targets[svc.Name] = thisEndpoint
+			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		case "basic":
 			thisAuthType := &BasicAuth{Username: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.RateLimited, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
-			s.Targets[svc.Name] = thisEndpoint
+			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		default:
 			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
 
 		}
 	}
+	for _, target := range s.Targets {
+		s.Log.Printf("initialized target: %s\n", target.GetURL())
+	}
+	s.Log.Printf("initialized from config: %v", cfg)
 }

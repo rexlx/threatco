@@ -119,7 +119,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
-
+	// fmt.Println("virus total url", url, req)
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
@@ -171,7 +171,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	}
 
 	url := fmt.Sprintf("%s/get/ip4", ep.GetURL())
-
+	// fmt.Println("deep fry url", url, req)
 	data := struct {
 		Message string `json:"message"`
 		Value   string `json:"value"`
@@ -256,6 +256,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 		return nil, fmt.Errorf("target not found")
 	}
 	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
+	// fmt.Println("misp url", url, req)
 	go s.addStat(url, float64(len(out)))
 
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
