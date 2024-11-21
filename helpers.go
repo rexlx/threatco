@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rexlx/threatco/vendors"
 )
@@ -99,11 +100,22 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 	})
 }
 
+type ErrorMessage struct {
+	Error bool   `json:"error"`
+	Info  string `json:"info"`
+	Time  int64  `json:"time"`
+}
+
 func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
+	var em ErrorMessage
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		fmt.Println("target not found")
-		return nil, fmt.Errorf("target not found")
+		em.Error = true
+		em.Info = "target not found"
+		em.Time = time.Now().Unix()
+		return json.Marshal(em)
+		// return nil, fmt.Errorf("target not found")
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
@@ -111,14 +123,18 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
-		fmt.Println("request error", err)
-		return nil, err
+		em.Error = true
+		em.Info = "request error"
+		em.Time = time.Now().Unix()
+		return json.Marshal(em)
 	}
 
 	// request.Header.Set("Content-Type", "application/json")
 	resp := ep.Do(request)
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("rate limited")
+		em.Error = true
+		em.Info = "rate limited"
+		em.Time = time.Now().Unix()
 	}
 	go s.addStat(url, float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
@@ -127,7 +143,10 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
 		fmt.Println("couldnt unmarshal response into vendors.VirusTotalResponse")
-		return nil, err
+		em.Error = true
+		em.Info = "couldnt unmarshal response into vendors.VirusTotalResponse"
+		em.Time = time.Now().Unix()
+		return json.Marshal(em)
 	}
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
 	sum := SummarizedEvent{
@@ -291,4 +310,11 @@ func DeepMapCopy(x, y map[string]float64) {
 	for k, v := range x {
 		y[k] = v
 	}
+}
+
+var AuthTypes = map[string]string{
+	"key":   "key",
+	"none":  "none",
+	"token": "token",
+	"temp":  "temp",
 }

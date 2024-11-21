@@ -23,6 +23,13 @@ var (
 	vtKey         = flag.String("vt-key", "", "VirusTotal API key")
 	mispKey       = flag.String("misp-key", "", "MISP API key")
 	dbLocation    = flag.String("db", "insights.db", "Database location")
+	httpsPort     = flag.String("https-port", ":8443", "HTTPS port")
+	httpPort      = flag.String("http-port", ":8080", "HTTP port")
+	httpToo       = flag.Bool("http", false, "Enable HTTP")
+	tlsCert       = flag.String("tls-cert", "cert.pem", "TLS certificate")
+	tlsKey        = flag.String("tls-key", "key.pem", "TLS key")
+	certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
+	configPath    = flag.String("config", "data/config.json", "Configuration file")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 

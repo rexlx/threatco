@@ -265,7 +265,7 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Path[len("/events/"):]
 	event, ok := s.Cache.Responses[id]
 	if !ok {
-		http.Error(w, "event not found", http.StatusNotFound)
+		http.Error(w, fmt.Sprintf("event not found %v", id), http.StatusNotFound)
 		return
 	}
 	// out, err := json.Marshal(event)
@@ -297,9 +297,9 @@ type RawResponseRequest struct {
 
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("get_user_requests", 1)
-	defer func(start time.Time) {
-		fmt.Println("GetUserHandler took", time.Since(start))
-	}(time.Now())
+	// defer func(start time.Time) {
+	// 	fmt.Println("GetUserHandler took", time.Since(start))
+	// }(time.Now())
 	// s.Memory.RLock()
 	// defer s.Memory.RUnlock()
 	parts := strings.Split(r.Header.Get("Authorization"), ":")

@@ -62,9 +62,16 @@ var SupportedServices = []ServiceType{
 }
 
 type ServiceType struct {
-	Kind     string     `json:"kind"`
-	Type     []string   `json:"type"`
-	RouteMap []RouteMap `json:"route_map"`
+	Name        string     `json:"name"`
+	URL         string     `json:"url"`
+	RateLimited bool       `json:"rate_limited"`
+	MaxRequests int        `json:"max_requests"`
+	RefillRate  int        `json:"refill_rate"`
+	AuthType    string     `json:"auth_type"`
+	Key         string     `json:"key"`
+	Kind        string     `json:"kind"`
+	Type        []string   `json:"type"`
+	RouteMap    []RouteMap `json:"route_map"`
 }
 
 type RouteMap struct {
