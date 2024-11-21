@@ -12,22 +12,16 @@ import (
 
 func main() {
 	flag.Parse()
+	var c Configuration
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	s := NewServer("1", ":8081", *dbLocation)
 
-	bear := KeyAuth{Token: *mispKey}
-	vtAuth := XAPIKeyAuth{Token: *vtKey}
-	ticker := time.NewTicker(150 * time.Second)
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	misp := NewEndpoint(*mispUrl, &bear, true, s.RespCh)
-	vt := NewEndpoint("https://www.virustotal.com/api/v3", &vtAuth, false, s.RespCh)
-	deepFry := NewEndpoint("http://localhost:8080", &vtAuth, false, s.RespCh)
-	vt.RateLimited = true
-	vt.MaxRequests = 4
-	vt.RefillRate = 61 * time.Second
-	s.Targets["virustotal"] = vt
-	s.Targets["misp"] = misp
-	s.Targets["deepfry"] = deepFry
+	if err := c.PopulateFromJSONFile(*configPath); err != nil {
+		log.Fatalf("could not populate configuration: %v", err)
+	}
+	s.InitializeFromConfig(&c, true)
+	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	go func() {
 		for {
 			select {

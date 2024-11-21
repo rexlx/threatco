@@ -222,3 +222,43 @@ func (s *Server) AddResponse(uid string, data []byte) {
 	}
 	s.RespCh <- resp
 }
+
+func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
+	if fromFile {
+		err := cfg.PopulateFromJSONFile(*configPath)
+		if err != nil {
+			s.Log.Fatalf("could not populate from file: %v", err)
+		}
+	}
+	for _, svc := range cfg.Services {
+		switch svc.AuthType {
+		case "key":
+			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.RateLimited, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Name] = thisEndpoint
+			s.Memory.Unlock()
+		case "token":
+			thisAuthType := &KeyAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.RateLimited, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Name] = thisEndpoint
+			s.Memory.Unlock()
+		case "basic":
+			thisAuthType := &BasicAuth{Username: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.RateLimited, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Name] = thisEndpoint
+			s.Memory.Unlock()
+		default:
+			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
+
+		}
+	}
+}

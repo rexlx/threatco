@@ -1,24 +1,33 @@
 {
-    "server_id": "12345",
+    "server_id": "micah",
     "first_user_mode": true,
     "fqdn": "example.com",
     "services": [
         {
-            "name": "misp",
+            "name": "misp-dev",
             "url": "https://192.168.86.91:443",
             "rate_limited": false,
             "auth_type": "token",
-            "key": "Authorization",
-            "kind": "service",
+            "key": "",
+            "kind": "misp",
             "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"]
         },
         {
-            "name": "virustotal",
+            "name": "deepfry-ip",
+            "url": "http://localhost:8080/ip",
+            "rate_limited": false,
+            "auth_type": "key",
+            "key": "onnek",
+            "kind": "deepfry",
+            "type": ["ipv4"]
+        },
+        {
+            "name": "virustotal-free",
             "url": "https://www.virustotal.com/api/v3",
             "rate_limited": false,
-            "auth_type": "header",
-            "key": "Authorization",
-            "kind": "service",
+            "auth_type": "key",
+            "key": "",
+            "kind": "virustotal",
             "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
             "route_map": [{
                 "type": "md5",
@@ -60,7 +69,7 @@
     "tls_key": "/path/to/tls.key",
     "cert_auth": "/path/to/cert.auth",
     "db_location": "/path/to/db",
-    "session_token_ttl": 3600,
-    "response_cache_expiry": 600,
-    "stat_cache_tick_rate": 60
+    "session_token_ttl": 36000,
+    "response_cache_expiry": 60000,
+    "stat_cache_tick_rate": 180
 }
