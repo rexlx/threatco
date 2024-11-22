@@ -73,12 +73,6 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_service_requests", 1)
-	// body, err := io.ReadAll(r.Body)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-	// fmt.Println("body", string(body), "body")
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
