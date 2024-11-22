@@ -9,6 +9,11 @@ var SupportedServices = []ServiceType{
 		RouteMap: make([]RouteMap, 0),
 	},
 	{
+		Kind:     "deepfry",
+		Type:     []string{"ipv4", "ipv6"},
+		RouteMap: make([]RouteMap, 0),
+	},
+	{
 		Kind: "virustotal",
 		Type: []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "url", "domain", "filepath", "filename"},
 		RouteMap: []RouteMap{
@@ -57,9 +62,20 @@ var SupportedServices = []ServiceType{
 }
 
 type ServiceType struct {
-	Kind     string     `json:"kind"`
-	Type     []string   `json:"type"`
-	RouteMap []RouteMap `json:"route_map"`
+	Expires     int        `json:"expires"`
+	Secret      string     `json:"secret"`
+	Selected    bool       `json:"selected"`
+	Insecure    bool       `json:"insecure"`
+	Name        string     `json:"name"`
+	URL         string     `json:"url"`
+	RateLimited bool       `json:"rate_limited"`
+	MaxRequests int        `json:"max_requests"`
+	RefillRate  int        `json:"refill_rate"`
+	AuthType    string     `json:"auth_type"`
+	Key         string     `json:"key"`
+	Kind        string     `json:"kind"`
+	Type        []string   `json:"type"`
+	RouteMap    []RouteMap `json:"route_map"`
 }
 
 type RouteMap struct {

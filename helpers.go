@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rexlx/threatco/vendors"
 )
@@ -27,7 +28,8 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 				AttrCount:     attrs,
 				ThreatLevelID: "0",
 				Value:         req.Value,
-				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
 			attrs, err := strconv.Atoi(response[0].AttributeCount)
@@ -43,7 +45,8 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 				ThreatLevelID: response[0].ThreatLevelID,
 				Value:         req.Value,
 				Info:          response[0].Info,
-				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
@@ -70,7 +73,8 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 				Value:         req.Value,
 				AttrCount:     0,
 				ThreatLevelID: "1",
-				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
 			return json.Marshal(SummarizedEvent{
@@ -81,7 +85,8 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 				Value:         req.Value,
 				AttrCount:     len(response.Response[0].Event.Attribute),
 				ThreatLevelID: response.Response[0].Event.ThreatLevelID,
-				Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
@@ -95,17 +100,94 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 	})
 }
 
+type ErrorMessage struct {
+	Error bool   `json:"error"`
+	Info  string `json:"info"`
+	Time  int64  `json:"time"`
+}
+
 func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
+	var em ErrorMessage
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		fmt.Println("target not found")
+		em.Error = true
+		em.Info = "target not found"
+		em.Time = time.Now().Unix()
+		return json.Marshal(em)
+		// return nil, fmt.Errorf("target not found")
+	}
+
+	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	// fmt.Println("virus total url", url, req)
+	request, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		em.Error = true
+		em.Info = "request error"
+		em.Time = time.Now().Unix()
+		return json.Marshal(em)
+	}
+
+	// request.Header.Set("Content-Type", "application/json")
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		em.Error = true
+		em.Info = "rate limited"
+		em.Time = time.Now().Unix()
+	}
+	go s.addStat(url, float64(len(resp)))
+	go s.AddResponse(req.TransactionID, resp)
+
+	var response vendors.VirusTotalResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("couldnt unmarshal response into vendors.VirusTotalResponse")
+		em.Error = true
+		em.Info = "couldnt unmarshal response into vendors.VirusTotalResponse"
+		em.Time = time.Now().Unix()
+		return json.Marshal(em)
+	}
+	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
+	sum := SummarizedEvent{
+		Background: "has-background-primary-dark",
+		Info:       info,
+		From:       req.To,
+		Value:      response.Data.ID,
+		Link:       req.TransactionID,
+		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+		Matched: true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
+}
+
+func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
+	fmt.Println("DeepFryHelper")
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		fmt.Println("target not found")
 		return nil, fmt.Errorf("target not found")
 	}
 
-	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	url := fmt.Sprintf("%s/get/ip4", ep.GetURL())
+	// fmt.Println("deep fry url", url, req)
+	data := struct {
+		Message string `json:"message"`
+		Value   string `json:"value"`
+		Error   bool   `json:"error"`
+	}{
+		Message: "",
+		Value:   req.Value,
+	}
 
-	request, err := http.NewRequest("GET", url, nil)
-
+	out, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("json marshal error", err)
+		return nil, err
+	}
+	fmt.Println(req, data)
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 	if err != nil {
 		fmt.Println("request error", err)
 		return nil, err
@@ -118,24 +200,43 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.addStat(url, float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
-
-	var response vendors.VirusTotalResponse
+	fmt.Println("DeepFryHelper", string(resp))
+	response := struct {
+		ID      int    `json:"id"`
+		Message string `json:"message"`
+		Value   string `json:"value"`
+		Error   bool   `json:"error"`
+	}{
+		Message: "",
+		Value:   "",
+	}
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		fmt.Println("couldnt unmarshal response into vendors.VirusTotalResponse")
+		fmt.Println("couldnt unmarshal response into vendors.DeepFyResponse", string(resp))
 		return nil, err
 	}
-	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
+	var matched bool
+	var id string
+	bg := "has-background-dark"
+	if !response.Error {
+		matched = true
+		bg = "has-background-primary-dark"
+		id = strconv.Itoa(response.ID)
+	}
+	fmt.Println(response)
 	sum := SummarizedEvent{
-		Background: "has-background-primary-dark",
-		Info:       info,
-		From:       req.To,
-		Value:      response.Data.ID,
-		Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched:    true,
+		AttrCount:     0,
+		ThreatLevelID: "1",
+		ID:            id,
+		Background:    bg,
+		Info:          "that IP looks nosey!",
+		From:          req.To,
+		Value:         response.Value,
+		Link:          req.TransactionID,
+		// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+		Matched: matched,
 	}
 	return json.Marshal(sum)
-	// return resp, nil
 }
 
 func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
@@ -155,6 +256,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 		return nil, fmt.Errorf("target not found")
 	}
 	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
+	// fmt.Println("misp url", url, req)
 	go s.addStat(url, float64(len(out)))
 
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
@@ -209,4 +311,11 @@ func DeepMapCopy(x, y map[string]float64) {
 	for k, v := range x {
 		y[k] = v
 	}
+}
+
+var AuthTypes = map[string]string{
+	"key":   "key",
+	"none":  "none",
+	"token": "token",
+	"temp":  "temp",
 }

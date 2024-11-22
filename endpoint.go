@@ -3,6 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -10,6 +14,7 @@ import (
 
 type AuthMethod interface {
 	Apply(req *http.Request)
+	GetAndStoreToken(stop chan bool)
 }
 
 type Endpoint struct {
@@ -84,19 +89,6 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 			}
 			e.Backlog = append(e.Backlog, req)
 			e.Memory.Unlock()
-			// sumOut := SummarizedEvent{
-			// 	ID:            "0",
-			// 	Background:    "has-background-info",
-			// 	Info:          "Request backlogged due to a rate limit",
-			// 	ThreatLevelID: "0",
-			// 	Link:          "coming soon!",
-			// }
-			// out, err := json.Marshal(sumOut)
-			// if err != nil {
-			// 	fmt.Println("ERROR", e, err)
-			// 	return []byte(err.Error())
-			// }
-			// return out
 			return []byte{}
 		}
 		e.InFlight++
@@ -151,8 +143,76 @@ type KeyAuth struct {
 	Token string
 }
 
+type PrefetchAuth struct {
+	AppName string `json:"x_app"`
+	URL     string `json:"url"`
+	Key     string `json:"key"`
+	Secret  string `json:"secret"`
+	Token   string `json:"token"`
+	Expires int    `json:"expires"`
+}
+
 type XAPIKeyAuth struct {
 	Token string `json:"token"`
+}
+
+func (p *PrefetchAuth) Apply(req *http.Request) {
+	req.Header.Set("X-App-Name", p.AppName)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.Token)
+}
+
+func (p *PrefetchAuth) GetAndStoreToken(stop chan bool) {
+	ticker := time.NewTicker(time.Duration(p.Expires-5) * time.Second)
+	client := &http.Client{}
+
+	for {
+		_auth := p.Key + ":" + p.Secret
+		auth := base64.StdEncoding.EncodeToString([]byte(_auth))
+		grant := []byte("grant_type=client_credentials")
+		req, err := http.NewRequest("POST", p.URL, bytes.NewBuffer(grant))
+		if err != nil {
+			fmt.Println("PrefetchAuth.GetAndStoreToken: error creating request", err)
+			return
+		}
+		req.Header.Set("Authorization", "Basic "+auth)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("X-App-Name", p.AppName)
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("PrefetchAuth.GetAndStoreToken: error doing request", err)
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("PrefetchAuth.GetAndStoreToken: error reading response body", err)
+			continue
+		}
+		resp.Body.Close()
+		type mandiantTokenResponse struct {
+			Token     string `json:"access_token"`
+			Expires   int    `json:"expires_in"`
+			TokenType string `json:"token_type"`
+		}
+		var res mandiantTokenResponse
+		if err := json.Unmarshal(body, &res); err != nil {
+			fmt.Println("PrefetchAuth.GetAndStoreToken: error unmarshaling response", err)
+			continue
+		}
+		p.Token = res.Token
+		fmt.Println("PrefetchAuth.GetAndStoreToken: token updated")
+		select {
+		case <-ticker.C:
+			continue
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (x *XAPIKeyAuth) GetAndStoreToken(stop chan bool) {
+	fmt.Println("no need to rotate token")
 }
 
 func (x *XAPIKeyAuth) Apply(req *http.Request) {
@@ -160,12 +220,24 @@ func (x *XAPIKeyAuth) Apply(req *http.Request) {
 	req.Header.Set("Accept", "application/json")
 }
 
+func (b *BearerAuth) GetAndStoreToken(stop chan bool) {
+	fmt.Println("no need to rotate token")
+}
+
 func (b *BearerAuth) Apply(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+b.Token)
 }
 
+func (k *KeyAuth) GetAndStoreToken(stop chan bool) {
+	fmt.Println("no need to rotate token")
+}
+
 func (k *KeyAuth) Apply(req *http.Request) {
 	req.Header.Set("Authorization", k.Token)
+}
+
+func (b *BasicAuth) GetAndStoreToken(stop chan bool) {
+	fmt.Println("no need to rotate token")
 }
 
 func (b *BasicAuth) Apply(req *http.Request) {

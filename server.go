@@ -1,25 +1,42 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"errors"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
+	"github.com/google/uuid"
 	"go.etcd.io/bbolt"
 )
 
 var (
-	mispUrl    = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
-	vtKey      = flag.String("vt-key", "", "VirusTotal API key")
-	mispKey    = flag.String("misp-key", "", "MISP API key")
-	dbLocation = flag.String("db", "insights.db", "Database location")
+	firstUserMode = flag.Bool("firstuse", false, "First user mode")
+	fqdn          = flag.String("fqdn", "http://localhost", "Fully qualified domain name")
+	mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
+	vtKey         = flag.String("vt-key", "", "VirusTotal API key")
+	mispKey       = flag.String("misp-key", "", "MISP API key")
+	dbLocation    = flag.String("db", "insights.db", "Database location")
+	httpsPort     = flag.String("https-port", ":8443", "HTTPS port")
+	httpPort      = flag.String("http-port", ":8080", "HTTP port")
+	httpToo       = flag.Bool("http", false, "Enable HTTP")
+	tlsCert       = flag.String("tls-cert", "cert.pem", "TLS certificate")
+	tlsKey        = flag.String("tls-key", "key.pem", "TLS key")
+	certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
+	configPath    = flag.String("config", "data/config.json", "Configuration file")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
 type Server struct {
+	Session *scs.SessionManager  `json:"-"`
 	RespCh  chan ResponseItem    `json:"-"`
+	StopCh  chan bool            `json:"-"`
 	Cache   *Cache               `json:"-"`
 	DB      *bbolt.DB            `json:"-"`
 	Gateway *http.ServeMux       `json:"-"`
@@ -68,7 +85,16 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Responses:    make(map[string]ResponseItem),
 	}
 	resch := make(chan ResponseItem, 200)
+	sessionMgr := scs.New()
+	sessionMgr.Lifetime = 24 * time.Hour
+	sessionMgr.IdleTimeout = 1 * time.Hour
+	sessionMgr.Cookie.Persist = true
+	sessionMgr.Cookie.Name = "token"
+	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
+	// sessionMgr.Cookie.Secure = true
+	sessionMgr.Cookie.HttpOnly = true
 	svr := &Server{
+		Session: sessionMgr,
 		RespCh:  resch,
 		Cache:   cache,
 		DB:      db,
@@ -78,6 +104,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Targets: targets,
 		ID:      id,
 		Details: Details{
+			FQDN:              *fqdn,
 			SupportedServices: SupportedServices,
 			Address:           address,
 			StartTime:         time.Now(),
@@ -88,10 +115,23 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	svr.Gateway.HandleFunc("/stats", svr.GetStatHistoryHandler)
 	svr.Gateway.Handle("/pipe", http.HandlerFunc(svr.ValidateToken(svr.ProxyHandler)))
 	svr.Gateway.Handle("/user", http.HandlerFunc(svr.ValidateToken(svr.GetUserHandler)))
-	svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
+	svr.Gateway.Handle("/updateuser", http.HandlerFunc(svr.ValidateSessionToken(svr.UpdateUserHandler)))
 	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
+	svr.Gateway.HandleFunc("/addservice", svr.AddServiceHandler)
 	svr.Gateway.Handle("/raw", http.HandlerFunc(svr.ValidateToken(svr.RawResponseHandler)))
-	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.EventHandler))
+	svr.Gateway.HandleFunc("/createuser", svr.CreateUserViewHandler)
+	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.ValidateSessionToken(svr.EventHandler)))
+	svr.Gateway.HandleFunc("/login", svr.LoginHandler)
+	svr.Gateway.HandleFunc("/splash", svr.LoginViewHandler)
+	svr.Gateway.HandleFunc("/services", http.HandlerFunc(svr.ValidateSessionToken(svr.ViewServicesHandler)))
+	svr.Gateway.HandleFunc("/getservices", http.HandlerFunc(svr.ValidateSessionToken(svr.GetServicesHandler)))
+	svr.Gateway.HandleFunc("/add-service", http.HandlerFunc(svr.ValidateSessionToken(svr.AddServicesHandler)))
+	svr.Gateway.Handle("/static/", http.StripPrefix("/static/", svr.FileServer()))
+	if *firstUserMode {
+		svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
+	} else {
+		svr.Gateway.Handle("/adduser", http.HandlerFunc(svr.ValidateSessionToken(svr.AddUserHandler)))
+	}
 	return svr
 }
 
@@ -140,6 +180,40 @@ func (s *Server) ProcessTransientResponses() {
 	}
 }
 
+func (t *Token) CreateToken(userID string, ttl time.Duration) (*Token, error) {
+	tk := &Token{
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+	hotSauce := make([]byte, 64)
+	_, err := io.ReadFull(rand.Reader, hotSauce)
+	if err != nil {
+		return nil, err
+	}
+	tk.Token = uuid.New().String()
+	hash := sha256.Sum256([]byte(tk.Token))
+	tk.Hash = hash[:]
+	return tk, nil
+}
+
+func (s *Server) AddTokenToSession(r *http.Request, w http.ResponseWriter, tk *Token) error {
+	s.Session.Put(r.Context(), "token", tk.Token)
+	return nil
+}
+
+func (s *Server) DeleteTokenFromSession(r *http.Request) error {
+	s.Session.Remove(r.Context(), "token")
+	return nil
+}
+
+func (s *Server) GetTokenFromSession(r *http.Request) (string, error) {
+	tk, ok := s.Session.Get(r.Context(), "token").(string)
+	if !ok {
+		return "", errors.New("error getting token from session")
+	}
+	return tk, nil
+}
+
 func (s *Server) AddResponse(uid string, data []byte) {
 	// uid := uuid.New().String()
 	resp := ResponseItem{
@@ -148,4 +222,66 @@ func (s *Server) AddResponse(uid string, data []byte) {
 		Data: data,
 	}
 	s.RespCh <- resp
+}
+
+func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
+	if fromFile {
+		err := cfg.PopulateFromJSONFile(*configPath)
+		if err != nil {
+			s.Log.Fatalf("could not populate from file: %v", err)
+		}
+	}
+	for _, svc := range cfg.Services {
+		switch svc.AuthType {
+		case "key":
+			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "token":
+			thisAuthType := &KeyAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "basic":
+			thisAuthType := &BasicAuth{Username: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "fetch":
+			thisAuthType := &PrefetchAuth{
+				URL:     svc.URL,
+				Key:     svc.Key,
+				Secret:  svc.Secret,
+				Expires: svc.Expires,
+			}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		default:
+			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
+
+		}
+	}
+	s.Details.SupportedServices = cfg.Services
+
+	for _, service := range s.Targets {
+		thisAuth := service.Auth
+		go thisAuth.GetAndStoreToken(s.StopCh)
+		// s.Log.Printf("service %s: +%v\n", serviceName, service)
+	}
+
+	s.Log.Printf("initialized from config: %v", cfg)
 }

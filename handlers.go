@@ -11,10 +11,14 @@ import (
 	"github.com/google/uuid"
 )
 
+func (s *Server) FileServer() http.Handler {
+	return http.FileServer(http.Dir("./static"))
+}
+
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_event_requests", 1)
 	defer func(start time.Time) {
-		fmt.Println("AddEventHandler took", time.Since(start))
+		s.Log.Println("AddEventHandler took", time.Since(start))
 	}(time.Now())
 	var ar AttributeRequest
 	err := json.NewDecoder(r.Body).Decode(&ar)
@@ -67,6 +71,54 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("add_service_requests", 1)
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var svc ServiceType
+	var rm RouteMap
+	for k, v := range r.PostForm {
+		switch k {
+		case "kind":
+			svc.Kind = v[0]
+		case "types":
+			tmp := strings.Split(v[0], ",")
+			for _, t := range tmp {
+				svc.Type = append(svc.Type, strings.TrimLeft(t, " "))
+			}
+		default:
+			if len(svc.Type) == len(v) {
+				for i, t := range v {
+					rm.Route = t
+					rm.Type = svc.Type[i]
+					// rm.Type = strings.TrimLeft(svc.Type[i], " ")
+					svc.RouteMap = append(svc.RouteMap, rm)
+				}
+			}
+
+		}
+	}
+	err = s.AddService(svc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.SupportedServices = append(s.Details.SupportedServices, svc)
+
+	out, err := json.Marshal(svc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("get_stat_history_requests", 1)
 	defer func(start time.Time) {
@@ -84,7 +136,7 @@ func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("add_user_requests", 1)
+	// defer s.addStat("add_user_requests", 1)
 	defer func(start time.Time) {
 		fmt.Println("AddUserHandler took", time.Since(start))
 	}(time.Now())
@@ -100,20 +152,32 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing 'email' field", http.StatusBadRequest)
 		return
 	}
-	s.Memory.Lock()
-	user, err := NewUser(nur.Email, nur.Admin, s.Details.SupportedServices)
+	//
+	var b bool
+	if nur.Admin == "on" {
+		b = true
+	}
+	user, err := NewUser(nur.Email, b, s.Details.SupportedServices)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		s.Memory.Unlock()
 		return
 	}
-	s.Memory.Unlock()
+	if nur.Password != "" {
+		err = user.SetPassword(nur.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	// s.Memory.Lock()
 	err = s.AddUser(*user)
 	if err != nil {
 		fmt.Println("error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// s.Memory.Unlock()
 		return
 	}
+	// s.Memory.Unlock()
 	out, err := json.Marshal(user)
 	if err != nil {
 		fmt.Println("error", err)
@@ -158,6 +222,15 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(resp)
 		return
+	case "deepfry":
+		resp, err := s.DeepFryHelper(req)
+		if err != nil {
+			fmt.Println("bigtime error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(resp)
+		return
 	default:
 		sumOut := SummarizedEvent{
 			From:          req.To,
@@ -167,6 +240,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			ThreatLevelID: "0",
 			Value:         req.Value,
 			ID:            "unknown target",
+			Link:          req.TransactionID,
 		}
 		out, err := json.Marshal(sumOut)
 		if err != nil {
@@ -178,16 +252,14 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("--------------------------------------EventHandler")
 	defer s.addStat("event_requests", 1)
-	defer func(start time.Time) {
-		fmt.Println("EventHandler took", time.Since(start))
-	}(time.Now())
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	id := r.URL.Path[len("/events/"):]
 	event, ok := s.Cache.Responses[id]
 	if !ok {
-		http.Error(w, "event not found", http.StatusNotFound)
+		http.Error(w, fmt.Sprintf("event not found %v", id), http.StatusNotFound)
 		return
 	}
 	// out, err := json.Marshal(event)
@@ -219,9 +291,9 @@ type RawResponseRequest struct {
 
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("get_user_requests", 1)
-	defer func(start time.Time) {
-		fmt.Println("GetUserHandler took", time.Since(start))
-	}(time.Now())
+	// defer func(start time.Time) {
+	// 	fmt.Println("GetUserHandler took", time.Since(start))
+	// }(time.Now())
 	// s.Memory.RLock()
 	// defer s.Memory.RUnlock()
 	parts := strings.Split(r.Header.Get("Authorization"), ":")
@@ -256,9 +328,97 @@ func (s *Server) RawResponseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(res.Data)
 }
 
+func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	tkn, _ := s.GetTokenFromSession(r)
+	if tkn != "" {
+		http.Error(w, "already logged in", http.StatusForbidden)
+		return
+	}
+	email := r.FormValue("username")
+	password := r.FormValue("password")
+	u, err := s.GetUserByEmail(email)
+	if err != nil || u.Email == "" {
+		fmt.Println("LoginHandler: user not found", email)
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	ok, err := u.PasswordMatches(password)
+	if err != nil {
+		fmt.Println("error checking password", err, email)
+		http.Error(w, "error checking password", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		fmt.Println("password does not match", email)
+		http.Error(w, "password does not match", http.StatusUnauthorized)
+		return
+	}
+	err = s.AddUser(u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tk, err := u.SessionToken.CreateToken(u.ID, 24*time.Hour)
+	if err != nil {
+		fmt.Println("error creating token", err)
+		http.Error(w, "error creating token", http.StatusInternalServerError)
+		return
+	}
+	tk.Email = u.Email
+	err = s.SaveToken(*tk)
+	if err != nil {
+		fmt.Println("error saving token", err)
+		http.Error(w, "error saving token", http.StatusInternalServerError)
+		return
+	}
+	err = s.AddTokenToSession(r, w, tk)
+	if err != nil {
+		fmt.Println("error adding token to session", err)
+		http.Error(w, "error adding token to session", http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("login successful", u.Email)
+	s.Memory.Lock()
+	s.Details.Stats["logins"]++
+	s.Memory.Unlock()
+	w.Write([]byte("login successful"))
+}
+
+func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("UpdateUserHandler")
+	var u User
+	err := json.NewDecoder(r.Body).Decode(&u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println("UpdateUserHandler", u)
+	user, err := s.GetUserByEmail(u.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.Services = u.Services
+	user.Updated = time.Now()
+	err = s.AddUser(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.Password = ""
+	user.Hash = nil
+	out, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 type NewUserRequest struct {
-	Email string `json:"email"`
-	Admin bool   `json:"admin"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Admin    string `json:"admin"`
 }
 
 type ProxyRequest struct {

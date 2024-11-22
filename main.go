@@ -12,21 +12,13 @@ import (
 
 func main() {
 	flag.Parse()
-	s := NewServer("1", ":8080", *dbLocation)
-
-	bear := KeyAuth{Token: *mispKey}
-	vtAuth := XAPIKeyAuth{Token: *vtKey}
-	ticker := time.NewTicker(150 * time.Second)
+	var c Configuration
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	misp := NewEndpoint(*mispUrl, &bear, true, s.RespCh)
-	vt := NewEndpoint("https://www.virustotal.com/api/v3", &vtAuth, false, s.RespCh)
-	vt.RateLimited = true
-	vt.MaxRequests = 4
-	vt.RefillRate = 61 * time.Second
-	s.Targets["virustotal"] = vt
-	s.Targets["misp"] = misp
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	s := NewServer("1", ":8081", *dbLocation)
 
+	s.InitializeFromConfig(&c, true)
+	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	go func() {
 		for {
 			select {
@@ -42,7 +34,7 @@ func main() {
 
 	svr := &http.Server{
 		Addr:    s.Details.Address,
-		Handler: s.Gateway,
+		Handler: s.Session.LoadAndSave(s.Gateway),
 	}
 	go s.ProcessTransientResponses()
 	s.Log.Printf("Server started at %s", s.Details.Address)
