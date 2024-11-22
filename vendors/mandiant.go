@@ -1,10 +1,10 @@
 package vendors
 
-type IndicatorResponse struct {
-	Indicators []Indicator `json:"indicators"`
+type MandiantIndicatorResponse struct {
+	Indicators []MndiantIndicator `json:"indicators"`
 }
 
-type Indicator struct {
+type MndiantIndicator struct {
 	AssociatedHashes       []AssociatedHash        `json:"associated_hashes"`
 	AttributedAssociations []AttributedAssociation `json:"attributed_associations"`
 	Actors                 []Actor                 `json:"actors"`

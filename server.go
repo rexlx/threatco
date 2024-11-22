@@ -36,6 +36,7 @@ var (
 type Server struct {
 	Session *scs.SessionManager  `json:"-"`
 	RespCh  chan ResponseItem    `json:"-"`
+	StopCh  chan bool            `json:"-"`
 	Cache   *Cache               `json:"-"`
 	DB      *bbolt.DB            `json:"-"`
 	Gateway *http.ServeMux       `json:"-"`
@@ -256,14 +257,31 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
+		case "fetch":
+			thisAuthType := &PrefetchAuth{
+				URL:     svc.URL,
+				Key:     svc.Key,
+				Secret:  svc.Secret,
+				Expires: svc.Expires,
+			}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
 		default:
 			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
 
 		}
 	}
 	s.Details.SupportedServices = cfg.Services
-	for _, target := range s.Details.SupportedServices {
-		s.Log.Printf("initialized from config: %v", target)
+
+	for _, service := range s.Targets {
+		thisAuth := service.Auth
+		go thisAuth.GetAndStoreToken(s.StopCh)
+		// s.Log.Printf("service %s: +%v\n", serviceName, service)
 	}
+
 	s.Log.Printf("initialized from config: %v", cfg)
 }

@@ -62,6 +62,8 @@ var SupportedServices = []ServiceType{
 }
 
 type ServiceType struct {
+	Expires     int        `json:"expires"`
+	Secret      string     `json:"secret"`
 	Selected    bool       `json:"selected"`
 	Insecure    bool       `json:"insecure"`
 	Name        string     `json:"name"`
