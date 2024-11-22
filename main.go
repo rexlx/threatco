@@ -17,9 +17,6 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	s := NewServer("1", ":8081", *dbLocation)
 
-	if err := c.PopulateFromJSONFile(*configPath); err != nil {
-		log.Fatalf("could not populate configuration: %v", err)
-	}
 	s.InitializeFromConfig(&c, true)
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	go func() {

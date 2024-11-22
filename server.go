@@ -261,8 +261,9 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 
 		}
 	}
-	for _, target := range s.Targets {
-		s.Log.Printf("initialized target: %s\n", target.GetURL())
+	s.Details.SupportedServices = cfg.Services
+	for _, target := range s.Details.SupportedServices {
+		s.Log.Printf("initialized from config: %v", target)
 	}
 	s.Log.Printf("initialized from config: %v", cfg)
 }
