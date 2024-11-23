@@ -163,7 +163,6 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 }
 
 func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
-	fmt.Println("DeepFryHelper")
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		fmt.Println("target not found")
@@ -200,7 +199,6 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.addStat(url, float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
-	fmt.Println("DeepFryHelper", string(resp))
 	response := struct {
 		ID      int    `json:"id"`
 		Message string `json:"message"`

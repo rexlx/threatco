@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -48,6 +49,7 @@ type Server struct {
 }
 
 type Details struct {
+	FirstUserMode     bool               `json:"first_user_mode"`
 	FQDN              string             `json:"fqdn"`
 	SupportedServices []ServiceType      `json:"supported_services"`
 	Address           string             `json:"address"`
@@ -56,9 +58,10 @@ type Details struct {
 }
 
 type Cache struct {
-	Services     []ServiceType           `json:"services"`
-	StatsHistory []StatItem              `json:"stats_history"`
-	Responses    map[string]ResponseItem `json:"responses"`
+	ResponseExpiry time.Duration           `json:"response_expiry"`
+	Services       []ServiceType           `json:"services"`
+	StatsHistory   []StatItem              `json:"stats_history"`
+	Responses      map[string]ResponseItem `json:"responses"`
 }
 type StatItem struct {
 	Time int64              `json:"time"`
@@ -84,6 +87,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		StatsHistory: make([]StatItem, 0),
 		Responses:    make(map[string]ResponseItem),
 	}
+	stopCh := make(chan bool)
 	resch := make(chan ResponseItem, 200)
 	sessionMgr := scs.New()
 	sessionMgr.Lifetime = 24 * time.Hour
@@ -94,6 +98,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
 	svr := &Server{
+		StopCh:  stopCh,
 		Session: sessionMgr,
 		RespCh:  resch,
 		Cache:   cache,
@@ -111,27 +116,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 			Stats:             make(map[string]float64),
 		},
 	}
-	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)
-	svr.Gateway.HandleFunc("/stats", svr.GetStatHistoryHandler)
-	svr.Gateway.Handle("/pipe", http.HandlerFunc(svr.ValidateToken(svr.ProxyHandler)))
-	svr.Gateway.Handle("/user", http.HandlerFunc(svr.ValidateToken(svr.GetUserHandler)))
-	svr.Gateway.Handle("/updateuser", http.HandlerFunc(svr.ValidateSessionToken(svr.UpdateUserHandler)))
-	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
-	svr.Gateway.HandleFunc("/addservice", svr.AddServiceHandler)
-	svr.Gateway.Handle("/raw", http.HandlerFunc(svr.ValidateToken(svr.RawResponseHandler)))
-	svr.Gateway.HandleFunc("/createuser", svr.CreateUserViewHandler)
-	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.ValidateSessionToken(svr.EventHandler)))
-	svr.Gateway.HandleFunc("/login", svr.LoginHandler)
-	svr.Gateway.HandleFunc("/splash", svr.LoginViewHandler)
-	svr.Gateway.HandleFunc("/services", http.HandlerFunc(svr.ValidateSessionToken(svr.ViewServicesHandler)))
-	svr.Gateway.HandleFunc("/getservices", http.HandlerFunc(svr.ValidateSessionToken(svr.GetServicesHandler)))
-	svr.Gateway.HandleFunc("/add-service", http.HandlerFunc(svr.ValidateSessionToken(svr.AddServicesHandler)))
-	svr.Gateway.Handle("/static/", http.StripPrefix("/static/", svr.FileServer()))
-	if *firstUserMode {
-		svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
-	} else {
-		svr.Gateway.Handle("/adduser", http.HandlerFunc(svr.ValidateSessionToken(svr.AddUserHandler)))
-	}
+	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	return svr
 }
 
@@ -169,9 +154,10 @@ func (s *Server) ProcessTransientResponses() {
 			s.Cache.Responses[resp.ID] = resp
 			s.Memory.Unlock()
 		case <-ticker.C:
+			s.Log.Println("Processing transient responses: removing old entries")
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {
-				if time.Since(v.Time) > 24*time.Hour {
+				if time.Since(v.Time) > s.Cache.ResponseExpiry {
 					delete(s.Cache.Responses, k)
 				}
 			}
@@ -276,11 +262,36 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		}
 	}
 	s.Details.SupportedServices = cfg.Services
-
+	s.Details.FQDN = cfg.FQDN
+	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
+	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
+	s.ID = cfg.ServerID
+	s.Details.FirstUserMode = cfg.FirstUserMode
+	s.Session.Lifetime = time.Duration(cfg.SessionTokenTTL) * time.Hour
 	for _, service := range s.Targets {
 		thisAuth := service.Auth
 		go thisAuth.GetAndStoreToken(s.StopCh)
 		// s.Log.Printf("service %s: +%v\n", serviceName, service)
+	}
+	s.Gateway.HandleFunc("/stats", s.GetStatHistoryHandler)
+	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
+	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
+	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
+	s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
+	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
+	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))
+	s.Gateway.HandleFunc("/createuser", http.HandlerFunc(s.ValidateToken(s.CreateUserViewHandler)))
+	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
+	s.Gateway.HandleFunc("/login", s.LoginHandler)
+	s.Gateway.HandleFunc("/splash", s.LoginViewHandler)
+	s.Gateway.HandleFunc("/services", http.HandlerFunc(s.ValidateSessionToken(s.ViewServicesHandler)))
+	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
+	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
+	s.Gateway.Handle("/static/", http.StripPrefix("/static/", s.FileServer()))
+	if s.Details.FirstUserMode {
+		s.Gateway.HandleFunc("/adduser", s.AddUserHandler)
+	} else {
+		s.Gateway.Handle("/adduser", http.HandlerFunc(s.ValidateSessionToken(s.AddUserHandler)))
 	}
 
 	s.Log.Printf("initialized from config: %v", cfg)

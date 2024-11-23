@@ -7,6 +7,7 @@ import (
 )
 
 type Configuration struct {
+	BindAddress         string        `json:"bind_address"`
 	ServerID            string        `json:"server_id"`
 	FirstUserMode       bool          `json:"first_user_mode"`
 	FQDN                string        `json:"fqdn"`

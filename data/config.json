@@ -1,6 +1,7 @@
 {
     "server_id": "micah",
     "first_user_mode": true,
+    "bind_address": "",
     "fqdn": "example.com",
     "services": [
         {
@@ -65,14 +66,14 @@
             }]
         }
     ],
-    "http_port": "8080",
+    "http_port": "8081",
     "https_port": "8443",
     "http_too": true,
     "tls_cert": "/path/to/tls.cert",
     "tls_key": "/path/to/tls.key",
     "cert_auth": "/path/to/cert.auth",
-    "db_location": "/path/to/db",
-    "session_token_ttl": 36000,
+    "db_location": "./insights.db",
+    "session_token_ttl": 36,
     "response_cache_expiry": 60000,
     "stat_cache_tick_rate": 180
 }
