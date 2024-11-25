@@ -41,6 +41,9 @@ var AddUserView string = `<!DOCTYPE html>
             </div>
           </nav>
          
+             <h1 class="title">User List</h1>
+    
+
             <section class="section has-background-black-ter" style="height: 100vh;">
                 <div class="container">
                     <h1 class="title has-text-primary">Add User</h1>
@@ -74,6 +77,7 @@ var AddUserView string = `<!DOCTYPE html>
                     </form>
                 </div>
             </section>
+
         </body>
         <script type="module" src="./static/js/functions.js"></script>
     </html>
