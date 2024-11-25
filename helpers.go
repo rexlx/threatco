@@ -139,7 +139,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 		em.Info = "rate limited"
 		em.Time = time.Now().Unix()
 	}
-	go s.addStat(url, float64(len(resp)))
+	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
 
 	var response vendors.VirusTotalResponse
@@ -200,7 +200,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("rate limited")
 	}
-	go s.addStat(url, float64(len(resp)))
+	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
 	response := struct {
 		ID      int    `json:"id"`
@@ -258,7 +258,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	}
 	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// fmt.Println("misp url", url, req)
-	go s.addStat(url, float64(len(out)))
+	go s.addStat(ep.GetURL(), float64(len(out)))
 
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 
