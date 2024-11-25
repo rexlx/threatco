@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
@@ -58,6 +60,8 @@ type Details struct {
 }
 
 type Cache struct {
+	Charts         []byte                  `json:"charts"`
+	Coordinates    map[string][]float64    `json:"coordinates"`
 	ResponseExpiry time.Duration           `json:"response_expiry"`
 	Services       []ServiceType           `json:"services"`
 	StatsHistory   []StatItem              `json:"stats_history"`
@@ -84,6 +88,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
+		Coordinates:  make(map[string][]float64),
 		StatsHistory: make([]StatItem, 0),
 		Responses:    make(map[string]ResponseItem),
 	}
@@ -274,6 +279,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		// s.Log.Printf("service %s: +%v\n", serviceName, service)
 	}
 	s.Gateway.HandleFunc("/stats", s.GetStatHistoryHandler)
+	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
+	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
 	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
 	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
@@ -295,4 +302,46 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 
 	s.Log.Printf("initialized from config: %v", cfg)
+}
+
+func (s *Server) UpdateCharts() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	malloc := float64(m.Alloc)
+	s.Details.Stats["malloc"] = malloc / 1024
+	s.Details.Stats["goroutines"] = float64(runtime.NumGoroutine())
+	s.Details.Stats["heap"] = float64(m.HeapAlloc) / 1024
+	s.Details.Stats["heap_objects"] = float64(m.HeapObjects)
+	s.Details.Stats["stack"] = float64(m.StackInuse) / 1024
+	s.Details.Stats["alloc"] = float64(m.Alloc) / 1024
+	s.Details.Stats["total_alloc"] = float64(m.TotalAlloc) / 1024
+	s.Details.Stats["sys"] = float64(m.Sys) / 1024
+	s.Details.Stats["num_gc"] = float64(m.NumGC)
+	// s.Details.Stats["poll_time"] = float64(time.Now().Unix())
+	// s.Details.Stats["poll_interval"] = float64(t.Seconds())
+	// s.Details.Stats["last_gc"] = float64(m.LastGC) / 1000000
+	s.Details.Stats["pause_total_ns"] = float64(m.PauseTotalNs) / 1000000
+	for i, stat := range s.Details.Stats {
+		_, ok := s.Cache.Coordinates[i]
+		if !ok {
+			s.Cache.Coordinates[i] = make([]float64, 0)
+		}
+		if len(s.Cache.Coordinates[i]) > 100 {
+			s.Cache.Coordinates[i] = s.Cache.Coordinates[i][1:]
+		}
+		s.Cache.Coordinates[i] = append(s.Cache.Coordinates[i], stat)
+	}
+
+	var buf bytes.Buffer
+	for k, v := range s.Cache.Coordinates {
+		chart := createLineChart(k, v)
+		err := chart.Render(&buf)
+		if err != nil {
+			s.Log.Printf("could not render chart: %v", err)
+			continue
+		}
+	}
+	s.Cache.Charts = buf.Bytes()
 }

@@ -252,7 +252,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("--------------------------------------EventHandler")
+	fmt.Println("EventHandler")
 	defer s.addStat("event_requests", 1)
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
@@ -436,16 +436,17 @@ type GenericOut struct {
 }
 
 type SummarizedEvent struct {
-	Matched       bool   `json:"matched"`
-	Error         bool   `json:"error"`
-	Background    string `json:"background"`
-	From          string `json:"from"`
-	ID            string `json:"id"`
-	AttrCount     int    `json:"attr_count"`
-	Link          string `json:"link"`
-	ThreatLevelID string `json:"threat_level_id"`
-	Value         string `json:"value"`
-	Info          string `json:"info"`
+	Timestamp     time.Time `json:"timestamp"`
+	Matched       bool      `json:"matched"`
+	Error         bool      `json:"error"`
+	Background    string    `json:"background"`
+	From          string    `json:"from"`
+	ID            string    `json:"id"`
+	AttrCount     int       `json:"attr_count"`
+	Link          string    `json:"link"`
+	ThreatLevelID string    `json:"threat_level_id"`
+	Value         string    `json:"value"`
+	Info          string    `json:"info"`
 }
 
 type AttributeRequest struct {

@@ -23,7 +23,8 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				s.updateCache()
+				s.UpdateCharts()
+				go s.updateCache()
 			case <-sigs:
 				s.Log.Println("Shutting down")
 				ticker.Stop()
