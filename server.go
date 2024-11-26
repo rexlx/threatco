@@ -224,7 +224,13 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		}
 	}
 	for _, svc := range cfg.Services {
-		switch svc.AuthType {
+		u := svc.URL
+		parts := strings.Split(svc.AuthType, "|")
+		if len(parts) > 1 {
+			u = parts[1]
+		}
+		authName := parts[0]
+		switch authName {
 		case "key":
 			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
@@ -250,13 +256,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		case "fetch":
-			var u string
-			parts := strings.Split(svc.Key, "|")
-			if len(parts) == 2 {
-				u = parts[1]
-			} else {
-				u = svc.URL
-			}
 			thisAuthType := &PrefetchAuth{
 				URL:     u,
 				Key:     svc.Key,
