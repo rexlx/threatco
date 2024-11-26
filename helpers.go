@@ -340,16 +340,34 @@ func createLineChart(seriesName string, data []float64) *charts.Line {
 	return line
 }
 
+type mandiantIndicatorPostReqest struct {
+	Requests []struct {
+		Values []string `json:"values"`
+	} `json:"requests"`
+}
+
 func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		fmt.Println("target not found")
 		return nil, fmt.Errorf("target not found")
 	}
-
-	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	var postReq mandiantIndicatorPostReqest
+	postReq.Requests = []struct {
+		Values []string `json:"values"`
+	}{
+		{
+			Values: []string{req.Value},
+		},
+	}
+	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// fmt.Println("mandiant url", url, req)
-	request, err := http.NewRequest("GET", url, nil)
+	out, err := json.Marshal(postReq)
+	if err != nil {
+		fmt.Println("json marshal error", err)
+		return nil, err
+	}
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 
 	if err != nil {
 		fmt.Println("request error", err)
@@ -370,7 +388,16 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		return nil, err
 	}
 	fmt.Printf("response: +%v\n", response)
-	return nil, nil
+	sum := SummarizedEvent{
+		Background: "has-background-primary-dark",
+		Info:       "under development",
+		From:       req.To,
+		Value:      "under development",
+		Link:       req.TransactionID,
+		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+		Matched: true,
+	}
+	return json.Marshal(sum)
 }
 
 // fmt.Println(response)
