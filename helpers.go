@@ -339,3 +339,41 @@ func createLineChart(seriesName string, data []float64) *charts.Line {
 		SetSeriesOptions(charts.WithLineChartOpts(smoothLine))
 	return line
 }
+
+func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		fmt.Println("target not found")
+		return nil, fmt.Errorf("target not found")
+	}
+
+	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	// fmt.Println("mandiant url", url, req)
+	request, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		fmt.Println("request error", err)
+		return nil, err
+	}
+
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("rate limited")
+	}
+	go s.addStat(ep.GetURL(), float64(len(resp)))
+	go s.AddResponse(req.TransactionID, resp)
+
+	var response vendors.MandiantIndicatorResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("couldnt unmarshal response into vendors.MandiantResponse")
+		return nil, err
+	}
+	fmt.Printf("response: +%v\n", response)
+	return nil, nil
+}
+
+// fmt.Println(response)
+// fmt.Println(response.Data.Attributes)
+// fmt.Println(response.Data.Attributes.Indicators)
+// fmt.Println(response.Data.Attributes.Indicators[0].
