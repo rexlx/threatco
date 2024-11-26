@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -249,8 +250,15 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		case "fetch":
+			var u string
+			parts := strings.Split(svc.Key, "|")
+			if len(parts) == 2 {
+				u = parts[1]
+			} else {
+				u = svc.URL
+			}
 			thisAuthType := &PrefetchAuth{
-				URL:     svc.URL,
+				URL:     u,
 				Key:     svc.Key,
 				Secret:  svc.Secret,
 				Expires: svc.Expires,
