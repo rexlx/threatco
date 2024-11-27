@@ -222,6 +222,15 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(resp)
 		return
+	case "mandiant":
+		resp, err := s.MandiantHelper(req)
+		if err != nil {
+			fmt.Println("bigtime error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(resp)
+		return
 	case "deepfry":
 		resp, err := s.DeepFryHelper(req)
 		if err != nil {
