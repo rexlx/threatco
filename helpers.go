@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
@@ -110,14 +109,11 @@ type ErrorMessage struct {
 }
 
 func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
-	var em ErrorMessage
+	// var em ErrorMessage
 	ep, ok := s.Targets[req.To]
 	if !ok {
-		fmt.Println("target not found")
-		em.Error = true
-		em.Info = "target not found"
-		em.Time = time.Now().Unix()
-		return json.Marshal(em)
+		s.Log.Println("VirusTotalHelper: target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 		// return nil, fmt.Errorf("target not found")
 	}
 
@@ -126,18 +122,16 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
-		em.Error = true
-		em.Info = "request error"
-		em.Time = time.Now().Unix()
-		return json.Marshal(em)
+		s.Log.Println("VirusTotalHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+		// return nil, err
 	}
 
 	// request.Header.Set("Content-Type", "application/json")
 	resp := ep.Do(request)
 	if len(resp) == 0 {
-		em.Error = true
-		em.Info = "rate limited"
-		em.Time = time.Now().Unix()
+		s.Log.Println("VirusTotalHelper: got a zero length response")
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
@@ -145,11 +139,8 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	var response vendors.VirusTotalResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		fmt.Println("couldnt unmarshal response into vendors.VirusTotalResponse")
-		em.Error = true
-		em.Info = "couldnt unmarshal response into vendors.VirusTotalResponse"
-		em.Time = time.Now().Unix()
-		return json.Marshal(em)
+		s.Log.Println("VirusTotalHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
 	sum := SummarizedEvent{
@@ -168,8 +159,8 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	ep, ok := s.Targets[req.To]
 	if !ok {
-		fmt.Println("target not found")
-		return nil, fmt.Errorf("target not found")
+		s.Log.Println("DeepFryHelper: target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 
 	url := fmt.Sprintf("%s/get/ip4", ep.GetURL())
@@ -185,20 +176,18 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 
 	out, err := json.Marshal(data)
 	if err != nil {
-		fmt.Println("json marshal error", err)
-		return nil, err
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
 	fmt.Println(req, data)
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 	if err != nil {
-		fmt.Println("request error", err)
-		return nil, err
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
 	// request.Header.Set("Content-Type", "application/json")
 	resp := ep.Do(request)
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("rate limited")
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
@@ -213,8 +202,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	}
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		fmt.Println("couldnt unmarshal response into vendors.DeepFyResponse", string(resp))
-		return nil, err
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 	var matched bool
 	var id string
@@ -247,14 +235,12 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 
 	out, err := json.Marshal(output)
 	if err != nil {
-		fmt.Println("json marshal error", err)
-		return nil, err
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
 
 	ep, ok := s.Targets[req.To]
 	if !ok {
-		fmt.Println("target not found")
-		return nil, fmt.Errorf("target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// fmt.Println("misp url", url, req)
@@ -271,7 +257,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	request.Header.Set("Accept", "application/json")
 	resp := ep.Do(request)
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("rate limited")
+		return CreateAndWriteSummarizedEvent(req, true, "zero length response")
 	}
 	go s.AddResponse(req.TransactionID, resp)
 
@@ -282,14 +268,12 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 		var e []vendors.Event
 		err := json.Unmarshal(resp, &e)
 		if err != nil {
-			fmt.Println("couldnt unmarshal response into vendors.Response or []vendors.Event")
-			return nil, err
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 		}
 
 		resp, err = s.ParseOtherMispResponse(req, e)
 		if err != nil {
-			fmt.Println(err)
-			return nil, err
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 		}
 		return resp, nil
 	}
@@ -312,13 +296,6 @@ func DeepMapCopy(x, y map[string]float64) {
 	for k, v := range x {
 		y[k] = v
 	}
-}
-
-var AuthTypes = map[string]string{
-	"key":   "key",
-	"none":  "none",
-	"token": "token",
-	"temp":  "temp",
 }
 
 func createLineChart(seriesName string, data []float64) *charts.Line {
@@ -349,8 +326,8 @@ type mandiantIndicatorPostReqest struct {
 func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	ep, ok := s.Targets[req.To]
 	if !ok {
-		fmt.Println("target not found")
-		return nil, fmt.Errorf("target not found")
+		s.Log.Println("MandiantHelper: target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 	var postReq mandiantIndicatorPostReqest
 	postReq.Requests = []struct {
@@ -364,19 +341,19 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	// fmt.Println("mandiant url", url, req)
 	out, err := json.Marshal(postReq)
 	if err != nil {
-		fmt.Println("json marshal error", err)
-		return nil, err
+		s.Log.Println("MandiantHelper: server error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 
 	if err != nil {
-		fmt.Println("request error", err)
-		return nil, err
+		s.Log.Println("MandiantHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
 	resp := ep.Do(request)
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("rate limited")
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
@@ -384,10 +361,9 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	var response vendors.MandiantIndicatorResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		fmt.Println("couldnt unmarshal response into vendors.MandiantResponse")
-		return nil, err
+		s.Log.Println("MandiantHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
-	fmt.Printf("response: +%v\n", response)
 	sum := SummarizedEvent{
 		Background: "has-background-primary-dark",
 		Info:       "under development",
@@ -400,7 +376,25 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	return json.Marshal(sum)
 }
 
-// fmt.Println(response)
-// fmt.Println(response.Data.Attributes)
-// fmt.Println(response.Data.Attributes.Indicators)
-// fmt.Println(response.Data.Attributes.Indicators[0].
+func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byte, error) {
+	if e {
+		return json.Marshal(SummarizedEvent{
+			Background: "has-background-warning",
+			Info:       info,
+			From:       req.To,
+			ID:         "no hits",
+			Value:      req.Value,
+			Link:       req.TransactionID,
+			Error:      true,
+		})
+	}
+	return json.Marshal(SummarizedEvent{
+		Error:      false,
+		Background: "has-background-primary-dark",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+	})
+
+}

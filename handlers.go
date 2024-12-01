@@ -188,26 +188,33 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("proxy_requests", 1)
-	defer func(start time.Time) {
-		fmt.Println("ProxyHandler took", time.Since(start))
-	}(time.Now())
-
+	// var written int
 	var req ProxyRequest
+	defer s.addStat("proxy_requests", 1)
+	defer func(start time.Time, kind string) {
+		fmt.Println("__ProxyHandler__ took:", time.Since(start), kind)
+	}(time.Now(), req.To)
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
+		s.Log.Println("ProxyHandler decoder error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// fmt.Println("ProxyHandler", req)
 	uid := uuid.New().String()
 	req.TransactionID = uid
 	switch req.To {
 	case "misp":
 		resp, err := s.MispHelper(req)
 		if err != nil {
-			fmt.Println("bigtime error", err)
-			// fmt.Println("bigtime error", err, string(resp))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+			if err != nil {
+				fmt.Println("bigtime error", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(r)
 			return
 		}
 		w.Write(resp)
@@ -216,8 +223,13 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		// fmt.Println("virustotal", req)
 		resp, err := s.VirusTotalHelper(req)
 		if err != nil {
-			fmt.Println("bigtime error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+			if err != nil {
+				fmt.Println("bigtime error", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(r)
 			return
 		}
 		w.Write(resp)
@@ -225,8 +237,13 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	case "mandiant":
 		resp, err := s.MandiantHelper(req)
 		if err != nil {
-			fmt.Println("bigtime error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+			if err != nil {
+				fmt.Println("bigtime error", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(r)
 			return
 		}
 		w.Write(resp)
@@ -234,8 +251,13 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	case "deepfry":
 		resp, err := s.DeepFryHelper(req)
 		if err != nil {
-			fmt.Println("bigtime error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+			if err != nil {
+				fmt.Println("bigtime error", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(r)
 			return
 		}
 		w.Write(resp)
@@ -258,14 +280,17 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(out)
 	}
+	// s.Memory.Lock()
+	// s.Details.Stats["amount_proxied"] += float64(written)
+	// s.Memory.Unlock()
 }
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("EventHandler")
 	defer s.addStat("event_requests", 1)
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	id := r.URL.Path[len("/events/"):]
+	// fmt.Println("EventHandler", id)
 	event, ok := s.Cache.Responses[id]
 	if !ok {
 		http.Error(w, fmt.Sprintf("event not found %v", id), http.StatusNotFound)
