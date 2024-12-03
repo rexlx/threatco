@@ -323,6 +323,10 @@ type mandiantIndicatorPostReqest struct {
 	} `json:"requests"`
 }
 
+type mandiantError struct {
+	Error string `json:"error"`
+}
+
 func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	ep, ok := s.Targets[req.To]
 	if !ok {
@@ -360,7 +364,15 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 
 	var response vendors.MandiantIndicatorResponse
 	err = json.Unmarshal(resp, &response)
-	if err != nil {
+	if err != nil || len(response.Indicators) < 1 {
+		var e mandiantError
+		err := json.Unmarshal(resp, &e)
+		if err != nil {
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+		}
+		if e.Error == "Not Found" {
+			return CreateAndWriteSummarizedEvent(req, false, "no hits")
+		}
 		s.Log.Println("MandiantHelper: bad vendor response", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
