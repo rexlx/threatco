@@ -449,6 +449,25 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("get_response_cache_list_requests", 1)
+	defer func(start time.Time) {
+		fmt.Println("GetResponseCacheListHandler took", time.Since(start))
+	}(time.Now())
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	tmp := make(map[string]string)
+	for k, v := range s.Cache.Responses {
+		tmp[k] = fmt.Sprintf("%v: %v", v.ID, v.Time)
+	}
+	out, err := json.Marshal(tmp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
