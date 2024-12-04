@@ -20,8 +20,13 @@ func (s *Server) AddServicesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, views.AddServiceView)
 }
 
-func (s *Server) BaseViewHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, views.BaseView)
+
+func (s *Server) ChartViewHandler(w http.ResponseWriter, r *http.Request) {
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	out := string(s.Cache.Charts)
+
+	fmt.Fprint(w, out)
 }
 
 func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {

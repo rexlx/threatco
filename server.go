@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,12 +27,20 @@ var (
 	vtKey         = flag.String("vt-key", "", "VirusTotal API key")
 	mispKey       = flag.String("misp-key", "", "MISP API key")
 	dbLocation    = flag.String("db", "insights.db", "Database location")
+	httpsPort     = flag.String("https-port", ":8443", "HTTPS port")
+	httpPort      = flag.String("http-port", ":8080", "HTTP port")
+	httpToo       = flag.Bool("http", false, "Enable HTTP")
+	tlsCert       = flag.String("tls-cert", "cert.pem", "TLS certificate")
+	tlsKey        = flag.String("tls-key", "key.pem", "TLS key")
+	certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
+	configPath    = flag.String("config", "data/config.json", "Configuration file")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
 type Server struct {
 	Session *scs.SessionManager  `json:"-"`
 	RespCh  chan ResponseItem    `json:"-"`
+	StopCh  chan bool            `json:"-"`
 	Cache   *Cache               `json:"-"`
 	DB      *bbolt.DB            `json:"-"`
 	Gateway *http.ServeMux       `json:"-"`
@@ -40,6 +52,7 @@ type Server struct {
 }
 
 type Details struct {
+	FirstUserMode     bool               `json:"first_user_mode"`
 	FQDN              string             `json:"fqdn"`
 	SupportedServices []ServiceType      `json:"supported_services"`
 	Address           string             `json:"address"`
@@ -48,9 +61,12 @@ type Details struct {
 }
 
 type Cache struct {
-	Services     []ServiceType           `json:"services"`
-	StatsHistory []StatItem              `json:"stats_history"`
-	Responses    map[string]ResponseItem `json:"responses"`
+	Charts         []byte                  `json:"charts"`
+	Coordinates    map[string][]float64    `json:"coordinates"`
+	ResponseExpiry time.Duration           `json:"response_expiry"`
+	Services       []ServiceType           `json:"services"`
+	StatsHistory   []StatItem              `json:"stats_history"`
+	Responses      map[string]ResponseItem `json:"responses"`
 }
 type StatItem struct {
 	Time int64              `json:"time"`
@@ -73,9 +89,11 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
+		Coordinates:  make(map[string][]float64),
 		StatsHistory: make([]StatItem, 0),
 		Responses:    make(map[string]ResponseItem),
 	}
+	stopCh := make(chan bool)
 	resch := make(chan ResponseItem, 200)
 	sessionMgr := scs.New()
 	sessionMgr.Lifetime = 24 * time.Hour
@@ -86,6 +104,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
 	svr := &Server{
+		StopCh:  stopCh,
 		Session: sessionMgr,
 		RespCh:  resch,
 		Cache:   cache,
@@ -103,27 +122,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 			Stats:             make(map[string]float64),
 		},
 	}
-	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler)
-	svr.Gateway.HandleFunc("/stats", svr.GetStatHistoryHandler)
-	svr.Gateway.Handle("/pipe", http.HandlerFunc(svr.ValidateToken(svr.ProxyHandler)))
-	svr.Gateway.Handle("/user", http.HandlerFunc(svr.ValidateToken(svr.GetUserHandler)))
-	svr.Gateway.Handle("/updateuser", http.HandlerFunc(svr.ValidateSessionToken(svr.UpdateUserHandler)))
-	svr.Gateway.HandleFunc("/add", svr.AddAttributeHandler)
-	svr.Gateway.HandleFunc("/addservice", svr.AddServiceHandler)
-	svr.Gateway.Handle("/raw", http.HandlerFunc(svr.ValidateToken(svr.RawResponseHandler)))
-	svr.Gateway.HandleFunc("/createuser", svr.CreateUserViewHandler)
-	svr.Gateway.Handle("/events/", http.HandlerFunc(svr.ValidateSessionToken(svr.EventHandler)))
-	svr.Gateway.HandleFunc("/login", svr.LoginHandler)
-	svr.Gateway.HandleFunc("/splash", svr.LoginViewHandler)
-	svr.Gateway.HandleFunc("/services", http.HandlerFunc(svr.ValidateSessionToken(svr.ViewServicesHandler)))
-	svr.Gateway.HandleFunc("/getservices", http.HandlerFunc(svr.ValidateSessionToken(svr.GetServicesHandler)))
-	svr.Gateway.HandleFunc("/add-service", http.HandlerFunc(svr.ValidateSessionToken(svr.AddServicesHandler)))
-	svr.Gateway.Handle("/static/", http.StripPrefix("/static/", svr.FileServer()))
-	if *firstUserMode {
-		svr.Gateway.HandleFunc("/adduser", svr.AddUserHandler)
-	} else {
-		svr.Gateway.Handle("/adduser", http.HandlerFunc(svr.ValidateSessionToken(svr.AddUserHandler)))
-	}
+	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	return svr
 }
 
@@ -161,9 +160,10 @@ func (s *Server) ProcessTransientResponses() {
 			s.Cache.Responses[resp.ID] = resp
 			s.Memory.Unlock()
 		case <-ticker.C:
+			s.Log.Println("Processing transient responses: removing old entries")
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {
-				if time.Since(v.Time) > 24*time.Hour {
+				if time.Since(v.Time) > s.Cache.ResponseExpiry {
 					delete(s.Cache.Responses, k)
 				}
 			}
@@ -214,4 +214,141 @@ func (s *Server) AddResponse(uid string, data []byte) {
 		Data: data,
 	}
 	s.RespCh <- resp
+}
+
+func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
+	if fromFile {
+		err := cfg.PopulateFromJSONFile(*configPath)
+		if err != nil {
+			s.Log.Fatalf("could not populate from file: %v", err)
+		}
+	}
+	for _, svc := range cfg.Services {
+		u := svc.URL
+		parts := strings.Split(svc.AuthType, "|")
+		if len(parts) > 1 {
+			u = parts[1]
+		}
+		authName := parts[0]
+		switch authName {
+		case "key":
+			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "token":
+			thisAuthType := &KeyAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "basic":
+			thisAuthType := &BasicAuth{Username: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "fetch":
+			thisAuthType := &PrefetchAuth{
+				URL:     u,
+				Key:     svc.Key,
+				Secret:  svc.Secret,
+				Expires: svc.Expires,
+			}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		default:
+			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
+
+		}
+	}
+	s.Details.SupportedServices = cfg.Services
+	s.Details.FQDN = cfg.FQDN
+	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
+	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
+	s.ID = cfg.ServerID
+	s.Details.FirstUserMode = cfg.FirstUserMode
+	s.Session.Lifetime = time.Duration(cfg.SessionTokenTTL) * time.Hour
+	for _, service := range s.Targets {
+		thisAuth := service.Auth
+		go thisAuth.GetAndStoreToken(s.StopCh)
+		// s.Log.Printf("service %s: +%v\n", serviceName, service)
+	}
+	s.Gateway.HandleFunc("/stats", s.GetStatHistoryHandler)
+	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
+	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
+	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
+	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
+	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
+	s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
+	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
+	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))
+	s.Gateway.HandleFunc("/createuser", http.HandlerFunc(s.ValidateToken(s.CreateUserViewHandler)))
+	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
+	s.Gateway.HandleFunc("/login", s.LoginHandler)
+	s.Gateway.HandleFunc("/splash", s.LoginViewHandler)
+	s.Gateway.HandleFunc("/services", http.HandlerFunc(s.ValidateSessionToken(s.ViewServicesHandler)))
+	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
+	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
+	s.Gateway.Handle("/static/", http.StripPrefix("/static/", s.FileServer()))
+	if s.Details.FirstUserMode {
+		s.Gateway.HandleFunc("/adduser", s.AddUserHandler)
+	} else {
+		s.Gateway.Handle("/adduser", http.HandlerFunc(s.ValidateSessionToken(s.AddUserHandler)))
+	}
+
+	s.Log.Printf("initialized from config: %v", cfg)
+}
+
+func (s *Server) UpdateCharts() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	malloc := float64(m.Alloc)
+	s.Details.Stats["malloc"] = malloc / 1024
+	s.Details.Stats["goroutines"] = float64(runtime.NumGoroutine())
+	s.Details.Stats["heap"] = float64(m.HeapAlloc) / 1024
+	s.Details.Stats["heap_objects"] = float64(m.HeapObjects)
+	s.Details.Stats["stack"] = float64(m.StackInuse) / 1024
+	s.Details.Stats["alloc"] = float64(m.Alloc) / 1024
+	s.Details.Stats["total_alloc"] = float64(m.TotalAlloc) / 1024
+	s.Details.Stats["sys"] = float64(m.Sys) / 1024
+	s.Details.Stats["num_gc"] = float64(m.NumGC)
+	// s.Details.Stats["poll_time"] = float64(time.Now().Unix())
+	// s.Details.Stats["poll_interval"] = float64(t.Seconds())
+	// s.Details.Stats["last_gc"] = float64(m.LastGC) / 1000000
+	s.Details.Stats["pause_total_ns"] = float64(m.PauseTotalNs) / 1000000
+	for i, stat := range s.Details.Stats {
+		_, ok := s.Cache.Coordinates[i]
+		if !ok {
+			s.Cache.Coordinates[i] = make([]float64, 0)
+		}
+		if len(s.Cache.Coordinates[i]) > 100 {
+			s.Cache.Coordinates[i] = s.Cache.Coordinates[i][1:]
+		}
+		s.Cache.Coordinates[i] = append(s.Cache.Coordinates[i], stat)
+	}
+
+	var buf bytes.Buffer
+	for k, v := range s.Cache.Coordinates {
+		chart := createLineChart(k, v)
+		err := chart.Render(&buf)
+		if err != nil {
+			s.Log.Printf("could not render chart: %v", err)
+			continue
+		}
+	}
+	s.Cache.Charts = buf.Bytes()
 }

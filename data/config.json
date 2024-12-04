@@ -1,0 +1,79 @@
+{
+    "server_id": "micah",
+    "first_user_mode": true,
+    "bind_address": "",
+    "fqdn": "example.com",
+    "services": [
+        {
+            "name": "misp-dev",
+            "url": "https://192.168.86.91:443",
+            "rate_limited": false,
+            "insecure": true,
+            "auth_type": "token",
+            "key": "",
+            "kind": "misp",
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"]
+        },
+        {
+            "name": "deepfry-ip",
+            "url": "http://localhost:8080",
+            "rate_limited": false,
+            "insecure": false,
+            "auth_type": "key",
+            "key": "onnek",
+            "kind": "deepfry",
+            "type": ["ipv4"]
+        },
+        {
+            "name": "virustotal-free",
+            "url": "https://www.virustotal.com/api/v3",
+            "rate_limited": false,
+            "auth_type": "key",
+            "insecure": false,
+            "key": "",
+            "kind": "virustotal",
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
+            "route_map": [{
+                "type": "md5",
+                "route": "files"
+            }, {
+                "type": "sha1",
+                "route": "files"
+            }, {
+                "type": "sha256",
+                "route": "files"
+            }, {
+                "type": "sha512",
+                "route": "files"
+            }, {
+                "type": "ipv4",
+                "route": "ip_addresses"
+            }, {
+                "type": "ipv6",
+                "route": "ip_addresses"
+            },{
+                "type": "url",
+                "route": "urls"
+            }, {
+                "type": "domain",
+                "route": "domains"
+            }, {
+                "type": "filepath",
+                "route": "files"
+            }, {
+                "type": "filename",
+                "route": "files"
+            }]
+        }
+    ],
+    "http_port": "8081",
+    "https_port": "8443",
+    "http_too": true,
+    "tls_cert": "/path/to/tls.cert",
+    "tls_key": "/path/to/tls.key",
+    "cert_auth": "/path/to/cert.auth",
+    "db_location": "./insights.db",
+    "session_token_ttl": 36,
+    "response_cache_expiry": 60000,
+    "stat_cache_tick_rate": 180
+}

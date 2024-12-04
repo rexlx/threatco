@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -30,10 +29,10 @@ func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Validating session token")
+		// fmt.Println("Validating session token")
 		token, err := s.GetTokenFromSession(r)
 		if err != nil {
-			fmt.Println("Error getting token from session")
+			// fmt.Println("Error getting token from session")
 			token := r.Header.Get("Authorization")
 			// fmt.Println("Token from header:", token)
 			parts := strings.Split(token, ":")

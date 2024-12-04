@@ -10,7 +10,7 @@ func (s *Server) GetUserByEmail(email string) (User, error) {
 	s.Memory.Lock()
 	defer s.Memory.Unlock()
 	s.Details.Stats["user_queries"]++
-	s.Log.Println("GetUserByEmail", email)
+	// s.Log.Println("GetUserByEmail", email)
 	var user User
 	err := s.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
