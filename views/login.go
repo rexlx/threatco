@@ -31,25 +31,25 @@ var LoginView string = `<!DOCTYPE html>
 </head>
 
 <body>
-
+ <section class="section has-background-black-ter" style="height: 100vh;">
   <div class="container">
     <div class="columns is-centered">
-      <div class="column is-half">
-        <div class="box has-background-black">
+      <div class="column">
+        <div class="box has-background-black-ter">
           <h2 class="title is-2 has-text-primary">login</h2>
-          <form action="/login" method="post" class="has-background-black">
+          <form action="/login" method="post" class="has-background-black-ter">
 
             <div class="field">
               <label class="label has-text-white">username</label>
               <div class="control">
-                <input class="input is-outlined" type="text" name="username" placeholder="Enter your username">
+                <input class="input is-outlined" type="text" name="username" placeholder="Enter your usernamess">
               </div>
             </div>
           
             <div class="field">
               <label class="label has-text-white">password</label>
               <div class="control">
-                <input class="input is-outlined" type="password" name="password" placeholder="Enter your password">
+                <input class="input is-outlined" type="password" name="password" placeholder="Enter your passwords">
               </div>
             </div>
             <div>
@@ -60,7 +60,7 @@ var LoginView string = `<!DOCTYPE html>
       </div>
     </div>
   </div>
-
+  </section>
 </body>
 
 </html>`

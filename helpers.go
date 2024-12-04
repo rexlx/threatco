@@ -178,7 +178,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	if err != nil {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
-	fmt.Println(req, data)
+	// fmt.Println(req, data)
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 	if err != nil {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
