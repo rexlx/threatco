@@ -80,9 +80,6 @@ func (u *User) UnmarshalBinary(data []byte) error {
 func (u *User) PasswordMatches(input string) (bool, error) {
 	err := bcrypt.CompareHashAndPassword(u.Hash, []byte(input))
 	if err != nil {
-		return false, err
-	}
-	if err != nil {
 		switch {
 		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
 			//invalid password
@@ -92,6 +89,7 @@ func (u *User) PasswordMatches(input string) (bool, error) {
 			return false, err
 		}
 	}
+
 	return true, nil
 }
 
