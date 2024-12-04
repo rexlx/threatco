@@ -28,12 +28,13 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 //handlers.go
 func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request)
   // this function has a switch statement for handling the users incoming request.
-  //your service will need to added to this statement to match the convention.
+  // your service will need to be added to this statement to match the convention.
+  // perhaps ill create a list of service names periodically and switch over that instead
 
 
 //helpers.gp
 func (s *Server) YourNewHelper(req ProxyRequest) ([]byte, error)
-  // here you should do the request and transform you response and return in 
+  // here you should do the request and transform you response and return
 ```
 create a new entry in the config.json for your new service
 

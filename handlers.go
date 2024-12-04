@@ -122,7 +122,7 @@ func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("get_stat_history_requests", 1)
 	defer func(start time.Time) {
-		fmt.Println("GetStatHistoryHandler took", time.Since(start))
+		s.Log.Println("GetStatHistoryHandler took", time.Since(start))
 	}(time.Now())
 	s.Memory.RLock()
 	out, err := json.Marshal(s.Cache.StatsHistory)
@@ -138,17 +138,17 @@ func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("add_user_requests", 1)
 	defer func(start time.Time) {
-		fmt.Println("AddUserHandler took", time.Since(start))
+		s.Log.Println("AddUserHandler took", time.Since(start))
 	}(time.Now())
 	var nur NewUserRequest
 	err := json.NewDecoder(r.Body).Decode(&nur)
 	if err != nil {
-		fmt.Println("error", err)
+		s.Log.Println("error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if nur.Email == "" {
-		fmt.Println("error", err)
+		s.Log.Println("error", err)
 		http.Error(w, "missing 'email' field", http.StatusBadRequest)
 		return
 	}
@@ -172,7 +172,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	// s.Memory.Lock()
 	err = s.AddUser(*user)
 	if err != nil {
-		fmt.Println("error", err)
+		s.Log.Println("error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		// s.Memory.Unlock()
 		return
@@ -180,7 +180,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	// s.Memory.Unlock()
 	out, err := json.Marshal(user)
 	if err != nil {
-		fmt.Println("error", err)
+		s.Log.Println("error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -192,7 +192,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	var req ProxyRequest
 	defer s.addStat("proxy_requests", 1)
 	defer func(start time.Time, kind string) {
-		fmt.Println("__ProxyHandler__ took:", time.Since(start), kind)
+		s.Log.Println("__ProxyHandler__ took:", time.Since(start), kind)
 	}(time.Now(), req.To)
 
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -201,7 +201,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// fmt.Println("ProxyHandler", req)
+	// s.Log.Println("ProxyHandler", req)
 	uid := uuid.New().String()
 	req.TransactionID = uid
 	switch req.To {
@@ -210,7 +210,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
 			if err != nil {
-				fmt.Println("bigtime error", err)
+				s.Log.Println("bigtime error", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -220,12 +220,12 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp)
 		return
 	case "virustotal":
-		// fmt.Println("virustotal", req)
+		// s.Log.Println("virustotal", req)
 		resp, err := s.VirusTotalHelper(req)
 		if err != nil {
 			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
 			if err != nil {
-				fmt.Println("bigtime error", err)
+				s.Log.Println("bigtime error", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -239,7 +239,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
 			if err != nil {
-				fmt.Println("bigtime error", err)
+				s.Log.Println("bigtime error", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -253,7 +253,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
 			if err != nil {
-				fmt.Println("bigtime error", err)
+				s.Log.Println("bigtime error", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -290,7 +290,7 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	id := r.URL.Path[len("/events/"):]
-	// fmt.Println("EventHandler", id)
+	// s.Log.Println("EventHandler", id)
 	event, ok := s.Cache.Responses[id]
 	if !ok {
 		http.Error(w, fmt.Sprintf("event not found %v", id), http.StatusNotFound)
@@ -307,7 +307,7 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("get_services_requests", 1)
 	defer func(start time.Time) {
-		fmt.Println("GetServicesHandler took", time.Since(start))
+		s.Log.Println("GetServicesHandler took", time.Since(start))
 	}(time.Now())
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
@@ -326,7 +326,7 @@ type RawResponseRequest struct {
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("get_user_requests", 1)
 	// defer func(start time.Time) {
-	// 	fmt.Println("GetUserHandler took", time.Since(start))
+	// 	s.Log.Println("GetUserHandler took", time.Since(start))
 	// }(time.Now())
 	// s.Memory.RLock()
 	// defer s.Memory.RUnlock()
@@ -372,18 +372,18 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	u, err := s.GetUserByEmail(email)
 	if err != nil || u.Email == "" {
-		fmt.Println("LoginHandler: user not found", email)
+		s.Log.Println("LoginHandler: user not found", email)
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
 	ok, err := u.PasswordMatches(password)
 	if err != nil {
-		fmt.Println("error checking password", err, email)
+		s.Log.Println("error checking password", err, email)
 		http.Error(w, "error checking password", http.StatusInternalServerError)
 		return
 	}
 	if !ok {
-		fmt.Println("password does not match", email)
+		s.Log.Println("password does not match", email)
 		http.Error(w, "password does not match", http.StatusUnauthorized)
 		return
 	}
@@ -394,39 +394,39 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	tk, err := u.SessionToken.CreateToken(u.ID, 24*time.Hour)
 	if err != nil {
-		fmt.Println("error creating token", err)
+		s.Log.Println("error creating token", err)
 		http.Error(w, "error creating token", http.StatusInternalServerError)
 		return
 	}
 	tk.Email = u.Email
 	err = s.SaveToken(*tk)
 	if err != nil {
-		fmt.Println("error saving token", err)
+		s.Log.Println("error saving token", err)
 		http.Error(w, "error saving token", http.StatusInternalServerError)
 		return
 	}
 	err = s.AddTokenToSession(r, w, tk)
 	if err != nil {
-		fmt.Println("error adding token to session", err)
+		s.Log.Println("error adding token to session", err)
 		http.Error(w, "error adding token to session", http.StatusInternalServerError)
 		return
 	}
-	fmt.Println("login successful", u.Email)
+	s.Log.Println("login successful", email)
+	http.Redirect(w, r, "/services", http.StatusSeeOther)
 	s.Memory.Lock()
 	s.Details.Stats["logins"]++
 	s.Memory.Unlock()
-	w.Write([]byte("login successful"))
 }
 
 func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("UpdateUserHandler")
+	s.Log.Println("UpdateUserHandler")
 	var u User
 	err := json.NewDecoder(r.Body).Decode(&u)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println("UpdateUserHandler", u)
+	s.Log.Println("UpdateUserHandler", u)
 	user, err := s.GetUserByEmail(u.Email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -452,7 +452,7 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("get_response_cache_list_requests", 1)
 	defer func(start time.Time) {
-		fmt.Println("GetResponseCacheListHandler took", time.Since(start))
+		s.Log.Println("GetResponseCacheListHandler took", time.Since(start))
 	}(time.Now())
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
