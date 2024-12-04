@@ -167,7 +167,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 		fmt.Println("json marshal error", err)
 		return nil, err
 	}
-	fmt.Println(req, data)
+	// fmt.Println(req, data)
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
 	if err != nil {
 		fmt.Println("request error", err)
