@@ -1,24 +1,11 @@
 package views
 
-var AddServiceView string = `<!DOCTYPE html>
-<html lang="en">
+import "fmt"
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Service</title>
-    <link rel="stylesheet" href="./static/bulma.min.css">
-    <style>
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
-</head>
+var AddServiceView string = fmt.Sprintf(BaseView, AddServiceSection)
 
-<body>
-    <div class="container">
+var AddServiceSection string = `
+    <section class="section has-background-black-ter">
         <div class="columns is-centered">
             <div class="column is-half">
                 <div class="box has-background-black">
@@ -48,27 +35,6 @@ var AddServiceView string = `<!DOCTYPE html>
                 </div>
             </div>
         </div>
-    </div>
-
-    <script>
-        document.getElementById('routeMapButton').addEventListener('click', function () {
-            const typesInput = document.getElementById('typesInput').value;
-            const typesArray = typesInput.split(',').map(type => type.trim());
-            const routeMap = typesArray.map((type, index) => ({ key: "route" + (index + 1), type: type }));
-
-            const routeMapOutput = document.getElementById('routeMapOutput');
-            //   routeMapOutput.innerHTML = '<pre>' + JSON.stringify(routeMap, null, 2) + '</pre>';
-            for (let i = 0; i < routeMap.length; i++) {
-                let field = '<div class="field">' +
-                    '<label class="label has-text-white">' + routeMap[i].type + '</label>' +
-                    '<div class="control">' +
-                    '<input class="input is-outlined" type="text" name="' + routeMap[i].route + '" placeholder="Enter service kind">' +
-                    '</div>' +
-                    '</div>';
-                routeMapOutput.innerHTML += field;
-            }
-        });
-    </script>
-</body>
+    </section>
 
 </html>`

@@ -1,36 +1,10 @@
 package views
 
-var LoginView string = `<!DOCTYPE html>
-<html>
+import "fmt"
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>login</title>
-  <link rel="stylesheet" href="/static/bulma.min.css">
-  <style>
-    body {
-      background-color: #0b141c;
-    }
+var LoginView string = fmt.Sprintf(BaseView, LoginSection)
 
-    .animate-spin {
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-
-      }
-    }
-  </style>
-</head>
-
-<body>
+var LoginSection string = `
  <section class="section has-background-black-ter" style="height: 100vh;">
   <div class="container">
     <div class="columns is-centered">
@@ -60,7 +34,4 @@ var LoginView string = `<!DOCTYPE html>
       </div>
     </div>
   </div>
-  </section>
-</body>
-
-</html>`
+  </section>`

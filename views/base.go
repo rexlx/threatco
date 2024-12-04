@@ -96,10 +96,80 @@ var BaseView string = `
         console.log('hello')
         dropDownMenu.classList.toggle('is-active')
     })
+    document.getElementById('addUserForm').addEventListener('submit',function(event){
+    event.preventDefault();
+    const email = document.getElementById('email').value
+    const key = document.getElementById('password').value
+    const admin = document.getElementById('admin').value
+    const userData = {
+        email,
+        key,
+        admin,
+    };
+    fetch('/adduser',{
+        method: 'POST',
+        headers:{
+            'Content-Type': 'application/json',
+            'Authorization': ''
+        },
+        body: JSON.stringify(userData),
+    })
+    .then(response => {
+        if (response.ok){
+            let x = response.json();
+            console.log(x);
+            return x
+        }
+        throw new Error('Network response was not ok.');
+    })
+    .then(data => {
+        console.log('User added: ',data);
+        alert('User added successfully!')
+    })    
+    .catch(error=> {
+        console.error('There was a problem with the fetch operation',error);
+    });
+
+});
+document.getElementById('routeMapButton').addEventListener('click', function () {
+            const typesInput = document.getElementById('typesInput').value;
+            const typesArray = typesInput.split(',').map(type => type.trim());
+            const routeMap = typesArray.map((type, index) => ({ key: "route" + (index + 1), type: type }));
+
+            const routeMapOutput = document.getElementById('routeMapOutput');
+            //   routeMapOutput.innerHTML = '<pre>' + JSON.stringify(routeMap, null, 2) + '</pre>';
+            for (let i = 0; i < routeMap.length; i++) {
+                let field = '<div class="field">' +
+                    '<label class="label has-text-white">' + routeMap[i].type + '</label>' +
+                    '<div class="control">' +
+                    '<input class="input is-outlined" type="text" name="' + routeMap[i].route + '" placeholder="Enter service kind">' +
+                    '</div>' +
+                    '</div>';
+                routeMapOutput.innerHTML += field;
+            }
+        });
 </script>
 <style>
     .section {
         height: 100vh;
+    }
+    body {
+      background-color: #0b141c;
+    }
+
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+
+      }
     }
 </style>
 
