@@ -5,7 +5,7 @@ import "fmt"
 var LoginView string = fmt.Sprintf(BaseView, LoginSection)
 
 var LoginSection string = `
- <section class="section has-background-black-ter" style="height: 100vh;">
+ <section class="section has-background-custom" style="height: 100vh;">
   <div class="container">
     <div class="columns is-centered">
       <div class="column">

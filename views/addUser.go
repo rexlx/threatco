@@ -5,7 +5,7 @@ import "fmt"
 var AddUserView string = fmt.Sprintf(BaseView, AddUserSection)
 
 var AddUserSection string = `
-<section class="section has-background-black-ter" style="height: 100vh;">
+<section class="section has-background-custom" style="height: 100vh;">
     <div class="container">
         <h1 class="title has-text-primary">Add User</h1>
         <form class="box has-background-black-ter" id="addUserForm">

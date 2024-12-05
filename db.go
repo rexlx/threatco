@@ -26,6 +26,25 @@ func (s *Server) GetUserByEmail(email string) (User, error) {
 	return user, err
 }
 
+func (s *Server) GetAllUsers() ([]User, error) {
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.Stats["user_queries"]++
+	var users []User
+	err := s.DB.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("users"))
+		return b.ForEach(func(k, v []byte) error {
+			var user User
+			if err := user.UnmarshalBinary(v); err != nil {
+				return err
+			}
+			users = append(users, user)
+			return nil
+		})
+	})
+	return users, err
+}
+
 func (s *Server) AddUser(u User) error {
 	// s.Log.Println("AddUser", u)
 	u.Updated = time.Now()

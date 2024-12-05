@@ -23,15 +23,19 @@ var BaseView string = `
 
                     <div class="navbar-dropdown has-background-black-ter">
                         <a class="navbar-item has-background-black-ter has-text-primary" href="/services">
-                            Services
+                            services
                         </a>
 
-                        <a class="navbar-item has-background-black-ter has-text-primary">
-                            Elements
+                        <a class="navbar-item has-background-black-ter has-text-primary" href="/create-user">
+                            add user
                         </a>
 
-                        <a class="navbar-item has-background-black-ter has-text-primary">
-                            Components
+                        <a class="navbar-item has-background-black-ter has-text-primary" href="/users">
+                            users
+                        </a>
+
+                        <a class="navbar-item has-background-black-ter has-text-primary" href="/charts">
+                            stats
                         </a>
 
                     </div>
@@ -155,6 +159,9 @@ document.getElementById('routeMapButton').addEventListener('click', function () 
     }
     body {
       background-color: #0b141c;
+    }
+    .has-background-custom {
+        background-color: #0b141c;
     }
 
     .animate-spin {

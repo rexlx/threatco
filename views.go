@@ -12,6 +12,25 @@ func (s *Server) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, views.LoginView)
 }
 
+func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
+	// s.Memory.RLock()
+	// defer s.Memory.RUnlock()
+	_users, err := s.GetAllUsers()
+	if err != nil {
+		s.Log.Println("AllUsersViewHandler", err)
+	}
+	users := ""
+	for _, u := range _users {
+		svcs := []string{}
+		for _, svc := range u.Services {
+			svcs = append(svcs, svc.Kind)
+		}
+		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated)
+	}
+	tempDiv := fmt.Sprintf(views.ViewUsersSection, users)
+	fmt.Fprintf(w, views.BaseView, tempDiv)
+}
+
 func (S *Server) CreateUserViewHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, views.AddUserView)
 }
@@ -19,7 +38,6 @@ func (S *Server) CreateUserViewHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) AddServicesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, views.AddServiceView)
 }
-
 
 func (s *Server) ChartViewHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
