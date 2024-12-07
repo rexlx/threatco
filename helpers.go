@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"sync"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
@@ -410,3 +412,45 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 	})
 
 }
+
+type UploadHandler struct {
+	Complete bool   `json:"complete"`
+	ID       string `json:"id"`
+	Data     []byte `json:"data"`
+	FileSize int64  `json:"file_size"`
+}
+
+func (u *UploadHandler) WriteToDisk(filename string) error {
+	fh, err := os.Create(filename)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	defer fh.Close()
+	_, err = fh.Write(u.Data)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+type UploadStore struct {
+	Files  map[string]UploadHandler
+	Memory *sync.RWMutex
+}
+
+func (u *UploadStore) AddFile(id string, Uh UploadHandler) {
+	u.Memory.Lock()
+	defer u.Memory.Unlock()
+	u.Files[id] = Uh
+}
+
+func (u *UploadStore) GetFile(id string) (UploadHandler, bool) {
+	u.Memory.RLock()
+	defer u.Memory.RUnlock()
+	file, ok := u.Files[id]
+	return file, ok
+}
+
+// func NewUploadHandler

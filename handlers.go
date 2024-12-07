@@ -4,12 +4,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+var store *UploadStore
+
+func PassStore(s *UploadStore) {
+	store = s
+}
 
 func (s *Server) FileServer() http.Handler {
 	return http.FileServer(http.Dir("./static"))
@@ -447,6 +454,50 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(out)
+}
+
+var UploadResponse = []byte(`{"status": "ok"}`)
+
+func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
+	var fileData bytes.Buffer
+
+	// Copy the request body (file data) to the buffer
+	_, err := io.Copy(&fileData, r.Body)
+	if err != nil {
+		http.Error(w, "Error reading file data", http.StatusInternalServerError)
+		return
+	}
+	defer s.addStat("upload_file_requests", 1)
+	defer func(start time.Time) {
+		s.Log.Println("UploadFileHandler took", time.Since(start))
+	}(time.Now())
+	chunkSize := r.ContentLength
+	filename := r.Header.Get("X-filename")
+	lastChunk := r.Header.Get("X-last-chunk")
+	fmt.Println(chunkSize, filename, lastChunk)
+	uploadHanlder, ok := store.GetFile(filename)
+	if !ok {
+		uploadHanlder = UploadHandler{
+			ID:       uuid.New().String(),
+			Data:     fileData.Bytes(),
+			FileSize: chunkSize,
+		}
+		go store.AddFile(filename, uploadHanlder)
+	} else {
+		uploadHanlder.Data = append(uploadHanlder.Data, fileData.Bytes()...)
+		uploadHanlder.FileSize += chunkSize
+	}
+
+	if lastChunk == "true" {
+		fmt.Println("last chunk", uploadHanlder.FileSize)
+		uploadHanlder.Complete = true
+	}
+
+	go store.AddFile(filename, uploadHanlder)
+	w.Write(UploadResponse)
+	if uploadHanlder.Complete {
+		go uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+	}
 }
 
 func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Request) {
