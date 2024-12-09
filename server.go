@@ -268,6 +268,14 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
+		case "vmray":
+			thisAuthType := &VmRayAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
 		default:
 			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
 

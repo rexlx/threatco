@@ -143,6 +143,10 @@ type KeyAuth struct {
 	Token string
 }
 
+type VmRayAuth struct {
+	Token string
+}
+
 type PrefetchAuth struct {
 	AppName string `json:"x_app"`
 	URL     string `json:"url"`
@@ -217,6 +221,15 @@ func (x *XAPIKeyAuth) GetAndStoreToken(stop chan bool) {
 
 func (x *XAPIKeyAuth) Apply(req *http.Request) {
 	req.Header.Set("x-apikey", x.Token)
+	req.Header.Set("Accept", "application/json")
+}
+
+func (v *VmRayAuth) GetAndStoreToken(stop chan bool) {
+	fmt.Println("no need to rotate token")
+}
+
+func (v *VmRayAuth) Apply(req *http.Request) {
+	req.Header.Set("api_key", v.Token)
 	req.Header.Set("Accept", "application/json")
 }
 
