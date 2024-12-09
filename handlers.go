@@ -494,11 +494,18 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go store.AddFile(filename, uploadHanlder)
-	w.Write(UploadResponse)
+
 	if uploadHanlder.Complete {
-		uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+		res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder)
+		if err != nil {
+			s.Log.Println("error", err)
+			return
+		}
+		w.Write(res)
 		store.DeleteFile(filename)
 	}
+	w.Write(UploadResponse)
 }
 
 func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Request) {

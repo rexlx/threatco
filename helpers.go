@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strconv"
@@ -156,6 +158,46 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	}
 	return json.Marshal(sum)
 	// return resp, nil
+}
+
+// func (s *Server) VmRayHelper(req ProxyRequest) ([]byte, error) {
+
+// }
+
+func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]byte, error) {
+	ep, ok := s.Targets["vmray"]
+	if !ok {
+		return nil, fmt.Errorf("target not found")
+	}
+
+	url := fmt.Sprintf("%s/%s", ep.GetURL(), "rest/sample/submit")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("sample_file", name)
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(part, bytes.NewReader(file.Data))
+	if err != nil {
+		return nil, err
+	}
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	// go s.addStat(ep.GetURL(), float64(len(resp)))
+	return resp, nil
+
 }
 
 func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
