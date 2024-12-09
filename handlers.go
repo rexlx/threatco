@@ -474,7 +474,7 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	chunkSize := r.ContentLength
 	filename := r.Header.Get("X-filename")
 	lastChunk := r.Header.Get("X-last-chunk")
-	fmt.Println(chunkSize, filename, lastChunk)
+	// fmt.Println(chunkSize, filename, lastChunk)
 	uploadHanlder, ok := store.GetFile(filename)
 	if !ok {
 		uploadHanlder = UploadHandler{
@@ -496,7 +496,8 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	go store.AddFile(filename, uploadHanlder)
 	w.Write(UploadResponse)
 	if uploadHanlder.Complete {
-		go uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+		uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+		store.DeleteFile(filename)
 	}
 }
 

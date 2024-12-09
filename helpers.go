@@ -453,4 +453,10 @@ func (u *UploadStore) GetFile(id string) (UploadHandler, bool) {
 	return file, ok
 }
 
+func (u *UploadStore) DeleteFile(id string) {
+	u.Memory.Lock()
+	defer u.Memory.Unlock()
+	delete(u.Files, id)
+}
+
 // func NewUploadHandler
