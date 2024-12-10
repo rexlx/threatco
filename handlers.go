@@ -456,11 +456,15 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-var UploadResponse = []byte(`{"status": "ok"}`)
+// var UploadResponse = []byte(`{"status": "ok"}`)
+type uploadResponse struct {
+	Status string `json:"status"`
+	ID     string `json:"id"`
+}
 
 func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	var fileData bytes.Buffer
-
+	var UploadResponse uploadResponse
 	// Copy the request body (file data) to the buffer
 	_, err := io.Copy(&fileData, r.Body)
 	if err != nil {
@@ -497,7 +501,8 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	if uploadHanlder.Complete {
 		uid := uuid.New().String()
-		UploadResponse = []byte(fmt.Sprintf(`{"status": "ok", "id": "%s"}`, uid))
+		UploadResponse.ID = uid
+		UploadResponse.Status = "complete"
 		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
 		go func(id string) {
 			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
@@ -515,7 +520,12 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 			s.RespCh <- newResponse
 		}(uid)
 	}
-	w.Write(UploadResponse)
+	out, err := json.Marshal(UploadResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
 }
 
 func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Request) {
