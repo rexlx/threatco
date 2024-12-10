@@ -229,7 +229,8 @@ func (v *VmRayAuth) GetAndStoreToken(stop chan bool) {
 }
 
 func (v *VmRayAuth) Apply(req *http.Request) {
-	req.Header.Set("api_key", v.Token)
+	key := fmt.Sprintf("api_key %s", v.Token)
+	req.Header.Set("Authorization", key)
 	req.Header.Set("Accept", "application/json")
 }
 
