@@ -496,14 +496,24 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	go store.AddFile(filename, uploadHanlder)
 
 	if uploadHanlder.Complete {
+		uid := uuid.New().String()
+		UploadResponse = []byte(fmt.Sprintf(`{"status": "ok", "id": "%s"}`, uid))
 		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
-		res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder)
-		if err != nil {
-			s.Log.Println("error", err)
-			return
-		}
-		w.Write(res)
-		store.DeleteFile(filename)
+		go func(id string) {
+			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
+			if err != nil {
+				s.Log.Println("error", err)
+				return
+			}
+			// w.Write(res)
+			store.DeleteFile(filename)
+			newResponse := ResponseItem{
+				ID:   id,
+				Time: time.Now(),
+				Data: res,
+			}
+			s.RespCh <- newResponse
+		}(uid)
 	}
 	w.Write(UploadResponse)
 }
