@@ -304,7 +304,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
 	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
 	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))
-	s.Gateway.HandleFunc("/createuser", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
+	s.Gateway.HandleFunc("/create-user", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
 	s.Gateway.HandleFunc("/login", s.LoginHandler)
 	// s.Gateway.HandleFunc("/splash", s.LoginViewHandler)
