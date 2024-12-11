@@ -46,6 +46,33 @@ var BaseView string = `
     %v
 </body>
 <script>
+    function deleteUser(email) {
+            if (!confirm('Are you sure you want to delete this user?')) {
+                return;
+            }
+
+            fetch('/deleteuser', {
+                method: 'POST', // Change to POST to match the handler
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded' // Use form-urlencoded to match FormValue
+                },
+                body: 'email=' + encodeURIComponent(email) // Encode the email in the body
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.text(); // Expecting plain text response
+                }
+                throw new Error('Network response was not ok.');
+            })
+            .then(data => {
+                console.log('User deleted: ', data);
+                document.getElementById('userResults').innerHTML = '<div class="notification is-success">User deleted successfully</div>';
+            })
+            .catch(error => {
+                console.error('There was a problem with the fetch operation', error);
+                document.getElementById('userResults').innerHTML = '<div class="notification is-danger">There was a problem deleting the user</div>';
+            });
+        }
     // Function to open the modal
     function openModal(modalID) {
         const modal = document.getElementById(modalID);

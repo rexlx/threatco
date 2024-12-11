@@ -21,11 +21,12 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	users := ""
 	for _, u := range _users {
+		deleteButton := fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')">Delete</button>`, u.Email)
 		svcs := []string{}
 		for _, svc := range u.Services {
 			svcs = append(svcs, svc.Kind)
 		}
-		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated)
+		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated, deleteButton)
 	}
 	tempDiv := fmt.Sprintf(views.ViewUsersSection, users)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
@@ -98,23 +99,3 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
-
-// func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
-// 	s.Memory.RLock()
-// 	defer s.Memory.RUnlock()
-// 	serviceDiv := `<div class="box has-background-black">
-// 	<h2 class="title is-2 has-text-primary">Services</h2>
-// 	<div class="columns is-multiline">`
-// 	for _, service := range s.Details.SupportedServices {
-// 		serviceDiv += fmt.Sprintf(`<div class="column is-one-third">
-// 		<div class="box has-background-black">
-// 			<h2 class="title is-2 has-text-primary">%s</h2>
-// 			<ul>`, service.Kind)
-// 		for _, t := range service.Type {
-// 			serviceDiv += fmt.Sprintf(`<li>%s</li>`, t)
-// 		}
-// 		serviceDiv += `</ul></div></div>`
-// 	}
-// 	serviceDiv += `</div></div>`
-// 	fmt.Fprintf(w, views.ViewServicesView,views.BaseView,serviceDiv)
-// }

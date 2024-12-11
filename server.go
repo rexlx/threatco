@@ -301,6 +301,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
+	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
 	s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
 	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
 	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))
@@ -318,6 +319,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		s.Gateway.Handle("/adduser", http.HandlerFunc(s.ValidateSessionToken(s.AddUserHandler)))
 	}
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
+	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
 
 	s.Log.Printf("initialized from config: %v", cfg)
 }

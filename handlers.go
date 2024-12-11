@@ -425,6 +425,26 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.Unlock()
 }
 
+func (s *Server) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	err := s.DeleteTokenFromSession(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	s.Log.Println("DeleteUserHandler")
+	email := r.FormValue("email")
+	err := s.DeleteUser(email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte("ok"))
+}
+
 func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	s.Log.Println("UpdateUserHandler")
 	var u User
@@ -439,6 +459,14 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if u.Password != "" {
+		err = user.SetPassword(u.Password)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	user.Admin = u.Admin
 	user.Services = u.Services
 	user.Updated = time.Now()
 	err = s.AddUser(user)

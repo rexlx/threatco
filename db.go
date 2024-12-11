@@ -26,6 +26,16 @@ func (s *Server) GetUserByEmail(email string) (User, error) {
 	return user, err
 }
 
+func (s *Server) DeleteUser(email string) error {
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Details.Stats["user_deletes"]++
+	return s.DB.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("users"))
+		return b.Delete([]byte(email))
+	})
+}
+
 func (s *Server) GetAllUsers() ([]User, error) {
 	s.Memory.Lock()
 	defer s.Memory.Unlock()

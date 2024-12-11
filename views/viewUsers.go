@@ -12,6 +12,7 @@ var ViewUsersSection string = `
 					<th>Services</th>
 					<th>Created</th>
 					<th>Updated</th>
+					<th>Delete</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -24,6 +25,7 @@ var ViewUsersSection string = `
 
 var UserTableBody string = `
 <tr>
+	<td>%v</td>
 	<td>%v</td>
 	<td>%v</td>
 	<td>%v</td>
