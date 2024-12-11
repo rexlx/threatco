@@ -6,7 +6,7 @@ var AddUserView string = fmt.Sprintf(BaseView, AddUserSection)
 
 var AddUserSection string = `
 <section class="section has-background-custom" style="height: 100vh;">
-    <div class="container">
+    <div class="container mb-3">
         <h1 class="title has-text-primary">Add User</h1>
         <form class="box has-background-black-ter" id="addUserForm">
             <div class="field">
@@ -37,5 +37,6 @@ var AddUserSection string = `
             </div>
         </form>
     </div>
+    <div class="container" id="userResults"></div>
 </section>
 `

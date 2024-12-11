@@ -456,10 +456,11 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 }
 
 type UploadHandler struct {
-	Complete bool   `json:"complete"`
-	ID       string `json:"id"`
-	Data     []byte `json:"data"`
-	FileSize int64  `json:"file_size"`
+	SendCh   chan struct{} `json:"-"`
+	Complete bool          `json:"complete"`
+	ID       string        `json:"id"`
+	Data     []byte        `json:"data"`
+	FileSize int64         `json:"file_size"`
 }
 
 func (u *UploadHandler) WriteToDisk(filename string) error {
@@ -478,8 +479,10 @@ func (u *UploadHandler) WriteToDisk(filename string) error {
 }
 
 type UploadStore struct {
-	Files  map[string]UploadHandler
-	Memory *sync.RWMutex
+	ServerConfig *Configuration
+	SendCh       chan struct{}
+	Files        map[string]UploadHandler
+	Memory       *sync.RWMutex
 }
 
 func (u *UploadStore) AddFile(id string, Uh UploadHandler) {
@@ -500,5 +503,7 @@ func (u *UploadStore) DeleteFile(id string) {
 	defer u.Memory.Unlock()
 	delete(u.Files, id)
 }
+
+// func (u *UploadStore) BroadcastUpload(uh UploadHandler)
 
 // func NewUploadHandler

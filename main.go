@@ -14,12 +14,12 @@ import (
 func main() {
 	flag.Parse()
 	var c Configuration
-	PassStore(&UploadStore{Files: make(map[string]UploadHandler), Memory: &sync.RWMutex{}})
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	s := NewServer("1", ":8081", *dbLocation)
 
 	s.InitializeFromConfig(&c, true)
+	PassStore(&UploadStore{Files: make(map[string]UploadHandler), Memory: &sync.RWMutex{}, ServerConfig: &c})
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	go func() {
 		for {

@@ -102,13 +102,14 @@ var BaseView string = `
     })
     document.getElementById('addUserForm').addEventListener('submit',function(event){
     event.preventDefault();
+    const userResults = document.getElementById('userResults');
     const email = document.getElementById('email').value
     const key = document.getElementById('password').value
     const admin = document.getElementById('admin').value
     const userData = {
-        email,
-        key,
-        admin,
+        "email": email,
+        "password": key,
+        "is_admin": admin
     };
     fetch('/adduser',{
         method: 'POST',
@@ -122,12 +123,15 @@ var BaseView string = `
         if (response.ok){
             let x = response.json();
             console.log(x);
-            return x
+            return x;
         }
         throw new Error('Network response was not ok.');
     })
     .then(data => {
         console.log('User added: ',data);
+        if (data.key){
+                userResults.innerHTML = '<div class="notification is-success">User added successfully. Key: ' + data.key + '</div>';
+            }
         alert('User added successfully!')
     })    
     .catch(error=> {

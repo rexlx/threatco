@@ -363,3 +363,7 @@ func (s *Server) UpdateCharts() {
 	}
 	s.Cache.Charts = buf.Bytes()
 }
+
+// func (s *Server) BroacastToAPIs(fn string, uh UploadHandler) {
+
+// }
