@@ -41,6 +41,11 @@ var BaseView string = `
                     </div>
                 </div>
             </div>
+            <div class="navbar-end">
+                <div class="navbar-item">
+                    <button class="button is-warning is-outlined" onclick="logout()">Logout</button>
+                </div>
+            </div>
         </div>
     </nav>
     %v
@@ -73,6 +78,21 @@ var BaseView string = `
                 document.getElementById('userResults').innerHTML = '<div class="notification is-danger">There was a problem deleting the user</div>';
             });
         }
+    function logout() {
+        fetch('/logout', {
+            method: 'GET'
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.href = '/splash';
+            }
+            throw new Error('Network response was not ok.');
+        })
+        .catch(error => {
+            console.error('There was a problem with the fetch operation', error);
+        });
+    }
+
     // Function to open the modal
     function openModal(modalID) {
         const modal = document.getElementById(modalID);
