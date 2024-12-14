@@ -18,7 +18,7 @@ var BaseView string = `
 
                 <div class="navbar-item has-dropdown" id="dropDownMenu">
                     <a class="navbar-link has-text-primary" id="dropDownMenuLink">
-                        ThreatPunch
+                        threatco
                     </a>
 
                     <div class="navbar-dropdown has-background-black-ter">
