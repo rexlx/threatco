@@ -179,7 +179,7 @@ var BaseView string = `
         if (data.key){
                 userResults.innerHTML = '<div class="notification is-success">User added successfully. Key: ' + data.key + '</div>';
             }
-        alert('User added successfully!')
+        alert('User added! A key will be displayed on the screen, please save it for future reference');
     })    
     .catch(error=> {
         console.error('There was a problem with the fetch operation',error);

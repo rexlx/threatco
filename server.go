@@ -17,6 +17,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/google/uuid"
+	"github.com/rexlx/threatco/views"
 	"go.etcd.io/bbolt"
 )
 
@@ -92,6 +93,7 @@ func NewServer(id string, address string, dbLocation string) *Server {
 		Coordinates:  make(map[string][]float64),
 		StatsHistory: make([]StatItem, 0),
 		Responses:    make(map[string]ResponseItem),
+		Charts:       []byte(views.NoDataView),
 	}
 	stopCh := make(chan bool)
 	resch := make(chan ResponseItem, 200)
