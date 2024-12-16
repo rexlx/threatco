@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
@@ -359,6 +360,20 @@ func createLineChart(seriesName string, data []float64) *charts.Line {
 		AddSeries(seriesName, items).
 		SetSeriesOptions(charts.WithLineChartOpts(smoothLine))
 	return line
+}
+
+func RemoveTimestamp(sep string, data string) (string, error) {
+	parts := strings.Split(data, sep)
+	// fmt.Println(parts)
+	if len(parts) < 2 {
+		return "", fmt.Errorf("bad data")
+	}
+	tmp := strings.Split(parts[1], ".")
+	if len(tmp) < 2 {
+		return "", fmt.Errorf("bad data")
+	}
+	trueFileName := fmt.Sprintf("%s.%s", parts[0], tmp[1])
+	return trueFileName, nil
 }
 
 type mandiantIndicatorPostReqest struct {

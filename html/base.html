@@ -38,11 +38,58 @@
                     </div>
                 </div>
             </div>
+            <div class="navbar-end">
+                <div class="navbar-item">
+                    <button class="button is-warning is-outlined" onclick="logout()">Logout</button>
+                </div>
+            </div>
         </div>
     </nav>
 
 </body>
 <script>
+    function deleteUser(email) {
+        if (!confirm('Are you sure you want to delete this user?')) {
+            return;
+        }
+
+        fetch('/deleteuser', {
+            method: 'POST', // Change to POST to match the handler
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded' // Use form-urlencoded to match FormValue
+            },
+            body: 'email=' + encodeURIComponent(email) // Encode the email in the body
+        })
+            .then(response => {
+                if (response.ok) {
+                    return response.text(); // Expecting plain text response
+                }
+                throw new Error('Network response was not ok.');
+            })
+            .then(data => {
+                console.log('User deleted: ', data);
+                document.getElementById('userResults').innerHTML = '<div class="notification is-success">User deleted successfully</div>';
+            })
+            .catch(error => {
+                console.error('There was a problem with the fetch operation', error);
+                document.getElementById('userResults').innerHTML = '<div class="notification is-danger">There was a problem deleting the user</div>';
+            });
+    }
+    function logout() {
+        fetch('/logout', {
+            method: 'GET'
+        })
+            .then(response => {
+                if (response.ok) {
+                    window.location.href = '/splash';
+                }
+                throw new Error('Network response was not ok.');
+            })
+            .catch(error => {
+                console.error('There was a problem with the fetch operation', error);
+            });
+    }
+
     // Function to open the modal
     function openModal(modalID) {
         const modal = document.getElementById(modalID);
@@ -97,83 +144,89 @@
         console.log('hello')
         dropDownMenu.classList.toggle('is-active')
     })
-    document.getElementById('addUserForm').addEventListener('submit',function(event){
-    event.preventDefault();
-    const email = document.getElementById('email').value
-    const key = document.getElementById('password').value
-    const admin = document.getElementById('admin').value
-    const userData = {
-        email,
-        key,
-        admin,
-    };
-    fetch('/adduser',{
-        method: 'POST',
-        headers:{
-            'Content-Type': 'application/json',
-            'Authorization': ''
-        },
-        body: JSON.stringify(userData),
-    })
-    .then(response => {
-        if (response.ok){
-            let x = response.json();
-            console.log(x);
-            return x
-        }
-        throw new Error('Network response was not ok.');
-    })
-    .then(data => {
-        console.log('User added: ',data);
-        alert('User added successfully!')
-    })    
-    .catch(error=> {
-        console.error('There was a problem with the fetch operation',error);
+    document.getElementById('addUserForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        const userResults = document.getElementById('userResults');
+        const email = document.getElementById('email').value
+        const key = document.getElementById('password').value
+        const admin = document.getElementById('admin').value
+        const userData = {
+            "email": email,
+            "password": key,
+            "is_admin": admin
+        };
+        fetch('/adduser', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': ''
+            },
+            body: JSON.stringify(userData),
+        })
+            .then(response => {
+                if (response.ok) {
+                    let x = response.json();
+                    console.log(x);
+                    return x;
+                }
+                throw new Error('Network response was not ok.');
+            })
+            .then(data => {
+                console.log('User added: ', data);
+                if (data.key) {
+                    userResults.innerHTML = '<div class="notification is-success">User added successfully. Key: ' + data.key + '</div>';
+                }
+                alert('User added! A key will be displayed on the screen, please save it for future reference');
+            })
+            .catch(error => {
+                console.error('There was a problem with the fetch operation', error);
+            });
+
     });
+    document.getElementById('routeMapButton').addEventListener('click', function () {
+        const typesInput = document.getElementById('typesInput').value;
+        const typesArray = typesInput.split(',').map(type => type.trim());
+        const routeMap = typesArray.map((type, index) => ({ key: "route" + (index + 1), type: type }));
 
-});
-document.getElementById('routeMapButton').addEventListener('click', function () {
-            const typesInput = document.getElementById('typesInput').value;
-            const typesArray = typesInput.split(',').map(type => type.trim());
-            const routeMap = typesArray.map((type, index) => ({ key: "route" + (index + 1), type: type }));
-
-            const routeMapOutput = document.getElementById('routeMapOutput');
-            //   routeMapOutput.innerHTML = '<pre>' + JSON.stringify(routeMap, null, 2) + '</pre>';
-            for (let i = 0; i < routeMap.length; i++) {
-                let field = '<div class="field">' +
-                    '<label class="label has-text-white">' + routeMap[i].type + '</label>' +
-                    '<div class="control">' +
-                    '<input class="input is-outlined" type="text" name="' + routeMap[i].route + '" placeholder="Enter service kind">' +
-                    '</div>' +
-                    '</div>';
-                routeMapOutput.innerHTML += field;
-            }
-        });
+        const routeMapOutput = document.getElementById('routeMapOutput');
+        //   routeMapOutput.innerHTML = '<pre>' + JSON.stringify(routeMap, null, 2) + '</pre>';
+        for (let i = 0; i < routeMap.length; i++) {
+            let field = '<div class="field">' +
+                '<label class="label has-text-white">' + routeMap[i].type + '</label>' +
+                '<div class="control">' +
+                '<input class="input is-outlined" type="text" name="' + routeMap[i].route + '" placeholder="Enter service kind">' +
+                '</div>' +
+                '</div>';
+            routeMapOutput.innerHTML += field;
+        }
+    });
 </script>
 <style>
     .section {
         height: 100vh;
     }
+
     body {
-      background-color: #0b141c;
+        background-color: #0b141c;
     }
+
     .has-background-custom {
         background-color: #0b141c;
     }
 
     .animate-spin {
-      animation: spin 1s linear infinite;
+        animation: spin 1s linear infinite;
     }
 
     @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
+        from {
+            transform: rotate(0deg);
+        }
 
-      to {
-        transform: rotate(360deg);
+        to {
+            transform: rotate(360deg);
 
-      }
+        }
     }
 </style>
 
