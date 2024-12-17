@@ -38,11 +38,6 @@ type VirusTotalAttributes struct {
 	LastDNSRecords           []DNSRecord                   `json:"last_dns_records"`
 }
 
-//	{
-//		"type": "A",
-//		"ttl": 14400,
-//		"value": "159.203.188.91"
-//	}
 type DNSRecord struct {
 	Type  string `json:"type"`
 	TTL   int    `json:"ttl"`
