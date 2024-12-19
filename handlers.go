@@ -19,7 +19,8 @@ func PassStore(s *UploadStore) {
 }
 
 func (s *Server) FileServer() http.Handler {
-	return http.FileServer(http.Dir("./static"))
+	return http.FileServer(http.Dir("/static"))
+	// return http.FileServer(http.Dir("./static"))
 }
 
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
@@ -537,7 +538,7 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		uid := uuid.New().String()
 		UploadResponse.ID = uid
 		UploadResponse.Status = "complete"
-		uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
 		go func(id string) {
 			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
 			if err != nil {

@@ -22,12 +22,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
 # https://hub.docker.com/_/alpine
 # https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
 FROM alpine:3
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates curl
 
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/server /server
 
 COPY static /static
+COPY data/config.json /config.json
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
