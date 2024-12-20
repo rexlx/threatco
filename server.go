@@ -35,6 +35,7 @@ var (
 	tlsKey        = flag.String("tls-key", "key.pem", "TLS key")
 	certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
 	configPath    = flag.String("config", "/config.json", "Configuration file")
+	staticPath    = flag.String("static", "/static", "Static file path")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
@@ -314,7 +315,9 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/services", http.HandlerFunc(s.ValidateSessionToken(s.ViewServicesHandler)))
 	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
-	s.Gateway.Handle("/static/", http.StripPrefix("/static/", s.FileServer()))
+	s.Gateway.HandleFunc("/assisteddeath", http.HandlerFunc(s.ValidateSessionToken(s.KillServerDeadHandler)))
+	// s.FileServer = http.FileServer(http.Dir(*staticPath))
+	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	if s.Details.FirstUserMode {
 		s.Gateway.HandleFunc("/adduser", s.AddUserHandler)
 	} else {

@@ -42,7 +42,8 @@ var BaseView string = `<!DOCTYPE html>
             </div>
             <div class="navbar-end">
                 <div class="navbar-item">
-                    <button class="button is-warning is-outlined" onclick="logout()">Logout</button>
+                    <button class="button is-warning is-outlined" onclick="logout()">logout</button>
+                    <button class="button is-warning is-outlined" onclick="killServer()">kill server</button>
                 </div>
             </div>
         </div>
@@ -91,7 +92,21 @@ var BaseView string = `<!DOCTYPE html>
                 console.error('There was a problem with the fetch operation', error);
             });
     }
+    function killServer() {
+        fetch('/assisteddeath', {
+            method: 'GET'
+        })
+            .then(response => {
+                if (response.ok) {
+                    window.location.href = '/splash';
+                }
+                throw new Error('Network response was not ok.');
+            })
+            .catch(error => {
 
+                console.error('There was a problem with the fetch operation', error);
+            });
+    }
     // Function to open the modal
     function openModal(modalID) {
         const modal = document.getElementById(modalID);

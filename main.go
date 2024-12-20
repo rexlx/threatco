@@ -31,6 +31,10 @@ func main() {
 				s.Log.Println("Shutting down")
 				ticker.Stop()
 				os.Exit(0)
+			case <-s.StopCh:
+				s.Log.Println("Shutting down")
+				ticker.Stop()
+				os.Exit(0)
 			}
 		}
 	}()

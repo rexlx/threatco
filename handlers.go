@@ -18,11 +18,6 @@ func PassStore(s *UploadStore) {
 	store = s
 }
 
-func (s *Server) FileServer() http.Handler {
-	return http.FileServer(http.Dir("/static"))
-	// return http.FileServer(http.Dir("./static"))
-}
-
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_event_requests", 1)
 	defer func(start time.Time) {
@@ -561,6 +556,12 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(out)
+}
+
+func (s *Server) KillServerDeadHandler(w http.ResponseWriter, r *http.Request) {
+	s.Log.Println("KillServerDeadHandler called. must kill the server.")
+	w.Write([]byte("ok"))
+	s.StopCh <- true
 }
 
 func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Request) {
