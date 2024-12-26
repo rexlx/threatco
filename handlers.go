@@ -104,7 +104,7 @@ func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 
 		}
 	}
-	err = s.AddService(svc)
+	err = s.DB.AddService(svc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -173,7 +173,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// s.Memory.Lock()
-	err = s.AddUser(*user)
+	err = s.DB.AddUser(*user)
 	if err != nil {
 		s.Log.Println("error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -335,7 +335,7 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.Memory.RUnlock()
 	parts := strings.Split(r.Header.Get("Authorization"), ":")
 	email := parts[0]
-	u, err := s.GetUserByEmail(email)
+	u, err := s.DB.GetUserByEmail(email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -373,7 +373,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	email := r.FormValue("username")
 	password := r.FormValue("password")
-	u, err := s.GetUserByEmail(email)
+	u, err := s.DB.GetUserByEmail(email)
 	if err != nil || u.Email == "" {
 		s.Log.Println("LoginHandler: user not found", email)
 		http.Error(w, "user not found", http.StatusNotFound)
@@ -390,7 +390,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "password does not match", http.StatusUnauthorized)
 		return
 	}
-	err = s.AddUser(u)
+	err = s.DB.AddUser(u)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -402,7 +402,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tk.Email = u.Email
-	err = s.SaveToken(*tk)
+	err = s.DB.SaveToken(*tk)
 	if err != nil {
 		s.Log.Println("error saving token", err)
 		http.Error(w, "error saving token", http.StatusInternalServerError)
@@ -433,7 +433,7 @@ func (s *Server) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	s.Log.Println("DeleteUserHandler")
 	email := r.FormValue("email")
-	err := s.DeleteUser(email)
+	err := s.DB.DeleteUser(email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -450,7 +450,7 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Println("UpdateUserHandler", u)
-	user, err := s.GetUserByEmail(u.Email)
+	user, err := s.DB.GetUserByEmail(u.Email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -465,7 +465,7 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	user.Admin = u.Admin
 	user.Services = u.Services
 	user.Updated = time.Now()
-	err = s.AddUser(user)
+	err = s.DB.AddUser(user)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

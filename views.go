@@ -15,7 +15,7 @@ func (s *Server) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	// s.Memory.RLock()
 	// defer s.Memory.RUnlock()
-	_users, err := s.GetAllUsers()
+	_users, err := s.DB.GetAllUsers()
 	if err != nil {
 		s.Log.Println("AllUsersViewHandler", err)
 	}

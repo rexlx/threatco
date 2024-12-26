@@ -14,7 +14,7 @@ func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Token is missing, malformed, or you are stupid.", http.StatusUnauthorized)
 			return
 		}
-		user, err := s.GetUserByEmail(parts[0])
+		user, err := s.DB.GetUserByEmail(parts[0])
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
@@ -40,7 +40,7 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, "Token is missing, malformed, or you are stupid.", http.StatusUnauthorized)
 				return
 			}
-			user, err := s.GetUserByEmail(parts[0])
+			user, err := s.DB.GetUserByEmail(parts[0])
 			if err != nil {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
@@ -52,7 +52,7 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		tk, err := s.GetTokenByValue(token)
+		tk, err := s.DB.GetTokenByValue(token)
 		if err != nil || tk.ExpiresAt.Before(time.Now()) {
 			http.Error(w, "Invalid session token", http.StatusUnauthorized)
 			return

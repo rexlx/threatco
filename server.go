@@ -44,7 +44,7 @@ type Server struct {
 	RespCh  chan ResponseItem    `json:"-"`
 	StopCh  chan bool            `json:"-"`
 	Cache   *Cache               `json:"-"`
-	DB      *bbolt.DB            `json:"-"`
+	DB      Database             `json:"-"`
 	Gateway *http.ServeMux       `json:"-"`
 	Log     *log.Logger          `json:"-"`
 	Memory  *sync.RWMutex        `json:"-"`
@@ -81,11 +81,8 @@ type ResponseItem struct {
 	Data []byte    `json:"data"`
 }
 
-func NewServer(id string, address string, dbLocation string) *Server {
-	db, err := bbolt.Open(dbLocation, 0600, nil)
-	if err != nil {
-		log.Fatalf("could not open database: %v", err)
-	}
+func NewServer(id string, address string, dbType string, dbLocation string) *Server {
+	var database Database
 	targets := make(map[string]*Endpoint)
 	memory := &sync.RWMutex{}
 	logger := log.New(log.Writer(), log.Prefix(), log.Flags())
@@ -106,12 +103,22 @@ func NewServer(id string, address string, dbLocation string) *Server {
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
 	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
+	switch dbType {
+	case "bbolt":
+		db, err := bbolt.Open(dbLocation, 0600, nil)
+		if err != nil {
+			log.Fatalf("could not open database: %v", err)
+		}
+		database = &BboltDB{DB: db}
+	default:
+		log.Fatalf("unsupported database type: %s", dbType)
+	}
 	svr := &Server{
 		StopCh:  stopCh,
 		Session: sessionMgr,
 		RespCh:  resch,
 		Cache:   cache,
-		DB:      db,
+		DB:      database,
 		Gateway: gateway,
 		Log:     logger,
 		Memory:  memory,

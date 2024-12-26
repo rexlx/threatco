@@ -6,18 +6,27 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-func (s *Server) GetUserByEmail(email string) (User, error) {
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["user_queries"]++
-	// s.Log.Println("GetUserByEmail", email)
+type Database interface {
+	GetUserByEmail(email string) (User, error)
+	DeleteUser(email string) error
+	GetAllUsers() ([]User, error)
+	AddUser(u User) error
+	GetServiceByKind(kind string) (ServiceType, error)
+	AddService(st ServiceType) error
+	GetTokenByValue(tk string) (Token, error)
+	SaveToken(t Token) error
+}
+
+type BboltDB struct {
+	DB *bbolt.DB
+}
+
+func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 	var user User
-	err := s.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		v := b.Get([]byte(email))
 		if v == nil {
-			s.Log.Println("GetUserByEmail: user not found")
-			s.Details.Stats["user_not_found"]++
 			return nil
 		}
 
@@ -26,22 +35,16 @@ func (s *Server) GetUserByEmail(email string) (User, error) {
 	return user, err
 }
 
-func (s *Server) DeleteUser(email string) error {
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["user_deletes"]++
-	return s.DB.Update(func(tx *bbolt.Tx) error {
+func (db *BboltDB) DeleteUser(email string) error {
+	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		return b.Delete([]byte(email))
 	})
 }
 
-func (s *Server) GetAllUsers() ([]User, error) {
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["user_queries"]++
+func (db *BboltDB) GetAllUsers() ([]User, error) {
 	var users []User
-	err := s.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		return b.ForEach(func(k, v []byte) error {
 			var user User
@@ -55,13 +58,10 @@ func (s *Server) GetAllUsers() ([]User, error) {
 	return users, err
 }
 
-func (s *Server) AddUser(u User) error {
+func (db *BboltDB) AddUser(u User) error {
 	// s.Log.Println("AddUser", u)
 	u.Updated = time.Now()
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["user_saves"]++
-	return s.DB.Update(func(tx *bbolt.Tx) error {
+	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("users"))
 		if err != nil {
 			return err
@@ -74,18 +74,12 @@ func (s *Server) AddUser(u User) error {
 	})
 }
 
-func (s *Server) GetServiceByKind(kind string) (ServiceType, error) {
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["service_queries"]++
-	s.Log.Println("GetServiceByKind", kind)
+func (db *BboltDB) GetServiceByKind(kind string) (ServiceType, error) {
 	var service ServiceType
-	err := s.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("services"))
 		v := b.Get([]byte(kind))
 		if v == nil {
-			s.Log.Println("GetServiceByKind: service not found")
-			s.Details.Stats["service_not_found"]++
 			return nil
 		}
 
@@ -94,12 +88,8 @@ func (s *Server) GetServiceByKind(kind string) (ServiceType, error) {
 	return service, err
 }
 
-func (s *Server) AddService(st ServiceType) error {
-	s.Log.Println("AddService", st)
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["service_saves"]++
-	return s.DB.Update(func(tx *bbolt.Tx) error {
+func (db *BboltDB) AddService(st ServiceType) error {
+	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("services"))
 		if err != nil {
 			return err
@@ -112,18 +102,12 @@ func (s *Server) AddService(st ServiceType) error {
 	})
 }
 
-func (s *Server) GetTokenByValue(tk string) (Token, error) {
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["token_queries"]++
-	s.Log.Println("GetTokenByValue", tk)
+func (db *BboltDB) GetTokenByValue(tk string) (Token, error) {
 	var token Token
-	err := s.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("tokens"))
 		v := b.Get([]byte(tk))
 		if v == nil {
-			s.Log.Println("GetTokenByValue: token not found")
-			s.Details.Stats["token_not_found"]++
 			return nil
 		}
 
@@ -132,12 +116,8 @@ func (s *Server) GetTokenByValue(tk string) (Token, error) {
 	return token, err
 }
 
-func (s *Server) SaveToken(t Token) error {
-	s.Log.Println("SaveToken", t)
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
-	s.Details.Stats["token_saves"]++
-	return s.DB.Update(func(tx *bbolt.Tx) error {
+func (db *BboltDB) SaveToken(t Token) error {
+	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("tokens"))
 		if err != nil {
 			return err
