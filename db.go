@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.etcd.io/bbolt"
 )
 
@@ -15,10 +18,16 @@ type Database interface {
 	AddService(st ServiceType) error
 	GetTokenByValue(tk string) (Token, error)
 	SaveToken(t Token) error
+	TestAndRecconect() error
 }
 
 type BboltDB struct {
 	DB *bbolt.DB
+}
+
+func (db *BboltDB) TestAndRecconect() error {
+	fmt.Println("TestAndRecconect")
+	return nil
 }
 
 func (db *BboltDB) GetUserByEmail(email string) (User, error) {
@@ -128,4 +137,141 @@ func (db *BboltDB) SaveToken(t Token) error {
 		}
 		return b.Put([]byte(t.Token), v)
 	})
+}
+
+// POSTGRES TYPE
+type PostgresDB struct {
+	Pool *pgxpool.Pool
+}
+
+func NewPostgresDB(dsn string) (*PostgresDB, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		return nil, err
+	}
+	p := &PostgresDB{Pool: pool}
+	if err := p.createTables(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (db *PostgresDB) createTables() error {
+	_, err := db.Pool.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS services (
+            id SERIAL PRIMARY KEY,
+            upload_service BOOLEAN,
+            expires INT,
+            secret TEXT,
+            selected BOOLEAN,
+            insecure BOOLEAN,
+            name TEXT,
+            url TEXT,
+            rate_limited BOOLEAN,
+            max_requests INT,
+            refill_rate INT,
+            auth_type TEXT,
+            key TEXT,
+            kind TEXT,
+            type TEXT[],
+            route_map JSONB
+        );
+		CREATE TABLE IF NOT EXISTS users (
+				email TEXT PRIMARY KEY,
+				admin BOOLEAN,
+				key TEXT,
+				hash BYTEA,
+				services JSONB,
+				created TIMESTAMP,
+				updated TIMESTAMP
+		);
+		CREATE TABLE IF NOT EXISTS tokens (
+				token TEXT PRIMARY KEY,
+				expires_at TIMESTAMP,
+				email TEXT,
+				hash BYTEA
+				);
+			`)
+	return err
+}
+
+func (db *PostgresDB) TestAndRecconect() error {
+	return db.Pool.Ping(context.Background())
+}
+
+func (db *PostgresDB) GetUserByEmail(email string) (User, error) {
+	var user User
+	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM users WHERE email = $1", email).Scan(
+		&user.Email, &user.Admin, &user.Key, &user.Hash, &user.Services, &user.Created, &user.Updated,
+	)
+	return user, err
+}
+
+func (db *PostgresDB) AddUser(u User) error {
+	_, err := db.Pool.Exec(context.Background(),
+		"INSERT INTO users (email, admin, key, hash, services, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		u.Email, u.Admin, u.Key, u.Hash, u.Services, u.Created, u.Updated,
+	)
+	return err
+}
+
+func (db *PostgresDB) DeleteUser(email string) error {
+	_, err := db.Pool.Exec(context.Background(), "DELETE FROM users WHERE email = $1", email)
+	return err
+}
+
+func (db *PostgresDB) GetAllUsers() ([]User, error) {
+	rows, err := db.Pool.Query(context.Background(), "SELECT * FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.Email, &user.Admin, &user.Key, &user.Hash, &user.Services, &user.Created, &user.Updated); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func (db *PostgresDB) GetServiceByKind(kind string) (ServiceType, error) {
+	var service ServiceType
+	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM services WHERE kind = $1", kind).Scan(
+		&service.UploadService, &service.Expires, &service.Secret, &service.Selected, &service.Insecure, &service.Name,
+		&service.URL, &service.RateLimited, &service.MaxRequests, &service.RefillRate, &service.AuthType, &service.Key, &service.Kind,
+		&service.Type, &service.RouteMap,
+	)
+	return service, err
+}
+
+func (db *PostgresDB) AddService(st ServiceType) error {
+	_, err := db.Pool.Exec(context.Background(),
+		`INSERT INTO services (upload_service, expires, secret, selected, insecure, name, url, rate_limited, max_requests, refill_rate, auth_type, key, kind, type, route_map)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		st.UploadService, st.Expires, st.Secret, st.Selected, st.Insecure, st.Name, st.URL, st.RateLimited, st.MaxRequests, st.RefillRate, st.AuthType, st.Key, st.Kind, st.Type, st.RouteMap,
+	)
+	return err
+}
+
+func (db *PostgresDB) GetTokenByValue(tk string) (Token, error) {
+	var token Token
+	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM tokens WHERE token = $1", tk).Scan(
+		&token.Token, &token.ExpiresAt, &token.Email, &token.Hash,
+	)
+	return token, err
+}
+
+func (db *PostgresDB) SaveToken(t Token) error {
+	_, err := db.Pool.Exec(context.Background(),
+		"INSERT INTO tokens (token, expires_at, email, hash) VALUES ($1, $2, $3, $4)",
+		t.Token, t.ExpiresAt, t.Email, t.Hash,
+	)
+	return err
 }
