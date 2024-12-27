@@ -212,10 +212,17 @@ func (db *PostgresDB) GetUserByEmail(email string) (User, error) {
 }
 
 func (db *PostgresDB) AddUser(u User) error {
-	_, err := db.Pool.Exec(context.Background(),
-		"INSERT INTO users (email, admin, key, hash, services, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		u.Email, u.Admin, u.Key, u.Hash, u.Services, u.Created, u.Updated,
-	)
+	_, err := db.Pool.Exec(context.Background(), `
+        INSERT INTO users (email, admin, key, hash, services, created, updated)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (email) DO UPDATE SET
+            admin = EXCLUDED.admin,
+            key = EXCLUDED.key,
+            hash = EXCLUDED.hash,
+            services = EXCLUDED.services,
+            created = EXCLUDED.created,
+            updated = EXCLUDED.updated
+    `, u.Email, u.Admin, u.Key, u.Hash, u.Services, u.Created, u.Updated)
 	return err
 }
 

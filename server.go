@@ -107,9 +107,15 @@ func NewServer(id string, address string, dbType string, dbLocation string) *Ser
 	case "bbolt":
 		db, err := bbolt.Open(dbLocation, 0600, nil)
 		if err != nil {
-			log.Fatalf("could not open database: %v", err)
+			log.Fatalf("bbolt could not open database: %v", err)
 		}
 		database = &BboltDB{DB: db}
+	case "postgres":
+		db, err := NewPostgresDB(dbLocation)
+		if err != nil {
+			log.Fatalf("postgres could not open database: %v", err)
+		}
+		database = db
 	default:
 		log.Fatalf("unsupported database type: %s", dbType)
 	}
