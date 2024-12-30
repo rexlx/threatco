@@ -337,6 +337,14 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	return resp, nil
 }
 
+func DeleteConfigFile(fh string) error {
+	err := os.Remove(fh)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func DeepMapCopy(x, y map[string]float64) {
 	for k, v := range x {
 		y[k] = v

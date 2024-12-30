@@ -22,6 +22,7 @@ import (
 )
 
 var (
+	deleteConfig  = flag.Bool("delete", false, "Delete configuration file")
 	firstUserMode = flag.Bool("firstuse", false, "First user mode")
 	fqdn          = flag.String("fqdn", "http://localhost", "Fully qualified domain name")
 	mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
@@ -237,6 +238,13 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		err := cfg.PopulateFromJSONFile(*configPath)
 		if err != nil {
 			s.Log.Fatalf("could not populate from file: %v", err)
+		}
+		if *deleteConfig {
+			err := DeleteConfigFile(*configPath)
+			if err != nil {
+				s.Log.Fatalf("could not delete config file: %v", err)
+			}
+			s.Log.Println("config file deleted")
 		}
 	}
 	for _, svc := range cfg.Services {
