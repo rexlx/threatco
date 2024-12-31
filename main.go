@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,9 @@ import (
 
 func main() {
 	flag.Parse()
+	dsn := "user=postgres password=monkeyintheattic host=%v dbname=threatco"
+	*dbLocation = fmt.Sprintf(dsn, GetDBHost())
+	fmt.Println(*dbLocation)
 	var c Configuration
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)

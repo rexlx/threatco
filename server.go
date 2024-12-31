@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ var (
 	mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
 	vtKey         = flag.String("vt-key", "", "VirusTotal API key")
 	mispKey       = flag.String("misp-key", "", "MISP API key")
-	dbLocation    = flag.String("db", "insights.db", "Database location")
+	dbLocation    = flag.String("db", "", "Database location")
 	httpsPort     = flag.String("https-port", ":8443", "HTTPS port")
 	httpPort      = flag.String("http-port", ":8080", "HTTP port")
 	httpToo       = flag.Bool("http", false, "Enable HTTP")
@@ -141,6 +142,15 @@ func NewServer(id string, address string, dbType string, dbLocation string) *Ser
 	}
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	return svr
+}
+
+func GetDBHost() string {
+	host := os.Getenv("DB_HOST")
+	if host == "" {
+		fmt.Println("DB_HOST not set, using localhost")
+		host = "localhost"
+	}
+	return host
 }
 
 func (s *Server) addStat(key string, value float64) {

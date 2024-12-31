@@ -16,4 +16,4 @@ killall server
 sleep 2
 
 # Restart the server in normal mode
-/server
+/server -delete

@@ -1,17 +1,28 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5554:5432"
+
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
+    container_name: go_app
+    environment:
+       DB_HOST: ${DB_HOST}
     ports:
       - "8080:8080"
-    volumes:
-      - insights-data:/app/data
-    environment:
-      - DB_PATH=/app/data/insights.db
+    depends_on:
+      - db
 
 volumes:
-  insights-data:
+  postgres_data:
     driver: local
