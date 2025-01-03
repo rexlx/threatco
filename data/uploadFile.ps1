@@ -1,47 +1,47 @@
-param (
-    [Parameter(Mandatory=$true)]
+param(
     [string]$filePath,
-    [Parameter(Mandatory=$true)]
-    [string]$url,
-    [int]$chunkSize = 1048576  # Default chunk size is 1MB
+    [string]$serverUrl
 )
 
-# Check if the file exists
-if (-Not (Test-Path -Path $filePath)) {
-    Write-Host "File not found: $filePath"
-    exit 1
+# Calculate the file size
+$fileSize = (Get-Item $filePath).Length
+
+# Set the chunk size (adjust as needed)
+$chunkSize = 1MB
+
+# Read the file content
+$fileContent = Get-Content $filePath -Raw
+
+# Calculate the number of chunks
+$totalChunks = [Math]::Ceiling($fileSize / $chunkSize)
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+
+# Loop through the chunks
+for ($i = 0; $i -lt $totalChunks; $i++) {
+    # Calculate the chunk offset and length
+    $offset = $i * $chunkSize
+    $length = [Math]::Min($chunkSize, $fileSize - $offset)
+
+    # Extract the chunk data
+    $chunkData = $fileContent.Substring($offset, $length)
+
+    # Create the web request
+    $request = [System.Net.WebRequest]::Create("$serverUrl/upload")
+    $request.Method = "POST"
+    $request.Headers.Add("X-filename", (Split-Path $filePath -Leaf))
+    $request.Headers.Add("X-last-chunk", ($i -eq ($totalChunks - 1)))
+    $request.ContentLength = $length
+
+    # Write the chunk data to the request stream
+    $requestStream = $request.GetRequestStream()
+    $requestStream.Write([System.Text.Encoding]::UTF8.GetBytes($chunkData), 0, $length)
+    $requestStream.Close()
+
+    # Get the response
+    $response = $request.GetResponse()
+    $response.Close()
+
+    Write-Host "Uploaded chunk $($i + 1) of $totalChunks"
 }
 
-# Get the file name
-$fileName = [System.IO.Path]::GetFileName($filePath)
-
-# Open the file stream
-$fileStream = [System.IO.File]::OpenRead($filePath)
-$buffer = New-Object byte[] $chunkSize
-$bytesRead = 0
-$chunkNumber = 0
-
-try {
-    while (($bytesRead = $fileStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-        $chunkNumber++
-        $isLastChunk = $fileStream.Position -eq $fileStream.Length
-
-        # Define the headers
-        $headers = @{
-            "Content-Type" = "application/octet-stream"
-            "X-filename" = $fileName
-            "X-last-chunk" = $isLastChunk.ToString()
-        }
-
-        # Get the actual bytes read
-        $chunkData = if ($bytesRead -eq $buffer.Length) { $buffer } else { $buffer[0..($bytesRead - 1)] }
-
-        # Make the POST request
-        $response = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $chunkData
-
-        # Output the response
-        Write-Host "Chunk $chunkNumber response: $($response | ConvertTo-Json -Depth 10)"
-    }
-} finally {
-    $fileStream.Close()
-}
+Write-Host "File uploaded successfully!"
