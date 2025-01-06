@@ -32,7 +32,15 @@ func (db *BboltDB) TestAndRecconect() error {
 
 func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 	var user User
-	err := db.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("users"))
+		return err
+	})
+	if err != nil {
+		return user, err
+	}
+
+	err = db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		v := b.Get([]byte(email))
 		if v == nil {
@@ -46,14 +54,24 @@ func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 
 func (db *BboltDB) DeleteUser(email string) error {
 	return db.DB.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte("users"))
+		b, err := tx.CreateBucketIfNotExists([]byte("users"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
 		return b.Delete([]byte(email))
 	})
 }
 
 func (db *BboltDB) GetAllUsers() ([]User, error) {
 	var users []User
-	err := db.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("users"))
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		return b.ForEach(func(k, v []byte) error {
 			var user User
@@ -85,7 +103,14 @@ func (db *BboltDB) AddUser(u User) error {
 
 func (db *BboltDB) GetServiceByKind(kind string) (ServiceType, error) {
 	var service ServiceType
-	err := db.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("services"))
+		return err
+	})
+	if err != nil {
+		return service, err
+	}
+	err = db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("services"))
 		v := b.Get([]byte(kind))
 		if v == nil {
@@ -113,7 +138,14 @@ func (db *BboltDB) AddService(st ServiceType) error {
 
 func (db *BboltDB) GetTokenByValue(tk string) (Token, error) {
 	var token Token
-	err := db.DB.View(func(tx *bbolt.Tx) error {
+	err := db.DB.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("tokens"))
+		return err
+	})
+	if err != nil {
+		return token, err
+	}
+	err = db.DB.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("tokens"))
 		v := b.Get([]byte(tk))
 		if v == nil {

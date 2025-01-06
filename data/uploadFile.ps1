@@ -1,6 +1,6 @@
 param(
     [string]$filePath,
-    [string]$serverUrl
+    [string]$serverUrl = "http://localhost:8081"
 )
 
 # Calculate the file size
@@ -28,6 +28,7 @@ for ($i = 0; $i -lt $totalChunks; $i++) {
     # Create the web request
     $request = [System.Net.WebRequest]::Create("$serverUrl/upload")
     $request.Method = "POST"
+    $request.Headers.Add("Authorization", "")
     $request.Headers.Add("X-filename", (Split-Path $filePath -Leaf))
     $request.Headers.Add("X-last-chunk", ($i -eq ($totalChunks - 1)))
     $request.ContentLength = $length

@@ -45,6 +45,12 @@ func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 	}
 	// fmt.Println("NewUser", email, admin)
 	uid := uuid.New()
+	thisCopy := make([]ServiceType, len(services))
+	for i, svc := range services {
+		thisCopy[i] = svc
+		thisCopy[i].Secret = ""
+		thisCopy[i].Key = ""
+	}
 	u := &User{
 		ID:       uid.String(),
 		Email:    email,
@@ -52,7 +58,7 @@ func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 		Created:  time.Now(),
 		Updated:  time.Now(),
 		Selected: make(map[string]int),
-		Services: services,
+		Services: thisCopy,
 		Admin:    admin,
 	}
 	return u, nil
@@ -91,6 +97,11 @@ func (u *User) PasswordMatches(input string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (u *User) Sanitize() {
+	u.Hash = nil
+	u.Password = ""
 }
 
 type Token struct {
