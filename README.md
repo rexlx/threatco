@@ -6,15 +6,15 @@ companion application for the insights extension. Server / proxy / frontend.
 - a config.json
 - start in firstuse mode or there will no way to add a user
 
-
-## key management
-there will be .env support but everything is stored in config.json right now.
-secure you server.
-
+## containerized deployment
+- docker, podman, or docker-compose
+- Dockerfile(s) / entrypoint.sh located in the root directory of this folder
+- a configuration file is also needed. the -delete option remove the config after reading it in.
+- creates a user admin@aol.com with password admin for the frontend
 
 ## adding the first user (or any!)
 ```
-# create a regular extension user
+# create a regular extension user (no password is required, so none is set)
 curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", "admin": false}'
 
 # or with password to get frontend access (the admin flag doesnt corrently do anything)
@@ -22,20 +22,6 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 ```
 
 
-### creating a new service
 
-```go
-//handlers.go
-func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request)
-  // this function has a switch statement for handling the users incoming request.
-  // your service will need to be added to this statement to match the convention.
-  // perhaps ill create a list of service names periodically and switch over that instead
-
-
-//helpers.gp
-func (s *Server) YourNewHelper(req ProxyRequest) ([]byte, error)
-  // here you should do the request and transform you response and return
-```
-create a new entry in the config.json for your new service
 
 
