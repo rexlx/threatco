@@ -65,6 +65,7 @@ type Details struct {
 }
 
 type Cache struct {
+	Logs           []LogItem               `json:"logs"`
 	Charts         []byte                  `json:"charts"`
 	Coordinates    map[string][]float64    `json:"coordinates"`
 	ResponseExpiry time.Duration           `json:"response_expiry"`
@@ -83,6 +84,12 @@ type ResponseItem struct {
 	Data []byte    `json:"data"`
 }
 
+type LogItem struct {
+	Time  time.Time `json:"time"`
+	Data  string    `json:"data"`
+	Error bool      `json:"error"`
+}
+
 func NewServer(id string, address string, dbType string, dbLocation string) *Server {
 	var database Database
 	targets := make(map[string]*Endpoint)
@@ -90,6 +97,7 @@ func NewServer(id string, address string, dbType string, dbLocation string) *Ser
 	logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
+		Logs:         make([]LogItem, 0),
 		Coordinates:  make(map[string][]float64),
 		StatsHistory: make([]StatItem, 0),
 		Responses:    make(map[string]ResponseItem),
@@ -176,6 +184,36 @@ func (s *Server) updateCache() {
 	// set the size limit of the cache here by removing the oldest item if
 	// the length is greater than whatever you set
 	s.Cache.StatsHistory = append(s.Cache.StatsHistory, stat)
+}
+
+func (s *Server) LogError(err error) {
+	s.Log.Println(err)
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Cache.Logs = append(s.Cache.Logs, LogItem{
+		Time:  time.Now(),
+		Data:  err.Error(),
+		Error: true,
+	})
+}
+
+func (s *Server) LogInfo(info string) {
+	s.Log.Println(info)
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	s.Cache.Logs = append(s.Cache.Logs, LogItem{
+		Time:  time.Now(),
+		Data:  info,
+		Error: false,
+	})
+}
+
+func (s *Server) GetLogs() []LogItem {
+	newLogs := make([]LogItem, 0)
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	newLogs = append(newLogs, s.Cache.Logs...)
+	return newLogs
 }
 
 func (s *Server) ProcessTransientResponses() {
@@ -405,3 +443,19 @@ func (s *Server) UpdateCharts() {
 // func (s *Server) BroacastToAPIs(fn string, uh UploadHandler) {
 
 // }
+
+func LogItemsToArticle(logs []LogItem) string {
+	out := `<div class="container">`
+	templ := `<article class="message is-%s">%v</article>`
+	for _, log := range logs {
+		var color string
+		if log.Error {
+			color = "danger"
+		} else {
+			color = "info"
+		}
+		out += fmt.Sprintf(templ, color, log.Data)
+	}
+	out += `</div>`
+	return out
+}
