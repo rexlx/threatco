@@ -24,8 +24,32 @@ body {
     font-size: 16px;
     line-height: 1.5;
     color: #556c96;
+    background-color: #0b141c;
     margin: 0;
     padding: 0;
+}
+
+.section {
+    height: 100vh;
+}
+
+.has-background-custom {
+    background-color: #0b141c;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+
+    }
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -36,7 +60,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0;
 }
 
-.logArea {
+.logarea {
     font-family: 'IBMPlexMono', monospace;
     font-size: 14px;
     line-height: 1.5;

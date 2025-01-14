@@ -12,6 +12,10 @@ func (s *Server) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, views.LoginView)
 }
 
+func (s *Server) LogViewHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, views.LogView)
+}
+
 func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	// s.Memory.RLock()
 	// defer s.Memory.RUnlock()

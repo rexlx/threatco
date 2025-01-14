@@ -385,6 +385,9 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
 	s.Gateway.HandleFunc("/assisteddeath", http.HandlerFunc(s.ValidateSessionToken(s.KillServerDeadHandler)))
+	s.Gateway.HandleFunc("/logs", http.HandlerFunc(s.ValidateSessionToken(s.GetLogsHandler)))
+	s.Gateway.HandleFunc("/getlogs", http.HandlerFunc(s.ValidateSessionToken(s.LogsSSRHandler)))
+	s.Gateway.HandleFunc("/view-logs", http.HandlerFunc(s.ValidateSessionToken(s.LogViewHandler)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	if s.Details.FirstUserMode {
@@ -446,7 +449,14 @@ func (s *Server) UpdateCharts() {
 
 func LogItemsToArticle(logs []LogItem) string {
 	out := `<div class="container">`
-	templ := `<article class="message is-%s">%v</article>`
+	templ := `<article class="message is-%s">
+                <div class="message-header">
+                    <p>%s</p>
+                </div>
+                <div class="message-body">
+                    %v
+                </div>
+              </article>`
 	for _, log := range logs {
 		var color string
 		if log.Error {
@@ -454,7 +464,7 @@ func LogItemsToArticle(logs []LogItem) string {
 		} else {
 			color = "info"
 		}
-		out += fmt.Sprintf(templ, color, log.Data)
+		out += fmt.Sprintf(templ, color, log.Time, log.Data)
 	}
 	out += `</div>`
 	return out

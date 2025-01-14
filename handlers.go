@@ -559,20 +559,36 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
+	s.Log.Println("LogsSSRHandler")
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	step := 50
+	if len(s.Cache.Logs) < 50 {
+		step = len(s.Cache.Logs)
+	}
+	chunk := s.Cache.Logs[0:step]
+	out := LogItemsToArticle(chunk)
+
+	fmt.Fprint(w, out)
+}
+
 func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
+	s.LogInfo("GetLogsHandler called")
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	start, _ := strconv.Atoi(r.URL.Query().Get("start"))
 	end, _ := strconv.Atoi(r.URL.Query().Get("end"))
-	if start < 0 {
+	if start < 1 {
 		start = 0
 	}
-	if end < 0 {
+	if end < 1 {
 		end = start + 50
 	}
 	if end > len(s.Cache.Logs) {
 		end = len(s.Cache.Logs)
 	}
+	fmt.Println("ring", s.Cache.Logs[start:end], start, end)
 	out, err := json.Marshal(s.Cache.Logs[start:end])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
