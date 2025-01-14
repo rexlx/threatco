@@ -1,0 +1,62 @@
+@font-face {
+    font-family: 'IBMPlexMono';
+    src: url('/static/fonts/IBMPlexMono-Regular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'IBMPlexSans';
+    src: url('/static/fonts/IBMPlexSans-Regular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'IBMPlexSerif';
+    src: url('/static/fonts/IBMPlexSerif-Regular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    font-family: 'IBMPlexSans', sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #556c96;
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'IBMPlexSerif', serif;
+    font-weight: normal;
+    color: #222;
+    margin: 0;
+    padding: 0;
+}
+
+.logArea {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #222;
+}
+
+.scrollbar {
+    position: absolute;
+    width: 10px;
+    /* Add a width to the scrollbar */
+    right: 0;
+    top: 0;
+    background-color: #222;
+    /* Add background color for visibility */
+}
+
+.thumb {
+    width: 100%;
+    min-height: 20px;
+    /* Ensure minimum height */
+    background: #444;
+    cursor: pointer;
+}
