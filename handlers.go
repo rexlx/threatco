@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -551,6 +552,28 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		}(uid)
 	}
 	out, err := json.Marshal(UploadResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
+func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	start, _ := strconv.Atoi(r.URL.Query().Get("start"))
+	end, _ := strconv.Atoi(r.URL.Query().Get("end"))
+	if start < 0 {
+		start = 0
+	}
+	if end < 0 {
+		end = start + 50
+	}
+	if end > len(s.Cache.Logs) {
+		end = len(s.Cache.Logs)
+	}
+	out, err := json.Marshal(s.Cache.Logs[start:end])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

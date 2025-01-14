@@ -48,6 +48,6 @@ func main() {
 		Handler: s.Session.LoadAndSave(s.Gateway),
 	}
 	go s.ProcessTransientResponses()
-	s.Log.Printf("Server started at %s", s.Details.Address)
+	s.LogInfo(fmt.Sprintf("Server started at %s", s.Details.Address))
 	log.Fatal(svr.ListenAndServe())
 }
