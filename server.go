@@ -398,7 +398,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
 
-	s.Log.Printf("initialized from config: %v", cfg)
 }
 
 func (s *Server) UpdateCharts() {
@@ -448,7 +447,9 @@ func (s *Server) UpdateCharts() {
 // }
 
 func LogItemsToArticle(logs []LogItem) string {
-	out := `<div class="container">`
+	out := `<div class="scrollbar">
+            <div class="thumb"></div>
+        </div>`
 	templ := `<article class="message is-%s">
                 <div class="message-header">
                     <p>%s</p>
@@ -466,6 +467,11 @@ func LogItemsToArticle(logs []LogItem) string {
 		}
 		out += fmt.Sprintf(templ, color, log.Time, log.Data)
 	}
-	out += `</div>`
 	return out
+}
+
+func (s *Server) FakeLoggingEvent(n int) {
+	for i := 0; i < n; i++ {
+		s.LogError(fmt.Errorf("this is a fake error %d", i))
+	}
 }

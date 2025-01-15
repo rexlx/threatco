@@ -574,11 +574,20 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
-	s.LogInfo("GetLogsHandler called")
-	s.Memory.RLock()
-	defer s.Memory.RUnlock()
 	start, _ := strconv.Atoi(r.URL.Query().Get("start"))
 	end, _ := strconv.Atoi(r.URL.Query().Get("end"))
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	if start > len(s.Cache.Logs) {
+		tmp := []LogItem{}
+		out, err := json.Marshal(tmp)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(out)
+		return
+	}
 	if start < 1 {
 		start = 0
 	}
@@ -588,7 +597,6 @@ func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
 	if end > len(s.Cache.Logs) {
 		end = len(s.Cache.Logs)
 	}
-	fmt.Println("ring", s.Cache.Logs[start:end], start, end)
 	out, err := json.Marshal(s.Cache.Logs[start:end])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
