@@ -57,7 +57,6 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.Memory.RUnlock()
 
 	serviceDiv := `<div class="box has-background-black-ter">
-    <h2 class="title is-2 has-text-primary">Services</h2>
     <div class="columns is-multiline">`
 
 	for _, service := range s.Details.SupportedServices {
@@ -67,7 +66,7 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 		serviceDiv += fmt.Sprintf(`<div class="column">
         <div class="card has-background-black-ter" style="height: 200px;"> <!-- Set fixed height -->
             <div class="card-content">
-                <p class="title has-text-white is-4">%s</p> <!-- Use title class for consistency -->
+                <p class="title has-text-primary is-4">%s</p> <!-- Use title class for consistency -->
                 <div class="content">
                     <p class="has-text-white">Description or additional info can go here.</p> <!-- Optional description -->
                 </div>

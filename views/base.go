@@ -34,7 +34,9 @@ var BaseView string = `<!DOCTYPE html>
                         <a class="navbar-item has-background-black-ter has-text-primary" href="/users">
                             users
                         </a>
-
+                        <a class="navbar-item has-background-black-ter has-text-primary" href="/view-logs">
+                            logs
+                        </a>
                         <a class="navbar-item has-background-black-ter has-text-primary" href="/charts">
                             stats
                         </a>
