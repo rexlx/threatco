@@ -52,6 +52,10 @@ func (s *Server) ChartViewHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, out)
 }
 
+func (s *Server) ViewResponsesHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, views.ResponsesListView)
+}
+
 func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()

@@ -294,7 +294,7 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	id := r.URL.Path[len("/events/"):]
-	// s.Log.Println("EventHandler", id)
+	s.Log.Println("EventHandler", id)
 	event, ok := s.Cache.Responses[id]
 	if !ok {
 		http.Error(w, fmt.Sprintf("event not found %v", id), http.StatusNotFound)
@@ -305,6 +305,10 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
 	// 	return
 	// }
+	if event.Data == nil || len(event.Data) == 0 {
+		w.Write([]byte("no data for this event, but a record exists"))
+	}
+	fmt.Println("event", string(event.Data))
 	w.Write(event.Data)
 }
 
@@ -538,6 +542,11 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		go func(id string) {
 			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
 			if err != nil {
+				s.RespCh <- ResponseItem{
+					ID:   id,
+					Time: time.Now(),
+					Data: []byte(fmt.Sprintf("error: %v", err)),
+				}
 				s.Log.Println("error", err)
 				return
 			}
@@ -629,6 +638,24 @@ func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Requ
 	}
 	w.Write(out)
 }
+
+func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request) {
+	var out string
+	tmpl := `<div class="container is-fluid has-background-black-ter">
+		<p class="has-text-info">added: %v link: <a href="/events/%v">%v</a></p>
+		</div>`
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	for k, v := range s.Cache.Responses {
+		out += fmt.Sprintf(tmpl, v.Time, k, k)
+	}
+	fmt.Fprint(w, out)
+}
+
+// func (s *Server) GetResponsesHandler(w http.ResponseWriter, r *http.Request) {
+
+// 	fmt.Fprint(w, out)
+// }
 
 type NewUserRequest struct {
 	Email    string `json:"email"`
