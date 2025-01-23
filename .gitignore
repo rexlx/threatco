@@ -1,3 +1,4 @@
 *.db
 threatco
 threatco.exe
+.venv/
