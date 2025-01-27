@@ -218,9 +218,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			go s.DB.StoreResponse(uid, r)
 			w.Write(r)
 			return
 		}
+		go s.DB.StoreResponse(uid, resp)
 		w.Write(resp)
 		return
 	case "virustotal":
@@ -233,9 +235,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			go s.DB.StoreResponse(uid, r)
 			w.Write(r)
 			return
 		}
+		go s.DB.StoreResponse(uid, resp)
 		w.Write(resp)
 		return
 	case "mandiant":
@@ -247,9 +251,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			go s.DB.StoreResponse(uid, r)
 			w.Write(r)
 			return
 		}
+		go s.DB.StoreResponse(uid, resp)
 		w.Write(resp)
 		return
 	case "deepfry":
@@ -261,9 +267,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			go s.DB.StoreResponse(uid, r)
 			w.Write(r)
 			return
 		}
+		go s.DB.StoreResponse(uid, resp)
 		w.Write(resp)
 		return
 	default:
