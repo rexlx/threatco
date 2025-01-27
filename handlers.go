@@ -290,15 +290,24 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("event_requests", 1)
-	s.Memory.RLock()
-	defer s.Memory.RUnlock()
+	// defer s.addStat("event_requests", 1)
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
 	id := r.URL.Path[len("/events/"):]
 	s.Log.Println("EventHandler", id)
 	event, ok := s.Cache.Responses[id]
 	if !ok {
-		http.Error(w, fmt.Sprintf("event not found %v", id), http.StatusNotFound)
-		return
+		b, err := s.DB.GetResponse(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event = ResponseItem{
+			ID:   id,
+			Time: time.Now(),
+			Data: b,
+		}
+		s.Cache.Responses[id] = event
 	}
 	// out, err := json.Marshal(event)
 	// if err != nil {
@@ -313,7 +322,7 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("get_services_requests", 1)
+	// defer s.addStat("get_services_requests", 1)
 	defer func(start time.Time) {
 		s.Log.Println("GetServicesHandler took", time.Since(start))
 	}(time.Now())

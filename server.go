@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -400,6 +401,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
 
+	// s.AddResponse("fake", CreateFakeResponse())
 }
 
 func (s *Server) UpdateCharts() {
@@ -476,4 +478,29 @@ func (s *Server) FakeLoggingEvent(n int) {
 	for i := 0; i < n; i++ {
 		s.LogError(fmt.Errorf("this is a fake error %d", i))
 	}
+}
+
+func CreateFakeResponse() []byte {
+	tmp := make(map[string]interface{})
+	type fake struct {
+		Iter  int    `json:"iter"`
+		One   string `json:"one"`
+		Two   string `json:"two"`
+		ID    string `json:"id"`
+		Email string `json:"email"`
+	}
+	type faek struct {
+		One []string `json:"one"`
+		Two []string `json:"two"`
+	}
+	tmp["one"] = fake{One: "one", Two: "two", ID: uuid.New().String(), Email: "okok@ok.com"}
+	tmp["two"] = faek{One: []string{"one", "two"}, Two: []string{"three", "four"}}
+	for i := 0; i < 100; i++ {
+		tmp[uuid.New().String()] = fake{One: "one", Two: "two", ID: uuid.New().String(), Email: "ok@aol.com", Iter: i}
+	}
+	out, err := json.Marshal(tmp)
+	if err != nil {
+		return []byte("could not marshal fake response")
+	}
+	return out
 }

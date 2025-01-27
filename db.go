@@ -18,6 +18,9 @@ type Database interface {
 	AddService(st ServiceType) error
 	GetTokenByValue(tk string) (Token, error)
 	SaveToken(t Token) error
+	StoreResponse(id string, data []byte) error
+	GetResponse(id string) ([]byte, error)
+	DeleteResponse(id string) error
 	TestAndRecconect() error
 }
 
@@ -50,6 +53,42 @@ func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 		return user.UnmarshalBinary(v)
 	})
 	return user, err
+}
+
+func (db *BboltDB) StoreResponse(id string, data []byte) error {
+	return db.DB.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(id), data)
+	})
+}
+
+func (db *BboltDB) GetResponse(id string) ([]byte, error) {
+	var data []byte
+	err := db.DB.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("responses"))
+		v := b.Get([]byte(id))
+		if v == nil {
+			return nil
+		}
+		data = make([]byte, len(v))
+		copy(data, v)
+		return nil
+	})
+	return data, err
+}
+
+func (db *BboltDB) DeleteResponse(id string) error {
+	return db.DB.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
+		if err != nil {
+			fmt.Println("create bucket: ", err)
+			return err
+		}
+		return b.Delete([]byte(id))
+	})
 }
 
 func (db *BboltDB) DeleteUser(email string) error {
@@ -189,6 +228,11 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 	if err := p.createTables(); err != nil {
 		return nil, err
 	}
+	fmt.Println("PostgresDB created, cleaning old responses")
+	err = p.CleanResponses()
+	if err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -212,6 +256,11 @@ func (db *PostgresDB) createTables() error {
             type TEXT[],
             route_map JSONB
         );
+		CREATE TABLE IF NOT EXISTS responses (
+			id TEXT PRIMARY KEY,
+			data BYTEA NOT NULL,
+			created TIMESTAMP
+		);
 		CREATE TABLE IF NOT EXISTS users (
 				email TEXT PRIMARY KEY,
 				admin BOOLEAN,
@@ -228,6 +277,28 @@ func (db *PostgresDB) createTables() error {
 				hash BYTEA
 				);
 			`)
+	return err
+}
+
+func (db *PostgresDB) CleanResponses() error {
+	var expiration time.Time = time.Now().Add(-time.Hour * 24)
+	_, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE created < $1", expiration)
+	return err
+}
+
+func (db *PostgresDB) StoreResponse(id string, data []byte) error {
+	_, err := db.Pool.Exec(context.Background(), "INSERT INTO responses (id, data, created) VALUES ($1, $2, $3)", id, data, time.Now())
+	return err
+}
+
+func (db *PostgresDB) GetResponse(id string) ([]byte, error) {
+	var data []byte
+	err := db.Pool.QueryRow(context.Background(), "SELECT data FROM responses WHERE id = $1", id).Scan(&data)
+	return data, err
+}
+
+func (db *PostgresDB) DeleteResponse(id string) error {
+	_, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE id = $1", id)
 	return err
 }
 
