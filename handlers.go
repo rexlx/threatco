@@ -331,12 +331,23 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("get_services_requests", 1)
+	sanitized_services := []ServiceType{}
 	defer func(start time.Time) {
 		s.Log.Println("GetServicesHandler took", time.Since(start))
 	}(time.Now())
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
-	out, err := json.Marshal(s.Details.SupportedServices)
+	for _, svc := range s.Details.SupportedServices {
+		sanitized_services = append(sanitized_services, ServiceType{
+			Kind:          svc.Kind,
+			Type:          svc.Type,
+			Selected:      svc.Selected,
+			Name:          svc.Name,
+			URL:           svc.URL,
+			UploadService: svc.UploadService,
+		})
+	}
+	out, err := json.Marshal(sanitized_services)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
