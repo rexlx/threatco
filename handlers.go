@@ -11,12 +11,51 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rexlx/threatco/parser"
 )
 
 var store *UploadStore
 
 func PassStore(s *UploadStore) {
 	store = s
+}
+
+type ParserRequest struct {
+	Blob string `json:"blob"`
+}
+
+func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("parser_requests", 1)
+	defer func(start time.Time) {
+		s.Log.Println("ParserHandler took", time.Since(start))
+	}(time.Now())
+	cx := parser.NewContextualizer()
+	var pr ParserRequest
+	err := json.NewDecoder(r.Body).Decode(&pr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	out := make(map[string][]parser.Match)
+	for k, v := range cx.Expressions {
+		out[k] = cx.GetMatches(pr.Blob, k, v)
+	}
+	// resp, err := json.Marshal(out)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	// w.Write(resp)
+	for k, v := range out {
+		for _, svc := range s.Details.SupportedServices {
+			for _, t := range svc.Type {
+				if t == k { // also check is service is rate limited
+					fmt.Println(svc, "match", k, v)
+				}
+			}
+		}
+	}
+
 }
 
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
