@@ -11,12 +11,30 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/types"
 	"github.com/rexlx/threatco/vendors"
 )
+
+func (s *Server) ProxyHelper(req ProxyRequest) ([]byte, error) {
+	var resp []byte
+	// var err error
+	switch req.To {
+	case "virustotal":
+		return s.VirusTotalHelper(req)
+	case "misp":
+		return s.MispHelper(req)
+	case "deepfry":
+		return s.DeepFryHelper(req)
+	case "mandiant":
+		return s.MandiantHelper(req)
+	default:
+		return resp, fmt.Errorf("bad target")
+	}
+}
 
 func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte, error) {
 	// fmt.Println("ParseOtherMispResponse")
@@ -28,6 +46,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 				attrs = 0
 			}
 			return json.Marshal(SummarizedEvent{
+				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
 				Background:    "has-background-primary-dark",
 				From:          req.To,
@@ -45,6 +64,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 				attrs = 0
 			}
 			return json.Marshal(SummarizedEvent{
+				Timestamp:     time.Now(),
 				Background:    "has-background-primary-dark",
 				From:          req.To,
 				ID:            response[0].ID,
@@ -58,6 +78,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 		}
 	}
 	return json.Marshal(SummarizedEvent{
+		Timestamp:     time.Now(),
 		Background:    "has-background-warning",
 		Info:          "no hits for the given value",
 		From:          req.To,
@@ -73,6 +94,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
 			return json.Marshal(SummarizedEvent{
+				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
 				Background:    "has-background-primary-dark",
 				From:          req.To,
@@ -85,6 +107,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 			})
 		} else {
 			return json.Marshal(SummarizedEvent{
+				Timestamp:     time.Now(),
 				Background:    "has-background-primary-dark",
 				Info:          response.Response[0].Event.Info,
 				From:          req.To,
@@ -98,6 +121,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 		}
 	}
 	return json.Marshal(SummarizedEvent{
+		Timestamp:  time.Now(),
 		Background: "has-background-warning",
 		Info:       "no hits for the given value",
 		From:       req.To,
@@ -149,6 +173,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	}
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
 	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
 		Background: "has-background-primary-dark",
 		Info:       info,
 		From:       req.To,
@@ -259,6 +284,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	}
 	fmt.Println(response)
 	sum := SummarizedEvent{
+		Timestamp:     time.Now(),
 		AttrCount:     0,
 		ThreatLevelID: "1",
 		ID:            id,
@@ -326,6 +352,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	if err != nil {
 		fmt.Println("no hits", err)
 		badNews := SummarizedEvent{
+			Timestamp:  time.Now(),
 			Background: "has-background-warning",
 			From:       req.To,
 			ID:         "no hits",
@@ -444,6 +471,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
 		Background: "has-background-primary-dark",
 		Info:       "under development",
 		From:       req.To,
@@ -458,6 +486,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byte, error) {
 	if e {
 		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
 			Background: "has-background-warning",
 			Info:       info,
 			From:       req.To,
@@ -474,6 +503,7 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 		From:       req.To,
 		Value:      req.Value,
 		Link:       req.TransactionID,
+		Timestamp:  time.Now(),
 	})
 
 }

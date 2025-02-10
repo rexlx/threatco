@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,10 +26,13 @@ type ParserRequest struct {
 }
 
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("parser_requests", 1)
-	defer func(start time.Time) {
-		s.Log.Println("ParserHandler took", time.Since(start))
-	}(time.Now())
+	var wg sync.WaitGroup
+	var allBytes []byte //  Don't initialize here, will be used later
+	var mu sync.Mutex
+	// defer s.addStat("parser_requests", 1)
+	// defer func(start time.Time) {
+	// 	s.Log.Println("ParserHandler took", time.Since(start))
+	// }(time.Now())
 	cx := parser.NewContextualizer()
 	var pr ParserRequest
 	err := json.NewDecoder(r.Body).Decode(&pr)
@@ -40,22 +44,53 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	for k, v := range cx.Expressions {
 		out[k] = cx.GetMatches(pr.Blob, k, v)
 	}
-	// resp, err := json.Marshal(out)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-	// w.Write(resp)
+
 	for k, v := range out {
+		fmt.Println("parser", k, v)
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
-				if t == k { // also check is service is rate limited
-					fmt.Println(svc, "match", k, v)
+				if t == k && len(v) > 0 { // later check is service is rate limited
+					if svc.RateLimited {
+						continue
+					}
+					for _, value := range v {
+						var pr ProxyRequest
+						if len(svc.RouteMap) > 0 {
+							for _, rm := range svc.RouteMap {
+								if rm.Type == k {
+									pr.Route = rm.Route
+								}
+							}
+						}
+						pr.To = svc.Kind
+						pr.Type = k
+						pr.Value = value.Value
+						pr.From = "parser"
+						uid := uuid.New().String()
+						pr.TransactionID = uid
+						fmt.Println("parser match", pr)
+						wg.Add(1)
+						go func(id string) {
+							defer wg.Done()
+							out, err := s.ProxyHelper(pr)
+							if err != nil {
+								fmt.Println("error", err)
+								// continue
+							}
+							mu.Lock()
+							allBytes = append(allBytes, out...)
+							fmt.Println("allBytes", string(allBytes))
+							mu.Unlock()
+							s.DB.StoreResponse(id, out)
+						}(uid)
+						// do thing
+					}
 				}
 			}
 		}
 	}
-
+	wg.Wait()
+	w.Write(allBytes)
 }
 
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
@@ -315,6 +350,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		sumOut := SummarizedEvent{
+			Timestamp:     time.Now(),
 			From:          req.To,
 			Error:         true,
 			Background:    "has-background-danger",
