@@ -27,7 +27,8 @@ type ParserRequest struct {
 
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
-	var allBytes []byte //  Don't initialize here, will be used later
+	allBytes := []byte{'['} //  Don't initialize here, will be used later
+	first := true
 	var mu sync.Mutex
 	// defer s.addStat("parser_requests", 1)
 	// defer func(start time.Time) {
@@ -70,7 +71,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 						pr.TransactionID = uid
 						fmt.Println("parser match", pr)
 						wg.Add(1)
-						go func(id string) {
+						go func(id string, first *bool) {
 							defer wg.Done()
 							out, err := s.ProxyHelper(pr)
 							if err != nil {
@@ -78,11 +79,17 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								// continue
 							}
 							mu.Lock()
+							if len(out) == 0 {
+								return
+							}
+							if !*first {
+								allBytes = append(allBytes, ',')
+							}
 							allBytes = append(allBytes, out...)
-							fmt.Println("allBytes", string(allBytes))
+							*first = false
 							mu.Unlock()
 							s.DB.StoreResponse(id, out)
-						}(uid)
+						}(uid, &first)
 						// do thing
 					}
 				}
@@ -90,6 +97,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	wg.Wait()
+	allBytes = append(allBytes, ']')
 	w.Write(allBytes)
 }
 
