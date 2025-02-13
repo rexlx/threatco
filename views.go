@@ -106,3 +106,7 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
+
+func (s *Server) ViewUserOnboarding(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, views.OnboardingView)
+}

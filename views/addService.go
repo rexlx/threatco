@@ -35,6 +35,4 @@ var AddServiceSection string = `
                 </div>
             </div>
         </div>
-    </section>
-
-</html>`
+    </section>`
