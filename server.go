@@ -39,6 +39,7 @@ var (
 	certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
 	configPath    = flag.String("config", "/config.json", "Configuration file")
 	staticPath    = flag.String("static", "/static", "Static file path")
+	knowledgeBase = flag.String("kb", "/kb", "Knowledge base path")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
@@ -395,6 +396,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/docs/onboard", http.HandlerFunc(s.ValidateSessionToken(s.ViewUserOnboarding)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
+	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*knowledgeBase))))
 	if s.Details.FirstUserMode {
 		s.Gateway.HandleFunc("/adduser", s.AddUserHandler)
 	} else {
