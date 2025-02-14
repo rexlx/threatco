@@ -8,7 +8,8 @@ var OnboardingSection string = `
 <section class="section has-background-custom"">
   <div class="container">
     <div class="content">
-	  <h1 class="title is-1 has-text-primary">onboarding users</h1>
+	<h1 class="title is-1 has-text-primary">onboarding users</h1>
+	<hr>
 	  <h2 class="subtitle is-3 has-text-white">add users to the system</h2>
 	  <p class"has-text-info-light">follow the instructions below add users to the system</p>
 	  <ol class="has-text-white">
@@ -19,7 +20,6 @@ var OnboardingSection string = `
 	  </ol>
 
 	  <p class"has-text-info-light">you can now view the user in the users section</p>
-
 	  <h2 class="subtitle is-3 has-text-white">add users to the extensions</h2>
 	  <p class"has-text-info-light">follow the instructions below to add users to the extensions</p>
 	  <ol class="has-text-white">
