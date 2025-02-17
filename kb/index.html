@@ -7,7 +7,7 @@
 <html>
 
 <head>
-	<title>Dimension by HTML5 UP</title>
+	<title>knowledge</title>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 	<link rel="stylesheet" href="assets/css/main.css" />
@@ -28,7 +28,7 @@
 			</div>
 			<div class="content">
 				<div class="inner">
-					<h1>Knowledge Center</h1>
+					<h1 class="has-text-blue">Knowledge Center</h1>
 					<p>Documentation for the threatco server and insights extension.</p>
 				</div>
 			</div>
@@ -36,6 +36,8 @@
 				<ul>
 					<li><a href="#frontend">frontend</a></li>
 					<li><a href="#api">api</a></li>
+					<li><a href="#server">server</a></li>
+					<li><a href="#deploy">deploy</a></li>
 					<li><a href="#extension">extension</a></li>
 					<li><a href="#deps">dependencies</a></li>
 					<!--<li><a href="#elements">Elements</a></li>-->
@@ -47,9 +49,17 @@
 		<div id="main">
 			<!-- Intro -->
 			<article id="frontend">
-				<h2 class="major">Administration</h2>
-				<p class="has-text-blue">users</p>
-				<p>follow the instructions below add users to the system</p>
+				<h2 class="major has-text-green">administration</h2>
+				<p>documentation for live server administration</p>
+				<h3 class="major has-text-green">login</h3>
+				<span class="image main"><img src="images/home.png" alt="" /></span>
+				<p>to login to the server, enter the server url in the browser, enter your credentials, and click on the login button</p>
+				<p>you will be redirected to services screen as shown above</p>
+				<h3 class="major has-text-green">users</h3>
+				<span class="image main"><img src="images/users.png" alt="" /></span>
+				<p>view and delete users in the "users" menu</p>
+				<span class="image main"><img src="images/adduser.png" alt="" /></span>
+				<p>add a user by clicking on the "add user" link in the navigation bar</p>
 				<ol class="has-text-white">
 					<li>click on the "add user" link in the navigation bar</li>
 					<li>fill in the form with the user's details</li>
@@ -106,6 +116,30 @@
 				<p>a user can get exact responses with "goto" and an ID that matches a response that has not expired. though this can be achieved with the "view" button seen on each result</p>
 			</article>
 
+			<article id="server">
+				<h2 class="major has-text-green">server</h2>
+				<p>documentation for configuring and using the threatco server</p>
+				<h3 class="major has-text-green">configuration</h3>
+				<p>the server configuration is located in the data/config.json file. the following options are available:</p>
+	        <ul class="has-text-white">
+				<li>server_id: a unique identifier for the server</li>
+				<li>first_user_mode: if true, the server will only allow one user to be created</li>
+				<li>bind_address: the address the server will bind to</li>
+				<li>fqdn: the fully qualified domain name of the server</li>
+				<li>services: a list of services the server will use</li>
+				<li>http_port: the port the server will listen on for http</li>
+				<li>https_port: the port the server will listen on for https</li>
+				<li>http_too: if true, the server will listen on both http and https</li>
+				<li>tls_cert: the path to the tls certificate</li>
+				<li>tls_key: the path to the tls key</li>
+				<li>cert_auth: if true, the server will require client certificates</li>
+				<li>db_location: the path to the database file</li>
+				<li>session_token_ttl: the time in minutes a session token will last</li>
+				<li>response_cache_expiry: the time in minutes a response will last in the cache</li>
+				<li>stat_cache_tick_rate: the time in minutes the server will update the stats</li>
+			</ul>
+			</article>
+
 			<!-- Contact -->
 			<article id="deps">
 				<h2 class="major has-text-green">dependencies</h2>
@@ -153,7 +187,29 @@
 				for free under the <a href="https://html5up.net/license">Creative Commons</a> license.</p>
 				
 			</article>
-
+			<article id="deploy">
+				<h2 class="major has-text-green">deployment</h2>
+				<p>documentation for installing threatco. see dependencies to ensure smooth installation</p>
+				<h3 class="major has-text-green">basic install</h3>
+				<p>clone the repository</p>
+				<pre class="has-text-gray">git clone https://github.com/rexlx/threatco.git</pre>
+				<p>cd into the directory</p>
+				<pre class="has-text-gray">cd threatco</pre>
+				<p>build the server</p>
+				<pre class="has-text-gray">go build .</pre>
+				<p>view the config and consider options</p>
+				<pre class="has-text-gray">./threatco -h;vim data/config.json</pre>
+				<p>run the server</p>
+				<pre class="has-text-gray">./threatco -static "./static" -config data/config.json -db "user=postgres password=tacointhealley host=192.168.86.120 dbname=threatco" -kb ./kb/</pre>
+				<p>the servers default flags are written for docker, which is why so many have to be supplied when running bare metal.</p>
+				<p>they can be overwritten in server.go to run with less flags</p>
+				<h3 class="major has-text-green">docker / podman</h3>
+				<p>build the image</p>
+				<pre class="has-text-gray">docker build -t threatco .</pre>
+				<p>run the image</p>
+				<pre class="has-text-gray">docker run -d -p 8081:8081 threatco</pre>
+				<p>there is also a docker-compose.yml for docker-compose</p>
+			</article>
 			<!-- <article id="deps">
 				<h2 class="major has-text-green">Contact</h2>
 				<form method="post" action="#">
