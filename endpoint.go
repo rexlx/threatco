@@ -133,6 +133,10 @@ type BasicAuth struct {
 	Password string
 }
 
+func (b *BasicAuth) GetInfo() (string, string) {
+	return b.Username, b.Password
+}
+
 type BearerAuth struct {
 	// AuthMethod
 	Token string

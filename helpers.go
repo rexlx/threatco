@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,6 +36,45 @@ func (s *Server) ProxyHelper(req ProxyRequest) ([]byte, error) {
 	default:
 		return resp, fmt.Errorf("bad target")
 	}
+}
+
+func Sign(username, key, time, uri string) string {
+	p := username + time + uri
+	h := hmac.New(sha1.New, []byte(key))
+	h.Write([]byte(p))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		return nil, fmt.Errorf("target not found")
+	}
+	var uname, key string
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key = myAuth.(*BasicAuth).GetInfo()
+	default:
+		uname, key = "", ""
+	}
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	uri := fmt.Sprintf("/v1/%s/%s", req.Value, req.Route)
+	sig := Sign(uname, key, timestamp, uri)
+	url := fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	request, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	go s.addStat(ep.GetURL(), float64(len(resp)))
+	go s.AddResponse(req.TransactionID, resp)
+	return resp, nil
 }
 
 func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte, error) {
