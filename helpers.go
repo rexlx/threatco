@@ -33,6 +33,8 @@ func (s *Server) ProxyHelper(req ProxyRequest) ([]byte, error) {
 		return s.DeepFryHelper(req)
 	case "mandiant":
 		return s.MandiantHelper(req)
+	case "domaintools":
+		return s.DomainToolsHelper(req)
 	default:
 		return resp, fmt.Errorf("bad target")
 	}
@@ -50,7 +52,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("target not found")
 	}
-	var uname, key string
+	var uname, key, uri string
 	myAuth := ep.GetAuth()
 	switch myAuth.(type) {
 	case *BasicAuth:
@@ -59,7 +61,11 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		uname, key = "", ""
 	}
 	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
-	uri := fmt.Sprintf("/v1/%s/%s", req.Value, req.Route)
+	if req.Route != "" {
+		uri = fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	} else {
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+	}
 	sig := Sign(uname, key, timestamp, uri)
 	url := fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
 	request, err := http.NewRequest("GET", url, nil)
@@ -74,7 +80,23 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
-	return resp, nil
+	var response vendors.DomainProfileResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		return nil, err
+	}
+	info := fmt.Sprintf("registrant: %s, ip: %s, created: %s, expires: %s, updated: %s, registrar: %s", response.Response.Registrant.Name, response.Response.Server.IPAddress, response.Response.Registration.Created, response.Response.Registration.Expires, response.Response.Registration.Updated, response.Response.Registration.Registrar)
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-primary-dark",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
 }
 
 func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte, error) {
