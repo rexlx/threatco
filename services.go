@@ -77,6 +77,7 @@ type ServiceType struct {
 	Kind          string     `json:"kind"`
 	Type          []string   `json:"type"`
 	RouteMap      []RouteMap `json:"route_map"`
+	Description   string     `json:"description"`
 }
 
 type RouteMap struct {

@@ -12,7 +12,39 @@
             "auth_type": "token",
             "key": "",
             "kind": "misp",
-            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"]
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
+            "description": "MISP development instance contact admin@admin.net for access"
+        },
+        {
+            "kind": "domaintools" ,
+            "name": "username",
+            "url": "https://api.domaintools.com",
+            "type": ["email", "url", "domain"],
+            "rate_limited": false,
+            "insecure": false,
+            "auth_type": "basic",
+            "key": "xxxx-xxxx-xxxx-xxxx",
+            "description": "DomainTools API, limited to 1000 requests per day"
+        },
+        {
+            "kind": "fake1" ,
+            "name": "username",
+            "url": "https://api.domaintools.com",
+            "type": ["email", "url", "domain"],
+            "rate_limited": false,
+            "insecure": false,
+            "auth_type": "basic",
+            "key": "xxxx-xxxx-xxxx-xxxx"
+        },
+        {
+            "kind": "fake2" ,
+            "name": "username",
+            "url": "https://api.domaintools.com",
+            "type": ["email", "url", "domain"],
+            "rate_limited": false,
+            "insecure": false,
+            "auth_type": "basic",
+            "key": "xxxx-xxxx-xxxx-xxxx"
         },
         {
             "name": "deepfry-ip",
@@ -22,7 +54,8 @@
             "auth_type": "key",
             "key": "onnek",
             "kind": "deepfry",
-            "type": ["ipv4"]
+            "type": ["ipv4"],
+            "description": "deepfry is for testing only, but tells you is a ip or url has been sent to it already"
         },
         {
             "name": "virustotal-free",

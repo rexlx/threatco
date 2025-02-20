@@ -322,7 +322,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		case "basic":
-			thisAuthType := &BasicAuth{Username: svc.Key}
+			thisAuthType := &BasicAuth{Username: svc.Name, Password: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
