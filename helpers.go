@@ -48,13 +48,44 @@ func Sign(username, key, time, uri string) string {
 }
 
 func WhoIsURLBuilder(url, uname, key, time string, req ProxyRequest) string {
-	uri := fmt.Sprintf("/v1/%s/?domain=%v&api_username=%v&api_key=%v", req.Route, req.Value)
+	var _type string
+	switch req.Type {
+	case "domain":
+		_type = "domain"
+	case "ipv4":
+		_type = "ip"
+	case "ipv6":
+		_type = "ip"
+	case "url":
+		_type = "url"
+	case "email":
+		_type = "email"
+	default:
+		_type = "domain"
+	}
+	uri := fmt.Sprintf("/v1/%v/?%v=%v&api_username=%v&api_key=%v", req.Route, _type, req.Value, uname, key)
 	// sig := Sign(uname, key, time, uri)
 	return fmt.Sprintf("%s%s", url, uri)
 }
 
 func IrisInvestigateURLBuilder(url, uname, key, time string, req ProxyRequest) string {
-	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	var _type string
+	switch req.Type {
+	case "domain":
+		_type = "domain"
+	case "ipv4":
+		_type = "ip"
+	case "ipv6":
+		_type = "ip"
+	case "url":
+		_type = "url"
+	case "email":
+		_type = "email"
+	default:
+		_type = "domain"
+	}
+	uri := fmt.Sprintf("/v1/%v/?%v=%v&api_username=%v&api_key=%v", req.Route, _type, req.Value, uname, key)
+	// sig := Sign(uname, key, time, uri)
 	return fmt.Sprintf("%s%s", url, uri)
 }
 
@@ -69,7 +100,23 @@ func IrisDetectURLBuilder(url, uname, key, time string, req ProxyRequest) string
 }
 
 func IrisEnrichURLBuilder(url, uname, key, time string, req ProxyRequest) string {
-	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	var _type string
+	switch req.Type {
+	case "domain":
+		_type = "domain"
+	case "ipv4":
+		_type = "ip"
+	case "ipv6":
+		_type = "ip"
+	case "url":
+		_type = "url"
+	case "email":
+		_type = "email"
+	default:
+		_type = "domain"
+	}
+	uri := fmt.Sprintf("/v1/%v/?%v=%v&api_username=%v&api_key=%v", req.Route, _type, req.Value, uname, key)
+	// sig := Sign(uname, key, time, uri)
 	return fmt.Sprintf("%s%s", url, uri)
 }
 
