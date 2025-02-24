@@ -47,12 +47,43 @@ func Sign(username, key, time, uri string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+func WhoIsURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+	uri := fmt.Sprintf("/v1/%s/?domain=%v&api_username=%v&api_key=%v", req.Route, req.Value)
+	// sig := Sign(uname, key, time, uri)
+	return fmt.Sprintf("%s%s", url, uri)
+}
+
+func IrisInvestigateURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	return fmt.Sprintf("%s%s", url, uri)
+}
+
+func IrisProfileURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	return fmt.Sprintf("%s%s", url, uri)
+}
+
+func IrisDetectURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	return fmt.Sprintf("%s%s", url, uri)
+}
+
+func IrisEnrichURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	return fmt.Sprintf("%s%s", url, uri)
+}
+
+func IrisPivotURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	return fmt.Sprintf("%s%s", url, uri)
+}
+
 func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		return nil, fmt.Errorf("target not found")
 	}
-	var uname, key, uri string
+	var uname, key, uri, url string
 	myAuth := ep.GetAuth()
 	switch myAuth.(type) {
 	case *BasicAuth:
@@ -67,7 +98,23 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		uri = fmt.Sprintf("/v1/%s", req.Value)
 	}
 	sig := Sign(uname, key, timestamp, uri)
-	url := fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	switch req.Route {
+	case "whois":
+		url = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-investigate":
+		url = IrisInvestigateURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-profile":
+		url = IrisProfileURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-detect":
+		url = IrisDetectURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-enrich":
+		url = IrisEnrichURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-pivot":
+		url = IrisPivotURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	default:
+		url = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	}
+
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
