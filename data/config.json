@@ -24,7 +24,33 @@
             "insecure": false,
             "auth_type": "basic",
             "key": "xxxx-xxxx-xxxx-xxxx",
-            "description": "DomainTools API, limited to 1000 requests per day"
+            "description": "DomainTools API, limited to 1000 requests per day",
+            "route_map": [
+                {
+                    "type": "email",
+                    "route": "iris-investigate"
+                },
+                {
+                    "type": "url",
+                    "route": "iris-investigate"
+                },
+                {
+                    "type": "domain",
+                    "route": "iris-investigate"
+                },
+                {
+                    "type": "ipv4",
+                    "route": "iris-investigate"
+                },
+                {
+                    "type": "ipv6",
+                    "route": "iris-investigate"
+                },
+                {
+                    "type": "domain",
+                    "route": "iris-enrich"
+                }
+            ]
         },
         {
             "kind": "fake1" ,
