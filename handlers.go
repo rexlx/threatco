@@ -770,13 +770,21 @@ func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Requ
 
 func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request) {
 	var out string
-	tmpl := `<div class="container is-fluid has-background-black-ter">
-		<p class="has-text-info">added: %v link: <a href="/events/%v">%v</a></p>
+	var c int
+	tmpl := `<div class="container is-fluid has-background-%v">
+		<p class="has-text-info">%v <span class="has-text-white">from: (%v)</span> link: <a href="/events/%v">%v</a></p>
 		</div>`
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	for k, v := range s.Cache.Responses {
-		out += fmt.Sprintf(tmpl, v.Time, k, k)
+		var bg string
+		if c%2 == 0 {
+			bg = "black"
+		} else {
+			bg = "black-ter"
+		}
+		c++
+		out += fmt.Sprintf(tmpl, bg, v.Time, v.Vendor, k, k)
 	}
 	fmt.Fprint(w, out)
 }
