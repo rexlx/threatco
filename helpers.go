@@ -173,7 +173,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		return nil, fmt.Errorf("got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
-	go s.AddResponse(req.TransactionID, resp)
+	go s.AddResponse("domaintools", req.TransactionID, resp)
 	var response vendors.DomainToolsIrisEnrichResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
@@ -342,7 +342,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
-	go s.AddResponse(req.TransactionID, resp)
+	go s.AddResponse("virustotal", req.TransactionID, resp)
 
 	var response vendors.VirusTotalResponse
 	err = json.Unmarshal(resp, &response)
@@ -439,7 +439,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
-	go s.AddResponse(req.TransactionID, resp)
+	go s.AddResponse("deepfry", req.TransactionID, resp)
 	response := struct {
 		ID      int    `json:"id"`
 		Message string `json:"message"`
@@ -509,7 +509,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "zero length response")
 	}
-	go s.AddResponse(req.TransactionID, resp)
+	go s.AddResponse("misp", req.TransactionID, resp)
 
 	var response vendors.Response
 	err = json.Unmarshal(resp, &response)
@@ -633,7 +633,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
-	go s.AddResponse(req.TransactionID, resp)
+	go s.AddResponse("mandiant", req.TransactionID, resp)
 
 	var response vendors.MandiantIndicatorResponse
 	err = json.Unmarshal(resp, &response)

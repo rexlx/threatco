@@ -670,9 +670,10 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
 			if err != nil {
 				s.RespCh <- ResponseItem{
-					ID:   id,
-					Time: time.Now(),
-					Data: []byte(fmt.Sprintf("error: %v", err)),
+					Vendor: "file upload handler",
+					ID:     id,
+					Time:   time.Now(),
+					Data:   []byte(fmt.Sprintf("error: %v", err)),
 				}
 				s.Log.Println("error", err)
 				return
@@ -680,9 +681,10 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 			// w.Write(res)
 			store.DeleteFile(filename)
 			newResponse := ResponseItem{
-				ID:   id,
-				Time: time.Now(),
-				Data: res,
+				Vendor: "file upload handler",
+				ID:     id,
+				Time:   time.Now(),
+				Data:   res,
 			}
 			s.RespCh <- newResponse
 		}(uid)

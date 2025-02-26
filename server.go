@@ -81,9 +81,10 @@ type StatItem struct {
 }
 
 type ResponseItem struct {
-	ID   string    `json:"id"`
-	Time time.Time `json:"time"`
-	Data []byte    `json:"data"`
+	ID     string    `json:"id"`
+	Vendor string    `json:"vendor"`
+	Time   time.Time `json:"time"`
+	Data   []byte    `json:"data"`
 }
 
 type LogItem struct {
@@ -273,12 +274,13 @@ func (s *Server) GetTokenFromSession(r *http.Request) (string, error) {
 	return tk, nil
 }
 
-func (s *Server) AddResponse(uid string, data []byte) {
+func (s *Server) AddResponse(vendor, uid string, data []byte) {
 	// uid := uuid.New().String()
 	resp := ResponseItem{
-		ID:   uid,
-		Time: time.Now(),
-		Data: data,
+		Vendor: vendor,
+		ID:     uid,
+		Time:   time.Now(),
+		Data:   data,
 	}
 	s.RespCh <- resp
 }
