@@ -130,7 +130,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("target not found")
 	}
-	var uname, key, uri, url string
+	var uname, key, uri, url, info string
 	myAuth := ep.GetAuth()
 	switch myAuth.(type) {
 	case *BasicAuth:
@@ -174,12 +174,34 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse(req.TransactionID, resp)
-	var response vendors.DomainProfileResponse
+	var response vendors.DomainToolsIrisEnrichResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
 		return nil, err
 	}
-	info := fmt.Sprintf("registrant: %s, ip: %s, created: %s, expires: %s, updated: %s, registrar: %s", response.Response.Registrant.Name, response.Response.Server.IPAddress, response.Response.Registration.Created, response.Response.Registration.Expires, response.Response.Registration.Updated, response.Response.Registration.Registrar)
+	if response.Response.LimitExceeded {
+		info = "domaintools rate limit exceeded"
+		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
+			Background: "has-background-warning",
+			Info:       info,
+			From:       req.To,
+			Value:      req.Value,
+			Link:       req.TransactionID,
+		})
+	}
+	if response.Response.ResultsCount == 0 {
+		info = "domaintools returned no hits for that value"
+		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
+			Background: "has-background-warning",
+			Info:       info,
+			From:       req.To,
+			Value:      req.Value,
+			Link:       req.TransactionID,
+		})
+	}
+	info = "domaintools returned some hits for that value"
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
 		Background: "has-background-primary-dark",
