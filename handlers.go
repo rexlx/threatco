@@ -357,21 +357,40 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp)
 		return
 	case "domaintools":
-		resp, err := s.DomainToolsHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+		switch req.Route {
+		case "domain":
+			resp, err := s.DomainToolsClassicHelper(req)
 			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+				if err != nil {
+					s.Log.Println("bigtime error", err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				go s.DB.StoreResponse(uid, r)
+				w.Write(r)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
-			w.Write(r)
+			go s.DB.StoreResponse(uid, resp)
+			w.Write(resp)
+			return
+		default:
+			resp, err := s.DomainToolsHelper(req)
+			if err != nil {
+				r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+				if err != nil {
+					s.Log.Println("bigtime error", err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				go s.DB.StoreResponse(uid, r)
+				w.Write(r)
+				return
+			}
+			go s.DB.StoreResponse(uid, resp)
+			w.Write(resp)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
-		w.Write(resp)
-		return
 	default:
 		sumOut := SummarizedEvent{
 			Timestamp:     time.Now(),
@@ -770,35 +789,27 @@ func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Requ
 
 func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request) {
 	var out string
-	var c int
 	table := `<table class="table is-fullwidth is-striped">
 			<thead>
 				<tr>
-					<th>Time</th>
-					<th>Vendor</th>
-					<th>Link</th>
+					<th>time</th>
+					<th>vendor</th>
+					<th>link</th>
 				</tr>
 			</thead>
 			<tbody>
 				%v
 			</tbody>
 		</table>`
-	tmpl := `<tr class="%v">
+	tmpl := `<tr>
 		<td>%v</td>
 		<td>%v</td>
-		<td><a href="/events/%v">link</a></td>
+		<td><a href="/events/%v">%v</a></td>
 	</tr>`
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	for k, v := range s.Cache.Responses {
-		var bg string
-		if c%2 == 0 {
-			bg = "black"
-		} else {
-			bg = "black-ter"
-		}
-		c++
-		out += fmt.Sprintf(tmpl, bg, v.Time, v.Vendor, k, k)
+		out += fmt.Sprintf(tmpl, v.Time, v.Vendor, k, k)
 	}
 	out = fmt.Sprintf(table, out)
 	fmt.Fprint(w, out)

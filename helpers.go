@@ -131,6 +131,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		return nil, fmt.Errorf("target not found")
 	}
 	var uname, key, uri, url, info string
+	var resp []byte
 	myAuth := ep.GetAuth()
 	switch myAuth.(type) {
 	case *BasicAuth:
@@ -168,7 +169,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		return nil, err
 	}
 
-	resp := ep.Do(request)
+	resp = ep.Do(request)
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -202,6 +203,62 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		})
 	}
 	info = "domaintools returned some hits for that value"
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-primary-dark",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
+}
+
+func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		return nil, fmt.Errorf("target not found")
+	}
+	var uname, key, uri, url, info string
+	var resp []byte
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key = myAuth.(*BasicAuth).GetInfo()
+	default:
+		uname, key = "", ""
+	}
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+
+	sig := Sign(uname, key, timestamp, uri)
+	switch req.Route {
+	case "whois":
+		url = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	default:
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+		url = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	}
+
+	request, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp = ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	go s.addStat(ep.GetURL(), float64(len(resp)))
+	go s.AddResponse("domaintools", req.TransactionID, resp)
+	var response vendors.DomainProfileResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		return nil, err
+	}
+	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
 		Background: "has-background-primary-dark",
