@@ -359,6 +359,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	case "domaintools":
 		switch req.Route {
 		case "domain":
+			s.Log.Println("domaintools domain")
 			resp, err := s.DomainToolsClassicHelper(req)
 			if err != nil {
 				r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
@@ -375,6 +376,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write(resp)
 			return
 		default:
+			s.Log.Println("domaintools iris")
 			resp, err := s.DomainToolsHelper(req)
 			if err != nil {
 				r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))

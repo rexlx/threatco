@@ -160,9 +160,10 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	case "iris-pivot":
 		url = IrisPivotURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	default:
+		uri = fmt.Sprintf("/v1/%s", req.Value)
 		url = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
 	}
-
+	s.LogInfo(fmt.Sprintf("domaintools url: %s", url))
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
@@ -240,7 +241,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 		uri = fmt.Sprintf("/v1/%s", req.Value)
 		url = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
 	}
-
+	s.LogInfo(fmt.Sprintf("domaintools url: %s", url))
 	request, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
