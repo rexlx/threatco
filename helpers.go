@@ -34,7 +34,12 @@ func (s *Server) ProxyHelper(req ProxyRequest) ([]byte, error) {
 	case "mandiant":
 		return s.MandiantHelper(req)
 	case "domaintools":
-		return s.DomainToolsHelper(req)
+		switch req.Route {
+		case "domain":
+			return s.DomainToolsClassicHelper(req)
+		default:
+			return s.DomainToolsHelper(req)
+		}
 	default:
 		return resp, fmt.Errorf("bad target")
 	}
@@ -179,7 +184,43 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	var response vendors.DomainToolsIrisEnrichResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		return nil, err
+		var nextTry map[string]interface{}
+		err := json.Unmarshal(resp, &nextTry)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := nextTry["response"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		newResponse := val.(map[string]interface{})
+		results, ok := newResponse["results_count"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		switch results.(type) {
+		case int:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Info:       fmt.Sprintf("domaintools results count was %v", results),
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+				Matched:    true,
+			})
+		default:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-warning",
+				Matched:    false,
+				Info:       "domaintools returned a bad response",
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+			})
+		}
+
 	}
 	if response.Response.LimitExceeded {
 		info = "domaintools rate limit exceeded"
@@ -257,7 +298,43 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 	var response vendors.DomainProfileResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
-		return nil, err
+		var nextTry map[string]interface{}
+		err := json.Unmarshal(resp, &nextTry)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := nextTry["response"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		newResponse := val.(map[string]interface{})
+		results, ok := newResponse["results_count"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		switch results.(type) {
+		case int:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Info:       fmt.Sprintf("domaintools results count was %v", results),
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+				Matched:    true,
+			})
+		default:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-warning",
+				Matched:    false,
+				Info:       "domaintools returned a bad response",
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+			})
+		}
+
 	}
 	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
 	sum := SummarizedEvent{
