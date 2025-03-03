@@ -199,7 +199,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 			return nil, fmt.Errorf("bad response")
 		}
 		switch results.(type) {
-		case int:
+		case float64:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
 				Background: "has-background-primary-dark",
@@ -208,6 +208,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 				Value:      req.Value,
 				Link:       req.TransactionID,
 				Matched:    true,
+				AttrCount:  int(results.(float64)),
 			})
 		default:
 			return json.Marshal(SummarizedEvent{
@@ -313,7 +314,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 			return nil, fmt.Errorf("bad response")
 		}
 		switch results.(type) {
-		case int:
+		case float64:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
 				Background: "has-background-primary-dark",
@@ -322,6 +323,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 				Value:      req.Value,
 				Link:       req.TransactionID,
 				Matched:    true,
+				AttrCount:  int(results.(float64)),
 			})
 		default:
 			return json.Marshal(SummarizedEvent{

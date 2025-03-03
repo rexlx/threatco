@@ -193,6 +193,18 @@
 			<article id="deploy">
 				<h2 class="major has-text-green">deployment</h2>
 				<p>documentation for installing threatco. see dependencies to ensure smooth installation</p>
+				<h3 class="major has-text-green">system requirements</h3>
+				<p class="has-text-blue">operating system</p>
+				<p>the server has been tested on linux, mac, and windows. Linux is the recomended OS</p>
+				<p class="has-text-blue">hardware</p>
+				<p>The memory and cpu requirments will scale up with users and usage. for deployments handling less than 100 rps, any deployment will likely suffice. if you want to handle thousands of requests a second with little or no network latency, I recommend:</p>
+				<ul class="has-text-white">
+					<li>6 cores</li>
+					<li>8GB of ram</li>
+					<li>128+ GiB storage</li>
+				</ul>
+				<p class="has-text-blue">software</p>
+				<p>the server requires go 1.23 or higher and git</p>
 				<h3 class="major has-text-green">basic install</h3>
 				<p>clone the repository</p>
 				<pre class="has-text-gray">git clone https://github.com/rexlx/threatco.git</pre>
