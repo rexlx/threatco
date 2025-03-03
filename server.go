@@ -25,21 +25,21 @@ import (
 
 var (
 	deleteConfig  = flag.Bool("delete", false, "Delete configuration file")
-	firstUserMode = flag.Bool("firstuse", false, "First user mode")
 	fqdn          = flag.String("fqdn", "http://localhost", "Fully qualified domain name")
-	mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
-	vtKey         = flag.String("vt-key", "", "VirusTotal API key")
-	mispKey       = flag.String("misp-key", "", "MISP API key")
 	dbLocation    = flag.String("db", "", "Database location")
-	httpsPort     = flag.String("https-port", ":8443", "HTTPS port")
-	httpPort      = flag.String("http-port", ":8080", "HTTP port")
-	httpToo       = flag.Bool("http", false, "Enable HTTP")
-	tlsCert       = flag.String("tls-cert", "cert.pem", "TLS certificate")
-	tlsKey        = flag.String("tls-key", "key.pem", "TLS key")
-	certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
+	knowledgeBase = flag.String("kb", "/kb", "Knowledge base path")
 	configPath    = flag.String("config", "/config.json", "Configuration file")
 	staticPath    = flag.String("static", "/static", "Static file path")
-	knowledgeBase = flag.String("kb", "/kb", "Knowledge base path")
+	firstUserMode = flag.Bool("firstuse", false, "First user mode")
+	// mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
+	// vtKey         = flag.String("vt-key", "", "VirusTotal API key")
+	// mispKey       = flag.String("misp-key", "", "MISP API key")
+	// httpsPort     = flag.String("https-port", ":8443", "HTTPS port")
+	// httpPort      = flag.String("http-port", ":8080", "HTTP port")
+	// httpToo       = flag.Bool("http", false, "Enable HTTP")
+	// tlsCert       = flag.String("tls-cert", "cert.pem", "TLS certificate")
+	// tlsKey        = flag.String("tls-key", "key.pem", "TLS key")
+	// certAuth      = flag.String("cert-auth", "certauth.pem", "Certificate authority")
 	// userKey    = flag.String("user-key", "N0jwxsJjJ9KU0lyN74eFohM46yvIh5mqIAvqcq/c5Xw=", "User API key")
 )
 
@@ -356,6 +356,9 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
 
 		}
+	}
+	if *firstUserMode {
+		s.Details.FirstUserMode = true
 	}
 	s.Details.SupportedServices = cfg.Services
 	s.Details.FQDN = cfg.FQDN

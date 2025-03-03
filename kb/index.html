@@ -53,7 +53,8 @@
 				<p>documentation for live server administration</p>
 				<h3 class="major has-text-green">login</h3>
 				<span class="image main"><img src="images/home.png" alt="" /></span>
-				<p>to login to the server, enter the server url in the browser, enter your credentials, and click on the login button</p>
+				<p>to login to the server, enter the server url in the browser, enter your credentials, and click on the
+					login button</p>
 				<p>you will be redirected to services screen as shown above</p>
 				<h3 class="major has-text-green">users</h3>
 				<span class="image main"><img src="images/users.png" alt="" /></span>
@@ -81,24 +82,28 @@
 				<h3 class="major has-text-green">Endpoints</h3>
 				<h4 class="has-text-blue">GET /logs</h4>
 				<p>returns a list of all logs</p>
-				<pre class="has-text-gray">[{"time":"2025-01-30T07:15:11.800719266-06:00","data":"Server started at :8081","error":false}]</pre>
+				<pre
+					class="has-text-gray">[{"time":"2025-01-30T07:15:11.800719266-06:00","data":"Server started at :8081","error":false}]</pre>
 				<h4 class="has-text-blue">GET /events/:id</h4>
 				<p>returns the actual third party response that was cached</p>
 				<h4 class="has-text-blue">POST /parse</h4>
 				</p> returns a list of summarized repsonses </p>
-				<pre class="has-text-gray">[{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}]</pre>
+				<pre
+					class="has-text-gray">[{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}]</pre>
 				<p>requiries:
 				<pre class="has-text-gray">{"blob": "text to parse"}</pre>
 				</p>
 				<h4 class="has-text-blue">POST /proxy</h4>
 				<p>returns a summarized repsonse from the specified vendor</p>
-				<pre class="has-text-gray">{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}</pre>
+				<pre
+					class="has-text-gray">{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}</pre>
 				<p>requiries:
 				<pre class="has-text-gray">{"value": "8.8.8.8", "to": "deepfry", "type": "ipv4"}</pre>
 				</p>
 				<p><em class="has-text-blue">optional fields:</em>
-				"route": "ip_address". specifices an additional url element to add to the base url for that vendor if the API requests calls for it.
-			    </p>
+					"route": "ip_address". specifices an additional url element to add to the base url for that vendor
+					if the API requests calls for it.
+				</p>
 			</article>
 
 			<!-- About -->
@@ -107,37 +112,44 @@
 				<p>documentation for using the insights extension</p>
 				<h3 class="major has-text-green">menu</h3>
 				<span class="image main"><img src="images/menu960.png" alt="" /></span>
-				<p>The services option allows the user to enable and disable the services provided by the server. changes made are synced to the server per user</p>
+				<p>The services option allows the user to enable and disable the services provided by the server.
+					changes made are synced to the server per user</p>
 				<p>The profile option allows the user to configure the server url and email / key.</p>
 				<h3 class="major has-text-green">search</h3>
 				<span class="image main"><img src="images/search960.png" alt="" /></span>
-				<p>the search field accepts blobs of text and will parse "indicators" from the provided data. each indicator match is categorized and sent to respective services configured on the server.</p>
+				<p>the search field accepts blobs of text and will parse "indicators" from the provided data. each
+					indicator match is categorized and sent to respective services configured on the server.</p>
 				<p>a history of 24 results are kept in a first in first out queue</p>
-				<p>a user can get exact responses with "goto" and an ID that matches a response that has not expired. though this can be achieved with the "view" button seen on each result</p>
+				<p>a user can get exact responses with "goto" and an ID that matches a response that has not expired.
+					though this can be achieved with the "view" button seen on each result</p>
 			</article>
 
 			<article id="server">
 				<h2 class="major has-text-green">server</h2>
 				<p>documentation for configuring and using the threatco server</p>
 				<h3 class="major has-text-green">configuration</h3>
-				<p>the server configuration is located in the data/config.json file. the following options are available:</p>
-	        <ul class="has-text-white">
-				<li>server_id: a unique identifier for the server</li>
-				<li>first_user_mode: if true, the server will only allow one user to be created</li>
-				<li>bind_address: the address the server will bind to</li>
-				<li>fqdn: the fully qualified domain name of the server</li>
-				<li>services: a list of services the server will use</li>
-				<li>http_port: the port the server will listen on for http</li>
-				<li>https_port: the port the server will listen on for https</li>
-				<li>http_too: if true, the server will listen on both http and https</li>
-				<li>tls_cert: the path to the tls certificate</li>
-				<li>tls_key: the path to the tls key</li>
-				<li>cert_auth: if true, the server will require client certificates</li>
-				<li>db_location: the path to the database file</li>
-				<li>session_token_ttl: the time in minutes a session token will last</li>
-				<li>response_cache_expiry: the time in minutes a response will last in the cache</li>
-				<li>stat_cache_tick_rate: the time in minutes the server will update the stats</li>
-			</ul>
+				<p>the server configuration is located in the data/config.json file. the following options are
+					available:</p>
+				<ul class="has-text-white">
+					<li>server_id: a unique identifier for the server</li>
+					<li>first_user_mode: if true, the server will only allow one user to be created</li>
+					<li>bind_address: the address the server will bind to</li>
+					<li>fqdn: the fully qualified domain name of the server</li>
+					<li>services: a list of services the server will use</li>
+					<li>http_port: the port the server will listen on for http</li>
+					<li>https_port: the port the server will listen on for https</li>
+					<li>http_too: if true, the server will listen on both http and https</li>
+					<li>tls_cert: the path to the tls certificate</li>
+					<li>tls_key: the path to the tls key</li>
+					<li>cert_auth: if true, the server will require client certificates</li>
+					<li>db_location: the path to the database file</li>
+					<li>session_token_ttl: the time in minutes a session token will last</li>
+					<li>response_cache_expiry: the time in minutes a response will last in the cache</li>
+					<li>stat_cache_tick_rate: the time in minutes the server will update the stats</li>
+				</ul>
+				<h3 class="major has-text-green">logging</h3>
+				<p>the server logs to stdout and stderr. some logs are also duplicated on the frontend and served over
+					the api. There is no way to control log level currently</p>
 			</article>
 
 			<!-- Contact -->
@@ -145,9 +157,11 @@
 				<h2 class="major has-text-green">dependencies</h2>
 				<h3 class="major has-text-green">server</h3>
 				<p class="has-text-blue">server configuration</p>
-				<p>by default, the system will use data/config.json. please view the options available for configuration</p>
+				<p>by default, the system will use data/config.json. please view the options available for configuration
+				</p>
 				<p class="has-text-blue">frontend</p>
-				<p>the frontend is written in html, css, and javascript. it uses the following dependencies served statically from the server (no CDN):</p>
+				<p>the frontend is written in html, css, and javascript. it uses the following dependencies served
+					statically from the server (no CDN):</p>
 				<ul class="has-text-white">
 					<li>htmx</li>
 					<li>IBMPlex fonts</li>
@@ -165,30 +179,32 @@
 				</ul>
 				<p class="has-text-blue">database</p>
 				<p>the server requires a database connection, and supports two modes:
-					<ul class="has-text-white">
-						<li>embded with bbolt</li>
-						<li>postgres</li>
-					</ul>
+				<ul class="has-text-white">
+					<li>embded with bbolt</li>
+					<li>postgres</li>
+				</ul>
 				</p>
 				<h3 class="major has-text-green">extension</h3>
 				<p class="has-text-blue">client configuration</p>
 				<p>the client configuration is located in the profile section of the menu</p>
 				<p class="has-text-blue">services</p>
-				<p>third party services are developed and configured server side. the user saves their preferred services in the services menu</p>
+				<p>third party services are developed and configured server side. the user saves their preferred
+					services in the services menu</p>
 				<p class="has-text-blue">software dependencies</p>
-				<p>the extension is written in javascript and uses the following dependencies served statically from chrome (no CDN):</p>
+				<p>the extension is written in javascript and uses the following dependencies served statically from
+					chrome (no CDN):</p>
 				<ul class="has-text-white">
 					<li>IntelOneMono fonts</li>
 					<li>bulma css</li>
 				</ul>
 				<h3 class="major has-text-green">knowledge base</h3>
 				<p>A fully responsive site template designed by <a href="https://html5up.net">HTML5 UP</a> and
-				released<br />
-				for free under the <a href="https://html5up.net/license">Creative Commons</a> license.</p>
+					released<br />
+					for free under the <a href="https://html5up.net/license">Creative Commons</a> license.</p>
 				<h3 class="major has-text-green">source code</h3>
 				<p>the source code for the <a href="https://github.com/rexlx/threatco ">threatco server</a></p>
 				<p>the source code for the <a href="https://github.com/rexlx/insights ">insights extension</a></p>
-				
+
 			</article>
 			<article id="deploy">
 				<h2 class="major has-text-green">deployment</h2>
@@ -197,7 +213,9 @@
 				<p class="has-text-blue">operating system</p>
 				<p>the server has been tested on linux, mac, and windows. Linux is the recomended OS</p>
 				<p class="has-text-blue">hardware</p>
-				<p>The memory and cpu requirments will scale up with users and usage. for deployments handling less than 100 rps, any deployment will likely suffice. if you want to handle thousands of requests a second with little or no network latency, I recommend:</p>
+				<p>The memory and cpu requirments will scale up with users and usage. for deployments handling less than
+					100 rps, any deployment will likely suffice. if you want to handle thousands of requests a second
+					with little or no network latency, I recommend:</p>
 				<ul class="has-text-white">
 					<li>6 cores</li>
 					<li>8GB of ram</li>
@@ -215,9 +233,21 @@
 				<p>view the config and consider options</p>
 				<pre class="has-text-gray">./threatco -h;vim data/config.json</pre>
 				<p>run the server</p>
-				<pre class="has-text-gray">./threatco -static "./static" -config data/config.json -db "user=postgres password=tacointhealley host=192.168.86.120 dbname=threatco" -kb ./kb/</pre>
-				<p>the servers default flags are written for docker, which is why so many have to be supplied when running bare metal.</p>
+				<pre
+					class="has-text-gray">./threatco -static "./static" -config data/config.json -db "user=postgres password=tacointhealley host=192.168.86.120 dbname=threatco" -kb ./kb/</pre>
+				<p>the servers default flags are written for docker, which is why so many have to be supplied when
+					running bare metal.</p>
 				<p>they can be overwritten in server.go to run with less flags</p>
+				<p class="has-text-blue">server options</p>
+				<ul class="has-text-white">
+					<li>-static: the path to the static files</li>
+					<li>-config: the path to the config file</li>
+					<li>-db: the database connection string</li>
+					<li>-kb: the path to the knowledge base</li>
+					<li>-delete (optional): delete the config file after reading it</li>
+					<li>-firstuse (optional): leaves api route for creating users unprotected</li>
+					<li>-fqdn (optional): the path to the log file</li>
+				</ul>
 				<h3 class="major has-text-green">docker / podman</h3>
 				<p>build the image</p>
 				<pre class="has-text-gray">docker build -t threatco .</pre>
