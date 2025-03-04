@@ -40,6 +40,9 @@ var BaseView string = `<!DOCTYPE html>
                         <a class="navbar-item has-background-black-ter has-text-primary" href="/charts">
                             stats
                         </a>
+                        <a class="navbar-item has-background-black-ter has-text-primary" href="/responses">
+                            responses
+                        </a>
 
                     </div>
                 </div>

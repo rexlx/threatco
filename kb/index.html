@@ -35,10 +35,10 @@
 			<nav>
 				<ul>
 					<li><a href="#frontend">frontend</a></li>
-					<li><a href="#api">api</a></li>
-					<li><a href="#server">server</a></li>
-					<li><a href="#deploy">deploy</a></li>
 					<li><a href="#extension">extension</a></li>
+					<li><a href="#server">server</a></li>
+					<li><a href="#api">api</a></li>
+					<li><a href="#deploy">deploy</a></li>
 					<li><a href="#deps">dependencies</a></li>
 					<!--<li><a href="#elements">Elements</a></li>-->
 				</ul>
@@ -58,8 +58,10 @@
 				<p>you will be redirected to services screen as shown above</p>
 				<h3 class="major has-text-green">users</h3>
 				<span class="image main"><img src="images/users.png" alt="" /></span>
+				<p class="has-text-blue">view and delete users</p>
 				<p>view and delete users in the "users" menu</p>
 				<span class="image main"><img src="images/adduser.png" alt="" /></span>
+				<p class="has-text-blue">add a user</p>
 				<p>add a user by clicking on the "add user" link in the navigation bar</p>
 				<ol class="has-text-white">
 					<li>click on the "add user" link in the navigation bar</li>
@@ -69,6 +71,17 @@
 					<li>click ok and copy the one time key and give it to the user</li>
 				</ol>
 				<p>you can now view the user in the users section</p>
+				<p class="has-text-blue">edit a user</p>
+				<p>re-add a user to change their password. there is no update user function from the perspective of the forntend at this time (although the capability exists)</p>
+				<h3 class="major has-text-green">services</h3>
+				<p>you can view details about the the configured services here</p>
+				<h3 class="major has-text-green">logging</h3>
+				<p>view logs in the "logs" menu</p>
+				<h3 class="major has-text-green">responses</h3>
+				<p>view all cached responses in the "responses" menu</p>
+				<h3 class="major has-text-green">stats</h3>
+				<p>view application graphs in the "stats" menu</p>
+
 
 			</article>
 
@@ -240,13 +253,13 @@
 				<p>they can be overwritten in server.go to run with less flags</p>
 				<p class="has-text-blue">server options</p>
 				<ul class="has-text-white">
-					<li>-static: the path to the static files</li>
+					<li>-static: the path to the static files for the server frontend</li>
 					<li>-config: the path to the config file</li>
-					<li>-db: the database connection string</li>
-					<li>-kb: the path to the knowledge base</li>
+					<li>-db: the database connection string OR embedded db file location</li>
+					<li>-kb: the path to the knowledge base. without this flag the server wont host the knowledge base</li>
 					<li>-delete (optional): delete the config file after reading it</li>
 					<li>-firstuse (optional): leaves api route for creating users unprotected</li>
-					<li>-fqdn (optional): the path to the log file</li>
+					<li>-fqdn (optional): set the url of the server</li>
 				</ul>
 				<h3 class="major has-text-green">docker / podman</h3>
 				<p>build the image</p>
