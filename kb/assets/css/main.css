@@ -179,11 +179,12 @@ textarea {
 }
 
 .has-text-gray {
-	color: #5b7586;
+	/* 98896c */
+	color: rgb(128, 174, 215);
 }
 
 .has-text-gray:hover {
-	color: #34495e;
+	color: burlywood;
 }
 
 .has-text-green {

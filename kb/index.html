@@ -94,7 +94,7 @@
 				<pre class="has-text-gray">Authorization: user@place.com:key_here</pre>
 				<h3 class="major has-text-green">Endpoints</h3>
 				<h4 class="has-text-blue">GET /logs</h4>
-				<p>returns a list of all logs</p>
+				<p>returns a list of all logs ordered by when they occured</p>
 				<pre
 					class="has-text-gray">[{"time":"2025-01-30T07:15:11.800719266-06:00","data":"Server started at :8081","error":false}]</pre>
 				<h4 class="has-text-blue">GET /events/:id</h4>
@@ -106,7 +106,7 @@
 				<p>requiries:
 				<pre class="has-text-gray">{"blob": "text to parse"}</pre>
 				</p>
-				<h4 class="has-text-blue">POST /proxy</h4>
+				<h4 class="has-text-blue">POST /pipe</h4>
 				<p>returns a summarized repsonse from the specified vendor</p>
 				<pre
 					class="has-text-gray">{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}</pre>
@@ -117,6 +117,9 @@
 					"route": "ip_address". specifices an additional url element to add to the base url for that vendor
 					if the API requests calls for it.
 				</p>
+				<h4 class="has-text-blue">GET /getservices</h4>
+				<p>returns a list of all services available</p>
+				<pre class="has-text-gray">[{"upload_service": false,"expires": 0,"secret": "","selected": false,"insecure": false,"name": "misp-dev","url": "https://192.168.86.91:443","rate_limited": false,"max_requests": 0,"refill_rate": 0,"auth_type": "","key": "","kind": "misp","type": ["md5","sha1","sha256","sha512","ipv4","ipv6","email","url","domain","filepath","filename"],"route_map": null,"description": ""}]</pre>
 			</article>
 
 			<!-- About -->
