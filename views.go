@@ -61,49 +61,50 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.Memory.RUnlock()
 
 	serviceDiv := `<div class="box has-background-black-ter">
-    <div class="columns is-multiline">`
+<div class="columns is-multiline">`
 
 	for _, service := range s.Details.SupportedServices {
 		// Create a unique modal ID for each service
 		modalID := fmt.Sprintf("modal-%s", service.Kind)
 
-		serviceDiv += fmt.Sprintf(`<div class="column">
-        <div class="card has-background-black-ter" style="height: 200px;"> <!-- Set fixed height -->
-            <div class="card-content">
-                <p class="title has-text-primary is-4">%s</p> <!-- Use title class for consistency -->
-                <div class="content">
-                    <p class="has-text-white">Description or additional info can go here.</p> <!-- Optional description -->
-                </div>
-                <div class="has-text-centered">
-                    <button class="button open-modal is-primary" data-modal-id="%s">View Details</button> <!-- Button to open modal -->
-                </div>
-            </div>
-        </div>
+		serviceDiv += fmt.Sprintf(`
+<div class="column is-3"> 
+	<div class="card has-background-black-ter" style="height: 200px;">
+		<div class="card-content">
+			<p class="title has-text-primary is-4">%s</p>
+			<div class="content">
+				<p class="has-text-white">Description or additional info can go here.</p>
+			</div>
+			<div class="has-text-centered">
+				<button class="button open-modal is-primary" data-modal-id="%s">View Details</button>
+			</div>
+		</div>
+	</div>
 
-        <!-- Modal Structure -->
-        <div class="modal" id="%s">
-            <div class="modal-background"></div>
-            <div class="modal-card">
-                <header class="modal-card-head has-background-black">
-                    <p class="modal-card-title has-text-primary">%s types</p>
-                   <button class="delete close-modal" aria-label="close"></button>
-                </header>
-                <section class="modal-card-body has-background-black"><ul>
-                `, service.Kind, modalID, modalID, service.Kind)
+	<div class="modal" id="%s">
+		<div class="modal-background"></div>
+		<div class="modal-card">
+			<header class="modal-card-head has-background-black">
+				<p class="modal-card-title has-text-primary">%s types</p>
+				<button class="delete close-modal" aria-label="close"></button>
+			</header>
+			<section class="modal-card-body has-background-black">
+				<ul>
+`, service.Kind, modalID, modalID, service.Kind)
 
 		// Loop through service types
 		for _, t := range service.Type {
-			serviceDiv += fmt.Sprintf(`<li class="has-text-primary">%s</li>`, t) // Ensure t is a string
+			serviceDiv += fmt.Sprintf(`<li class="has-text-primary">%s</li>`, t)
 		}
 
 		serviceDiv += `</ul></section>
-            </div>
-        </div>
-    </div>`
+		</div>
+	</div>
+</div>`
 	}
 
 	serviceDiv += `</div></div>`
-	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv)
+	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv) // Use the local ViewSection variable
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
 

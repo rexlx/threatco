@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -631,6 +633,25 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(out)
+}
+
+func sanitizeEmail(email string) string {
+	// Basic email validation using regular expression
+	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if re.MatchString(email) {
+		return email
+	}
+	return ""
+}
+
+func isValidPassword(password string) bool {
+	// Implement your password complexity rules here
+	// Example: Minimum length of 8 characters
+	return len(password) >= 8
+}
+
+func sanitizeString(str string) string {
+	return html.EscapeString(str)
 }
 
 // var UploadResponse = []byte(`{"status": "ok"}`)

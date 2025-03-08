@@ -23,6 +23,9 @@ var BaseView string = `<!DOCTYPE html>
                     </a>
 
                     <div class="navbar-dropdown has-background-black-ter">
+                    <a class="navbar-item has-background-black-ter has-text-primary" href="/kb">
+                            documentation
+                        </a>
                         <a class="navbar-item has-background-black-ter has-text-primary" href="/services">
                             services
                         </a>
