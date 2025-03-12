@@ -1,11 +1,22 @@
 package parser
 
-import "regexp"
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 type Contextualizer struct {
 	ID          string
 	Expressions map[string]*regexp.Regexp
+	Checks      *PrivateChecks
 	// context     []string
+}
+
+type PrivateChecks struct {
+	Ipv4   bool
+	Ipv6   bool
+	Domain bool
 }
 
 type Match struct {
@@ -13,9 +24,10 @@ type Match struct {
 	Type  string
 }
 
-func NewContextualizer() *Contextualizer {
+func NewContextualizer(checks *PrivateChecks) *Contextualizer {
 	return &Contextualizer{
-		ID: "contextualizer",
+		Checks: checks,
+		ID:     "contextualizer",
 		Expressions: map[string]*regexp.Regexp{
 			"md5":      regexp.MustCompile(`([a-fA-F\d]{32})`),
 			"sha1":     regexp.MustCompile(`([a-fA-F\d]{40})`),
@@ -36,7 +48,29 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 	matches := regex.FindAllString(text, -1)
 	var results []Match
 	for _, match := range matches {
+		if c.Checks.Ipv4 && isPrivateIP4(match) {
+			continue
+		}
 		results = append(results, Match{Value: match, Type: kind})
 	}
 	return results
+}
+
+func isPrivateIP4(ip string) bool {
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return false
+	}
+	first, _ := strconv.Atoi(parts[0])
+	second, _ := strconv.Atoi(parts[1])
+	if first == 10 {
+		return true
+	}
+	if first == 172 && second >= 16 && second <= 31 {
+		return true
+	}
+	if first == 192 && second == 168 {
+		return true
+	}
+	return false
 }

@@ -36,7 +36,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	// defer func(start time.Time) {
 	// 	s.Log.Println("ParserHandler took", time.Since(start))
 	// }(time.Now())
-	cx := parser.NewContextualizer()
+	cx := parser.NewContextualizer(&parser.PrivateChecks{Ipv4: true})
 	var pr ParserRequest
 	err := json.NewDecoder(r.Body).Decode(&pr)
 	if err != nil {
