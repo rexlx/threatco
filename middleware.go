@@ -56,6 +56,8 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Invalid session token", http.StatusUnauthorized)
 			return
 		}
+		w.Header().Set("Content-Security-Policy", "default-src 'self'")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		next(w, r)
 	}
 }

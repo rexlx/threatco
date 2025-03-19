@@ -234,6 +234,10 @@ window.onload = () => {
                 .then(data => {
                     console.log('User added: ', data);
                     if (data.key) {
+                        if (!isValid32ByteBase64Key(data.key)) {
+                            userResults.innerHTML = '<div class="notification is-danger">User added successfully but key is invalid</div>';
+                            return;
+                        }
                         userResults.innerHTML = '<div class="notification is-success">User added successfully. Key: ' + data.key + '</div>';
                     }
                     alert('User added! A key will be displayed on the screen, please save it for future reference');
@@ -272,3 +276,20 @@ let startIndex = 50; // server sends 0-50 on load, we want 50-100 next
 dropDownMenuLink.addEventListener('click', () => {
     dropDownMenu.classList.toggle('is-active')
 })
+
+function isValid32ByteBase64Key(key) {
+    // Accept 43 (no padding) or 44 (with '=') characters
+    if (key.length !== 43 && key.length !== 44) return false;
+  
+    // Check valid Base64 characters (standard or URL-safe) and optional padding
+    const regex = /^[A-Za-z0-9+/=-]{43,44}$/;
+    if (!regex.test(key)) return false;
+  
+    // Decode and verify it’s exactly 32 bytes
+    try {
+      const decoded = atob(key.replace(/-/g, '+').replace(/_/g, '/')); // Handle URL-safe Base64
+      return decoded.length === 32;
+    } catch (e) {
+      return false; // Invalid Base64 string
+    }
+  }

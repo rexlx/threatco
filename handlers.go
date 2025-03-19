@@ -7,6 +7,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -421,10 +422,19 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("event_requests", 1)
+	pathPrefix := "/events/"
+	if !strings.HasPrefix(r.URL.Path, pathPrefix) {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	id := r.URL.Path[len(pathPrefix):]
+	if _, err := uuid.Parse(id); err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	// s.Log.Println("EventHandler", id)
 	s.Memory.Lock()
 	defer s.Memory.Unlock()
-	id := r.URL.Path[len("/events/"):]
-	s.Log.Println("EventHandler", id)
 	event, ok := s.Cache.Responses[id]
 	if !ok {
 		b, err := s.DB.GetResponse(id)
@@ -482,7 +492,7 @@ type RawResponseRequest struct {
 }
 
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
-	defer s.addStat("get_user_requests", 1)
+	// defer s.addStat("get_user_requests", 1)
 	// defer func(start time.Time) {
 	// 	s.Log.Println("GetUserHandler took", time.Since(start))
 	// }(time.Now())
@@ -495,6 +505,9 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	u.Hash = nil
+	u.Key = ""
+	u.Password = ""
 	out, err := json.Marshal(u)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -675,7 +688,9 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	}(time.Now())
 	chunkSize := r.ContentLength
 	filename := r.Header.Get("X-filename")
-	filename, err = RemoveTimestamp("_", filename)
+	safeFilename := filepath.Base(filename)
+
+	filename, err = RemoveTimestamp("_", safeFilename)
 	if err != nil {
 		fmt.Println("error removing timestamp", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -754,6 +769,7 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
+	var MaxLogs = 1000
 	start, _ := strconv.Atoi(r.URL.Query().Get("start"))
 	end, _ := strconv.Atoi(r.URL.Query().Get("end"))
 	s.Memory.RLock()
@@ -776,6 +792,9 @@ func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if end > len(s.Cache.Logs) {
 		end = len(s.Cache.Logs)
+	}
+	if end-start > MaxLogs {
+		end = start + MaxLogs
 	}
 	out, err := json.Marshal(s.Cache.Logs[start:end])
 	if err != nil {
