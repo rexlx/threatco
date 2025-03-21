@@ -20,7 +20,7 @@ func main() {
 	var c Configuration
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	s := NewServer("1", ":8081", "postgres", *dbLocation)
+	s := NewServer("1", ":8081", *dbMode, *dbLocation)
 
 	s.InitializeFromConfig(&c, true)
 	PassStore(&UploadStore{Files: make(map[string]UploadHandler), Memory: &sync.RWMutex{}, ServerConfig: &c})

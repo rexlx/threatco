@@ -27,6 +27,7 @@ var (
 	deleteConfig  = flag.Bool("delete", false, "Delete configuration file")
 	fqdn          = flag.String("fqdn", "http://localhost", "Fully qualified domain name")
 	dbLocation    = flag.String("db", "", "Database location")
+	dbMode        = flag.String("dbmode", "postgres", "Database mode")
 	knowledgeBase = flag.String("kb", "/kb", "Knowledge base path")
 	configPath    = flag.String("config", "/config.json", "Configuration file")
 	staticPath    = flag.String("static", "/static", "Static file path")

@@ -1,5 +1,6 @@
 {
     "server_id": "micah",
+    "database_type": "postgres",
     "first_user_mode": true,
     "bind_address": "",
     "fqdn": "example.com",
