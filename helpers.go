@@ -33,6 +33,8 @@ func (s *Server) ProxyHelper(req ProxyRequest) ([]byte, error) {
 		return s.DeepFryHelper(req)
 	case "mandiant":
 		return s.MandiantHelper(req)
+	case "crowdstrike":
+		return s.CrowdstrikeHelper(req)
 	case "domaintools":
 		switch req.Route {
 		case "domain":
@@ -686,6 +688,67 @@ func DeleteConfigFile(fh string) error {
 		return err
 	}
 	return nil
+}
+
+func crowdstrikeBodyBuilder(req ProxyRequest) ([]byte, error) {
+	var csr vendors.CSIndicatorRequest
+	csr.Filter = fmt.Sprintf("type:'%s' AND value:'%s'", req.Type, req.Value)
+	// TODO work out sort later
+	return json.Marshal(csr)
+}
+
+func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		s.Log.Println("CrowdstrikeHelper: target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
+	}
+	url := fmt.Sprintf("%s/%s", ep.GetURL(), "intelligence/combined/indicators/v1")
+	data, err := crowdstrikeBodyBuilder(req)
+	if err != nil {
+		s.Log.Println("CrowdstrikeHelper: server error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	// fmt.Println("crowdstrike url", url, req)
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		s.Log.Println("CrowdstrikeHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		s.Log.Println("CrowdstrikeHelper: got a zero length response")
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+	go s.addStat(ep.GetURL(), float64(len(resp)))
+	go s.AddResponse("crowdstrike", req.TransactionID, resp)
+	var response vendors.CSFalconIOCResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		s.Log.Println("CrowdstrikeHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+	if len(response.Resources) == 0 {
+		s.Log.Println("CrowdstrikeHelper: no hits")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits")
+	}
+	if len(response.Resources) > 1 {
+		s.Log.Println("CrowdstrikeHelper: multiple hits")
+		return CreateAndWriteSummarizedEvent(req, true, "multiple hits")
+	}
+	fmt.Println(response.Resources[0])
+	event := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-primary-dark",
+		Info:       "crowdstrike returned some hits for that value",
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+	}
+	return json.Marshal(event)
+
 }
 
 func DeepMapCopy(x, y map[string]float64) {
