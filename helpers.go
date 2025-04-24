@@ -705,7 +705,7 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 	ipv4Filter := "type:'ipv4'+malicious_confidence:>='high'"
-	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intelligence/combined/indicators/v1")
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intel/combined/indicators/v1")
 	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(ipv4Filter))
 	// data, err := crowdstrikeBodyBuilder(req)
 	// if err != nil {
