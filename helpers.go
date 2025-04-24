@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -127,9 +128,9 @@ func IrisEnrichURLBuilder(url, uname, key, time string, req ProxyRequest) string
 	return fmt.Sprintf("%s%s", url, uri)
 }
 
-func IrisPivotURLBuilder(url, uname, key, time string, req ProxyRequest) string {
+func IrisPivotURLBuilder(thisUrl, uname, key, time string, req ProxyRequest) string {
 	uri := fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
-	return fmt.Sprintf("%s%s", url, uri)
+	return fmt.Sprintf("%s%s", thisUrl, uri)
 }
 
 func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
@@ -137,7 +138,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("target not found")
 	}
-	var uname, key, uri, url, info string
+	var uname, key, uri, thisUrl, info string
 	var resp []byte
 	myAuth := ep.GetAuth()
 	switch myAuth.(type) {
@@ -155,23 +156,23 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	sig := Sign(uname, key, timestamp, uri)
 	switch req.Route {
 	case "whois":
-		url = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	case "iris-investigate":
-		url = IrisInvestigateURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = IrisInvestigateURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	case "iris-profile":
-		url = IrisProfileURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = IrisProfileURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	case "iris-detect":
-		url = IrisDetectURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = IrisDetectURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	case "iris-enrich":
-		url = IrisEnrichURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = IrisEnrichURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	case "iris-pivot":
-		url = IrisPivotURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = IrisPivotURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	default:
 		uri = fmt.Sprintf("/v1/%s", req.Value)
-		url = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+		thisUrl = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
 	}
-	s.LogInfo(fmt.Sprintf("domaintools url: %s", url))
-	request, err := http.NewRequest("GET", url, nil)
+	s.LogInfo(fmt.Sprintf("domaintools url: %s", thisUrl))
+	request, err := http.NewRequest("GET", thisUrl, nil)
 
 	if err != nil {
 		return nil, err
@@ -266,7 +267,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("target not found")
 	}
-	var uname, key, uri, url, info string
+	var uname, key, uri, thisUrl, info string
 	var resp []byte
 	myAuth := ep.GetAuth()
 	switch myAuth.(type) {
@@ -280,13 +281,13 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 	sig := Sign(uname, key, timestamp, uri)
 	switch req.Route {
 	case "whois":
-		url = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+		thisUrl = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
 	default:
 		uri = fmt.Sprintf("/v1/%s", req.Value)
-		url = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+		thisUrl = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
 	}
-	s.LogInfo(fmt.Sprintf("domaintools url: %s", url))
-	request, err := http.NewRequest("GET", url, nil)
+	s.LogInfo(fmt.Sprintf("domaintools url: %s", thisUrl))
+	request, err := http.NewRequest("GET", thisUrl, nil)
 
 	if err != nil {
 		return nil, err
@@ -464,9 +465,9 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 		// return nil, fmt.Errorf("target not found")
 	}
 
-	url := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	thisUrl := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
 	// fmt.Println("virus total url", url, req)
-	request, err := http.NewRequest("GET", url, nil)
+	request, err := http.NewRequest("GET", thisUrl, nil)
 
 	if err != nil {
 		s.Log.Println("VirusTotalHelper: request error", err)
@@ -514,7 +515,7 @@ func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]b
 		return nil, fmt.Errorf("target not found")
 	}
 
-	url := fmt.Sprintf("%s/%s", ep.GetURL(), "rest/sample/submit")
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "rest/sample/submit")
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -530,7 +531,7 @@ func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]b
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequest("POST", url, body)
+	request, err := http.NewRequest("POST", thisUrl, body)
 	if err != nil {
 		return nil, err
 	}
@@ -551,7 +552,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 
-	url := fmt.Sprintf("%s/get/ip4", ep.GetURL())
+	thisUrl := fmt.Sprintf("%s/get/ip4", ep.GetURL())
 	// fmt.Println("deep fry url", url, req)
 	data := struct {
 		Message string `json:"message"`
@@ -567,7 +568,7 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
 	// fmt.Println(req, data)
-	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
 	if err != nil {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
@@ -631,11 +632,11 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	if !ok {
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
-	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// fmt.Println("misp url", url, req)
 	go s.addStat(ep.GetURL(), float64(len(out)))
 
-	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
 
 	if err != nil {
 		fmt.Println("request error", err)
@@ -703,14 +704,17 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("CrowdstrikeHelper: target not found")
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
-	url := fmt.Sprintf("%s/%s", ep.GetURL(), "intelligence/combined/indicators/v1")
-	data, err := crowdstrikeBodyBuilder(req)
-	if err != nil {
-		s.Log.Println("CrowdstrikeHelper: server error", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
-	}
+	ipv4Filter := "type:'ipv4'+malicious_confidence:>='high'"
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intelligence/combined/indicators/v1")
+	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(ipv4Filter))
+	// data, err := crowdstrikeBodyBuilder(req)
+	// if err != nil {
+	// 	s.Log.Println("CrowdstrikeHelper: server error", err)
+	// 	return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	// }
 	// fmt.Println("crowdstrike url", url, req)
-	request, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	// request, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	request, err := http.NewRequest("GET", indicatorUrl, nil)
 	if err != nil {
 		s.Log.Println("CrowdstrikeHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
@@ -814,14 +818,14 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 			Values: []string{req.Value},
 		},
 	}
-	url := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// fmt.Println("mandiant url", url, req)
 	out, err := json.Marshal(postReq)
 	if err != nil {
 		s.Log.Println("MandiantHelper: server error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
-	request, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
 
 	if err != nil {
 		s.Log.Println("MandiantHelper: request error", err)
