@@ -90,3 +90,7 @@ h1, h2, h3, h4, h5, h6 {
     background: #444;
     cursor: pointer;
 }
+
+.service-card {
+    height: 200px; /* Or your desired fixed height */
+}

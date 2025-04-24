@@ -56,7 +56,7 @@ func (s *Server) ViewResponsesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, views.ResponsesListView)
 }
 
-func (s *Server) ViewServicesHandlerOld(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
@@ -69,7 +69,7 @@ func (s *Server) ViewServicesHandlerOld(w http.ResponseWriter, r *http.Request) 
 
 		serviceDiv += fmt.Sprintf(`
 <div class="column is-3"> 
-	<div class="card has-background-black-ter" style="height: 200px;">
+	<div class="card has-background-black-ter service-card">
 		<div class="card-content">
 			<p class="title has-text-primary is-4">%s</p>
 			<div class="content">
@@ -108,7 +108,7 @@ func (s *Server) ViewServicesHandlerOld(w http.ResponseWriter, r *http.Request) 
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
 
-func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ViewServicesHandlerBad(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
