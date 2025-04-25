@@ -704,10 +704,9 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("CrowdstrikeHelper: target not found")
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
-	ipv4Filter := "type:'ipv4'+malicious_confidence:>='high'"
+	filter := vendors.CSFalconFilterBuilder(req.Type, req.Value)
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intel/combined/indicators/v1")
-	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(ipv4Filter))
-	// data, err := crowdstrikeBodyBuilder(req)
+	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(filter))
 	// if err != nil {
 	// 	s.Log.Println("CrowdstrikeHelper: server error", err)
 	// 	return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
