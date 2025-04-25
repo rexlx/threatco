@@ -704,7 +704,27 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("CrowdstrikeHelper: target not found")
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
-	filter := vendors.CSFalconFilterBuilder(req.Type, req.Value)
+	var thisType string
+	switch req.Type {
+	case "domain":
+		thisType = "domain"
+	case "ipv4":
+		thisType = "ip_address"
+	case "ipv6":
+		thisType = "ip_address"
+	case "url":
+		thisType = "url"
+	case "md5":
+		thisType = "hash_md5"
+	case "sha256":
+		thisType = "hash_sha256"
+	case "sha1":
+		thisType = "hash_sha1"
+	default:
+		s.Log.Printf("CrowdstrikeHelper: unsupported type %s, TransactionID: %s", req.Type, req.TransactionID)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unsupported type: %s", req.Type))
+	}
+	filter := vendors.CSFalconFilterBuilder(thisType, req.Value)
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intel/combined/indicators/v1")
 	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(filter))
 	// if err != nil {
