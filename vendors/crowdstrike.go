@@ -32,7 +32,7 @@ func CSFalconFilterBuilder(_type, value string, args ...string) string {
 	// Initialize the filter parts with required type and value
 	filters := []string{
 		fmt.Sprintf("type:'%s'", _type),
-		fmt.Sprintf("value:'%s'", value),
+		fmt.Sprintf("indicator:'%s'", value),
 	}
 
 	// Process optional arguments (must be in key-value pairs)
