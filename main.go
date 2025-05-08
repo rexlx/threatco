@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/syslog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 )
 
 func main() {
+	var logger *log.Logger
 	flag.Parse()
 	//dsn := "user=postgres password=monkeyintheattic host=%v dbname=threatco"
 	//*dbLocation = fmt.Sprintf(dsn, GetDBHost())
@@ -20,7 +22,24 @@ func main() {
 	var c Configuration
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	s := NewServer("1", ":8081", *dbMode, *dbLocation)
+
+	if *useSyslog {
+		syslogWriter, err := syslog.Dial("udp", *syslogHost, syslog.LOG_INFO, *syslogIndex)
+		if err != nil {
+			fmt.Println("Error connecting to syslog:", err)
+			os.Exit(1)
+		}
+		logger = log.New(syslogWriter, "", log.LstdFlags)
+	} else {
+		file, err := os.OpenFile("threatco.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Error opening log file:", err)
+			os.Exit(1) // Or handle the error more gracefully
+		}
+		defer file.Close()
+		logger = log.New(file, "", log.LstdFlags)
+	}
+	s := NewServer("1", ":8081", *dbMode, *dbLocation, logger)
 
 	s.InitializeFromConfig(&c, true)
 	PassStore(&UploadStore{Files: make(map[string]UploadHandler), Memory: &sync.RWMutex{}, ServerConfig: &c})

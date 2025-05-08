@@ -216,7 +216,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		default:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
-				Background: "has-background-warning",
+				Background: "has-background-primary-dark",
 				Matched:    false,
 				Info:       "domaintools returned a bad response",
 				From:       req.To,
@@ -241,7 +241,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		info = "domaintools returned no hits for that value"
 		return json.Marshal(SummarizedEvent{
 			Timestamp:  time.Now(),
-			Background: "has-background-warning",
+			Background: "has-background-primary-dark",
 			Info:       info,
 			From:       req.To,
 			Value:      req.Value,
@@ -251,7 +251,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	info = "domaintools returned some hits for that value"
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-primary-dark",
+		Background: "has-background-danger",
 		Info:       info,
 		From:       req.To,
 		Value:      req.Value,
@@ -320,7 +320,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 		case float64:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
-				Background: "has-background-primary-dark",
+				Background: "has-background-danger",
 				Info:       fmt.Sprintf("domaintools results count was %v", results),
 				From:       req.To,
 				Value:      req.Value,
@@ -331,7 +331,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 		default:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
-				Background: "has-background-warning",
+				Background: "has-background-primary-dark",
 				Matched:    false,
 				Info:       "domaintools returned a bad response",
 				From:       req.To,
@@ -344,7 +344,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-primary-dark",
+		Background: "has-background-danger",
 		Info:       info,
 		From:       req.To,
 		Value:      req.Value,
@@ -367,7 +367,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
-				Background:    "has-background-primary-dark",
+				Background:    "has-background-danger",
 				From:          req.To,
 				ID:            "multiple hits",
 				AttrCount:     attrs,
@@ -384,7 +384,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 			}
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
-				Background:    "has-background-primary-dark",
+				Background:    "has-background-danger",
 				From:          req.To,
 				ID:            response[0].ID,
 				AttrCount:     attrs,
@@ -398,7 +398,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 	}
 	return json.Marshal(SummarizedEvent{
 		Timestamp:     time.Now(),
-		Background:    "has-background-warning",
+		Background:    "has-background-primary-dark",
 		Info:          "no hits for the given value",
 		From:          req.To,
 		ID:            "no hits",
@@ -415,7 +415,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
-				Background:    "has-background-primary-dark",
+				Background:    "has-background-danger",
 				From:          req.To,
 				ID:            "multiple",
 				Value:         req.Value,
@@ -427,7 +427,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 		} else {
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
-				Background:    "has-background-primary-dark",
+				Background:    "has-background-danger",
 				Info:          response.Response[0].Event.Info,
 				From:          req.To,
 				ID:            response.Response[0].Event.ID,
@@ -441,7 +441,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Res
 	}
 	return json.Marshal(SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-warning",
+		Background: "has-background-primary-dark",
 		Info:       "no hits for the given value",
 		From:       req.To,
 		ID:         "no hits",
@@ -493,7 +493,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-primary-dark",
+		Background: "has-background-danger",
 		Info:       info,
 		From:       req.To,
 		Value:      response.Data.ID,
@@ -672,7 +672,7 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 		fmt.Println("no hits", err)
 		badNews := SummarizedEvent{
 			Timestamp:  time.Now(),
-			Background: "has-background-warning",
+			Background: "has-background-primary-dark",
 			From:       req.To,
 			ID:         "no hits",
 			Value:      req.Value,
@@ -764,7 +764,7 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 	fmt.Println(response.Resources[0])
 	event := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-primary-dark",
+		Background: "has-background-danger",
 		Info:       "crowdstrike returned some hits for that value",
 		From:       req.To,
 		Value:      req.Value,
@@ -874,7 +874,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	}
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-primary-dark",
+		Background: "has-background-danger",
 		Info:       "under development",
 		From:       req.To,
 		Value:      "under development",

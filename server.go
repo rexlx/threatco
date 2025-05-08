@@ -32,6 +32,10 @@ var (
 	configPath    = flag.String("config", "/config.json", "Configuration file")
 	staticPath    = flag.String("static", "/static", "Static file path")
 	firstUserMode = flag.Bool("firstuse", false, "First user mode")
+	useSyslog     = flag.Bool("syslog", false, "Enable syslog")
+	syslogHost    = flag.String("syslog-host", "localhost", "Syslog host")
+	syslogPort    = flag.String("syslog-port", "514", "Syslog port")
+	syslogIndex   = flag.String("syslog-index", "threatco", "Syslog index")
 	// mispUrl       = flag.String("misp-url", "https://192.168.86.91:443", "MISP URL")
 	// vtKey         = flag.String("vt-key", "", "VirusTotal API key")
 	// mispKey       = flag.String("misp-key", "", "MISP API key")
@@ -94,11 +98,11 @@ type LogItem struct {
 	Error bool      `json:"error"`
 }
 
-func NewServer(id string, address string, dbType string, dbLocation string) *Server {
+func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
 	var database Database
 	targets := make(map[string]*Endpoint)
 	memory := &sync.RWMutex{}
-	logger := log.New(log.Writer(), log.Prefix(), log.Flags())
+	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
 		Logs:         make([]LogItem, 0),
