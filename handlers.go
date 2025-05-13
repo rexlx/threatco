@@ -25,18 +25,17 @@ func PassStore(s *UploadStore) {
 }
 
 type ParserRequest struct {
-	Blob string `json:"blob"`
+	Blob     string `json:"blob"`
+	Username string `json:"username"`
 }
 
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	var wg sync.WaitGroup
 	allBytes := []byte{'['} //  Don't initialize here, will be used later
 	first := true
 	var mu sync.Mutex
 	// defer s.addStat("parser_requests", 1)
-	// defer func(start time.Time) {
-	// 	s.Log.Println("ParserHandler took", time.Since(start))
-	// }(time.Now())
 	cx := parser.NewContextualizer(&parser.PrivateChecks{Ipv4: true})
 	var pr ParserRequest
 	err := json.NewDecoder(r.Body).Decode(&pr)
@@ -44,6 +43,15 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	defer func(start time.Time, req ParserRequest) {
+		reqOut, err := json.Marshal(req)
+		if err != nil {
+			s.Log.Println("ProxyHandler error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
+	}(start, pr)
 	out := make(map[string][]parser.Match)
 	for k, v := range cx.Expressions {
 		out[k] = cx.GetMatches(pr.Blob, k, v)
@@ -280,16 +288,22 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// var written int
 	var req ProxyRequest
 	defer s.addStat("proxy_requests", 1)
-	defer func(start time.Time, kind string) {
-		s.Log.Println("__ProxyHandler__ took:", time.Since(start), kind)
-	}(time.Now(), req.To)
-
+	start := time.Now()
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		s.Log.Println("ProxyHandler decoder error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	defer func(start time.Time, req ProxyRequest) {
+		reqOut, err := json.Marshal(req)
+		if err != nil {
+			s.Log.Println("ProxyHandler error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
+	}(start, req)
 	// s.Log.Println("ProxyHandler", req)
 	uid := uuid.New().String()
 	req.TransactionID = uid
@@ -891,6 +905,7 @@ type ProxyRequest struct {
 	Value         string `json:"value"`
 	From          string `json:"from"`
 	TransactionID string `json:"transaction_id"`
+	Username      string `json:"username"`
 }
 
 type GenericOut struct {
