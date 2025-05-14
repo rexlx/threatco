@@ -1,0 +1,285 @@
+// Jenkinsfile (Declarative Pipeline)
+
+pipeline {
+    agent any // Or specify a label for an agent with Docker and Go installed, e.g., 'docker-agent'
+
+    environment {
+        // Define environment variables
+        // Make sure DOCKER_REGISTRY_URL is set in Jenkins credentials or globally
+        // DOCKER_REGISTRY_URL = 'your.docker.registry.com'
+        // IMAGE_NAME = 'threatco' // Or your application's image name
+        // Credentials ID for your Docker registry
+        DOCKER_CREDENTIALS_ID = 'your-docker-registry-credentials-id'
+        // Credentials ID for your Git SSH private key
+        GIT_SSH_CREDENTIALS_ID = 'your-git-ssh-private-key-credentials-id' // << NEW/UPDATED
+    }
+
+    tools {
+        // If your agent doesn't have Go pre-installed and your Dockerfile doesn't use a Go base image for all build steps
+        // go 'Go_1_22_X' // Assumes 'Go_1_22_X' is configured in Jenkins Global Tool Configuration
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        // disableConcurrentBuilds()
+    }
+
+    parameters {
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        string(name: 'IMAGE_TAG_PREFIX', defaultValue: 'dev', description: 'Prefix for the image tag (e.g., dev, staging, prod, or version number)')
+        booleanParam(name: 'LATEST_TAG', defaultValue: true, description: 'Also tag this build as latest?')
+        // choice(name: 'DEPLOY_ENV', choices: ['staging', 'production'], description: 'Deployment environment')
+    }
+
+    stages {
+        // Stage: Checkout - Pulls source code
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "INFO: Checking out source code from branch ${params.GIT_BRANCH} using SSH..."
+                    // Ensure you have an SSH private key credential configured in Jenkins
+                    // and its ID is stored in GIT_SSH_CREDENTIALS_ID
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: params.GIT_BRANCH]],
+                        userRemoteConfigs: [[
+                            url: 'git@github.com:rexlx/threatco.git', // << UPDATED to SSH URL format (replace with your actual repo SSH URL)
+                            credentialsId: env.GIT_SSH_CREDENTIALS_ID // << UPDATED to use SSH credentials
+                        ]]
+                    ])
+                    // If Jenkinsfile is in the repo, 'checkout scm' is simpler if branch is handled by job config
+                    // and the job is configured to use SSH credentials for the SCM.
+                    // checkout scm
+                    echo "INFO: Checkout complete."
+                }
+            }
+        }
+
+        // Stage: Build Go Binary & Docker Image
+        // The Go build is handled by the Dockerfile, so this stage focuses on the Docker image.
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Define image name and tags
+                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com' // Fallback if not set in environment
+                    def imageName = env.IMAGE_NAME ?: 'threatco'
+                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
+                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
+                    def latestImageName = "${registryUrl}/${imageName}:latest"
+
+                    echo "INFO: Building Docker image: ${fullImageName}"
+
+                    // Ensure Dockerfile is present
+                    sh 'ls -la Dockerfile' // Verify Dockerfile exists
+
+                    // Build the Docker image
+                    // The Dockerfile itself should handle Go build, dependencies, etc.
+                    // Example: docker build -t myapp:1.0.1 -f Dockerfile .
+                    sh "docker build -t ${fullImageName} -f Dockerfile ."
+
+                    if (params.LATEST_TAG) {
+                        echo "INFO: Tagging ${fullImageName} as ${latestImageName}"
+                        sh "docker tag ${fullImageName} ${latestImageName}"
+                    }
+
+                    echo "INFO: Docker image build complete."
+
+                    // Optionally, you can store the image as an artifact if your Jenkins setup supports it,
+                    // or rely on pushing it to a registry.
+                    // Example: archiveArtifacts artifacts: 'image.tar', fingerprint: true (after docker save)
+                }
+            }
+            post {
+                success {
+                    echo 'INFO: Docker image build was successful.'
+                }
+                failure {
+                    echo 'ERROR: Docker image build failed.'
+                }
+            }
+        }
+
+        // Stage: Run Go Tests (Optional, if not fully covered in Docker build or if you want separate reporting)
+        stage('Test Go Application') {
+            // when {
+            //     expression { return true } // Or some condition
+            // }
+            steps {
+                script {
+                    echo "INFO: Starting Go application tests..."
+                    // If your Dockerfile doesn't run tests, or you want to run them on the agent:
+                    // This assumes Go is installed on the agent.
+                    // sh 'go test ./...'
+
+                    // If tests are run inside a Docker container (recommended for consistency):
+                    // You might have a separate Dockerfile stage for testing or a script.
+                    // Example: sh "docker run --rm ${fullImageName} go test ./..." // fullImageName might not be defined here yet if build failed
+                    // Or if your primary Docker image already ran tests as part of its build:
+                    echo "INFO: Tests are assumed to be part of the Docker build process or not explicitly run in this stage."
+
+                    // Publish test results if applicable
+                    // junit '**/test-reports/*.xml'
+                    echo "INFO: Go application tests complete."
+                }
+            }
+        }
+
+        // Stage: Push Docker Image to Registry
+        stage('Push Docker Image') {
+            // when {
+            //    expression { return true } // e.g., only push for main/develop branches
+            //    branch 'main'
+            // }
+            steps {
+                script {
+                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                    def imageName = env.IMAGE_NAME ?: 'threatco'
+                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
+                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
+                    def latestImageName = "${registryUrl}/${imageName}:latest"
+
+                    echo "INFO: Pushing Docker image ${fullImageName} to registry ${registryUrl}"
+                    // Docker login using credentials stored in Jenkins
+                    withCredentials([string(credentialsId: env.DOCKER_CREDENTIALS_ID, variable: 'DOCKER_REGISTRY_PASSWORD'),
+                                     string(credentialsId: env.DOCKER_CREDENTIALS_ID + '-user', variable: 'DOCKER_REGISTRY_USER')]) { // Assuming user is stored with a -user suffix or separate ID
+                        // Note: Adjust DOCKER_REGISTRY_USER retrieval based on how you store it.
+                        // Some registries use a token as password and don't need a separate username for `docker login -u AWS -p $(aws ecr get-login-password)`
+                        // For Docker Hub, username is your Docker ID.
+                        sh "docker login -u '${DOCKER_REGISTRY_USER}' -p '${DOCKER_REGISTRY_PASSWORD}' ${registryUrl}"
+                    }
+                    
+                    sh "docker push ${fullImageName}"
+
+                    if (params.LATEST_TAG) {
+                        echo "INFO: Pushing Docker image ${latestImageName}"
+                        sh "docker push ${latestImageName}"
+                    }
+                    echo "INFO: Docker image push complete."
+                }
+            }
+            post {
+                success {
+                    echo 'INFO: Docker image push was successful.'
+                }
+                failure {
+                    echo 'ERROR: Docker image push failed.'
+                }
+                always {
+                    // Logout after push attempt
+                    script {
+                        def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                        echo "INFO: Logging out from Docker registry ${registryUrl}"
+                        sh "docker logout ${registryUrl}"
+                    }
+                }
+            }
+        }
+
+        // Stage: Security Scan (Optional - for Docker image)
+        stage('Scan Docker Image') {
+            // when {
+            //    expression { return true } // e.g. after successful push
+            // }
+            steps {
+                script {
+                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                    def imageName = env.IMAGE_NAME ?: 'threatco'
+                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
+                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
+
+                    echo "INFO: Starting security scan for Docker image: ${fullImageName}..."
+                    // Add steps to run your Docker image scanning tool (e.g., Trivy, Clair, Snyk, Aqua Security)
+                    // Example with Trivy (assuming Trivy is installed on the agent or run via Docker):
+                    // sh "trivy image ${fullImageName}"
+                    // To fail the build on critical vulnerabilities:
+                    // sh "trivy image --exit-code 1 --severity CRITICAL ${fullImageName}"
+                    echo "INFO: Security scan complete."
+                }
+            }
+        }
+
+        // Stage: Deploy to Staging
+        stage('Deploy to Staging') {
+            when {
+                // Example: only deploy from develop branch or if specifically triggered
+                // branch 'develop'
+                // expression { return params.DEPLOY_ENV == 'staging' }
+                allOf {
+                    branch 'develop' // Only from develop branch
+                    expression { returnfileExists('deploy/staging-values.yaml') } // Example: check if a config file exists
+                }
+            }
+            input {
+                message "Deploy image ${env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'}/${env.IMAGE_NAME ?: 'threatco'}:${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER} to Staging?"
+                ok "Yes, Deploy to Staging"
+            }
+            steps {
+                script {
+                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                    def imageName = env.IMAGE_NAME ?: 'threatco'
+                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
+                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
+
+                    echo "INFO: Starting deployment of ${fullImageName} to Staging..."
+                    // Add your deployment scripts here. This is highly dependent on your infrastructure.
+                    // Example for a simple Docker host:
+                    // withCredentials([sshUserPrivateKey(credentialsId: 'STAGING_SSH_KEY', keyFileVariable: 'SSH_KEY_FILE')]) {
+                    //    sh "ssh -i ${SSH_KEY_FILE} user@staging-server 'docker pull ${fullImageName} && docker stop ${imageName} && docker rm ${imageName} && docker run -d --name ${imageName} -p 8080:8080 ${fullImageName}'"
+                    // }
+
+                    // Example for Kubernetes using kubectl and a deployment file:
+                    // sh "sed -i 's|image:.*|image: ${fullImageName}|g' kubernetes/staging-deployment.yaml"
+                    // sh "kubectl apply -f kubernetes/staging-deployment.yaml --namespace staging"
+                    echo "INFO: Deployment to Staging complete."
+                }
+            }
+        }
+
+        // Stage: Deploy to Production
+        stage('Deploy to Production') {
+            when {
+                branch 'main' // Only deploy to production from the main branch
+                // expression { return params.DEPLOY_ENV == 'production' }
+            }
+            input {
+                message "Deploy image ${env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'}/${env.IMAGE_NAME ?: 'threatco'}:${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER} to PRODUCTION? (Branch: ${params.GIT_BRANCH})"
+                ok "Yes, Deploy to PRODUCTION"
+                // submitter 'release-managers'
+            }
+            steps {
+                script {
+                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                    def imageName = env.IMAGE_NAME ?: 'threatco'
+                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}" // Ensure this tag is what was tested and approved
+                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
+
+                    echo "INFO: Starting deployment of ${fullImageName} to Production..."
+                    // Add your production deployment scripts here
+                    // sh './deploy-production.sh ${fullImageName}'
+                    echo "INFO: Deployment to Production complete."
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'INFO: Pipeline execution finished.'
+            cleanWs() // Clean up workspace
+        }
+        success {
+            echo 'SUCCESS: Pipeline completed successfully.'
+            // mail to: 'dev-team@example.com', subject: "SUCCESS: Pipeline '${env.JOB_NAME}' (${env.BUILD_NUMBER})", body: "..."
+        }
+        failure {
+            echo 'FAILURE: Pipeline failed.'
+            // mail to: 'dev-team@example.com', subject: "FAILED: Pipeline '${env.JOB_NAME}' (${env.BUILD_NUMBER})", body: "..."
+        }
+        aborted {
+            echo 'ABORTED: Pipeline was aborted.'
+        }
+    }
+}
+
