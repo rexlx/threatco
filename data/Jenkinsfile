@@ -14,17 +14,11 @@ pipeline {
         GIT_SSH_CREDENTIALS_ID = 'your-git-ssh-private-key-credentials-id' // << NEW/UPDATED
     }
 
-    tools {
-        // If your agent doesn't have Go pre-installed and your Dockerfile doesn't use a Go base image for all build steps
-        // go 'Go_1_22_X' // Assumes 'Go_1_22_X' is configured in Jenkins Global Tool Configuration
-    }
-
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timestamps()
-        timeout(time: 1, unit: 'HOURS')
-        // disableConcurrentBuilds()
-    }
+    // options {
+    //     buildDiscarder(logRotator(numToKeepStr: '10'))
+    //     timestamps()
+    //     timeout(time: 1, unit: 'HOURS')
+    // }
 
     parameters {
         string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to build')
@@ -134,22 +128,14 @@ pipeline {
             // }
             steps {
                 script {
-                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com' // Fallback if not set in environment
                     def imageName = env.IMAGE_NAME ?: 'threatco'
                     def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
                     def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
                     def latestImageName = "${registryUrl}/${imageName}:latest"
-
-                    echo "INFO: Pushing Docker image ${fullImageName} to registry ${registryUrl}"
-                    // Docker login using credentials stored in Jenkins
-                    withCredentials([string(credentialsId: env.DOCKER_CREDENTIALS_ID, variable: 'DOCKER_REGISTRY_PASSWORD'),
-                                     string(credentialsId: env.DOCKER_CREDENTIALS_ID + '-user', variable: 'DOCKER_REGISTRY_USER')]) { // Assuming user is stored with a -user suffix or separate ID
-                        // Note: Adjust DOCKER_REGISTRY_USER retrieval based on how you store it.
-                        // Some registries use a token as password and don't need a separate username for `docker login -u AWS -p $(aws ecr get-login-password)`
-                        // For Docker Hub, username is your Docker ID.
-                        sh "docker login -u '${DOCKER_REGISTRY_USER}' -p '${DOCKER_REGISTRY_PASSWORD}' ${registryUrl}"
-                    }
-                    
+                    sh '/usr/local/bin/aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR.ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com'
+                    sh 'docker tag ${fullImageName} ${latestImageName}'
+                    echo "INFO: Pushing Docker image ${fullImageName} to registry ${registryUrl}..."
                     sh "docker push ${fullImageName}"
 
                     if (params.LATEST_TAG) {
