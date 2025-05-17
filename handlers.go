@@ -536,7 +536,7 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u.Hash = nil
-	u.Key = ""
+	// u.Key = ""
 	u.Password = ""
 	out, err := json.Marshal(u)
 	if err != nil {

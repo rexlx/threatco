@@ -9,9 +9,10 @@ pipeline {
         // DOCKER_REGISTRY_URL = 'your.docker.registry.com'
         // IMAGE_NAME = 'threatco' // Or your application's image name
         // Credentials ID for your Docker registry
-        DOCKER_CREDENTIALS_ID = 'your-docker-registry-credentials-id'
+        // DOCKER_CREDENTIALS_ID = 'your-docker-registry-credentials-id'
         // Credentials ID for your Git SSH private key
-        GIT_SSH_CREDENTIALS_ID = 'your-git-ssh-private-key-credentials-id' // << NEW/UPDATED
+        // GIT_SSH_CREDENTIALS_ID = 'your-git-ssh-private-key-credentials-id'
+        PATH = "/usr/local/go/bin:${env.PATH}"
     }
 
     // options {
@@ -35,66 +36,17 @@ pipeline {
                     echo "INFO: Checking out source code from branch ${params.GIT_BRANCH} using SSH..."
                     // Ensure you have an SSH private key credential configured in Jenkins
                     // and its ID is stored in GIT_SSH_CREDENTIALS_ID
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: params.GIT_BRANCH]],
-                        userRemoteConfigs: [[
-                            url: 'git@github.com:rexlx/threatco.git', // << UPDATED to SSH URL format (replace with your actual repo SSH URL)
-                            credentialsId: env.GIT_SSH_CREDENTIALS_ID // << UPDATED to use SSH credentials
-                        ]]
-                    ])
-                    // If Jenkinsfile is in the repo, 'checkout scm' is simpler if branch is handled by job config
-                    // and the job is configured to use SSH credentials for the SCM.
-                    // checkout scm
+                    git url: 'https://github.com/rexlx/threatco.git', branch: 'master' // Or your preferred branch
+                script {
+                    // Print current commit for traceability
+                    sh 'git rev-parse HEAD > .git/commit-id'
+                    def commitId = readFile('.git/commit-id').trim()
+                    echo "Checked out Git commit: ${commitId}"
+                }
                     echo "INFO: Checkout complete."
                 }
             }
         }
-
-        // Stage: Build Go Binary & Docker Image
-        // The Go build is handled by the Dockerfile, so this stage focuses on the Docker image.
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    // Define image name and tags
-                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com' // Fallback if not set in environment
-                    def imageName = env.IMAGE_NAME ?: 'threatco'
-                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
-                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
-                    def latestImageName = "${registryUrl}/${imageName}:latest"
-
-                    echo "INFO: Building Docker image: ${fullImageName}"
-
-                    // Ensure Dockerfile is present
-                    sh 'ls -la Dockerfile' // Verify Dockerfile exists
-
-                    // Build the Docker image
-                    // The Dockerfile itself should handle Go build, dependencies, etc.
-                    // Example: docker build -t myapp:1.0.1 -f Dockerfile .
-                    sh "docker build -t ${fullImageName} -f Dockerfile ."
-
-                    if (params.LATEST_TAG) {
-                        echo "INFO: Tagging ${fullImageName} as ${latestImageName}"
-                        sh "docker tag ${fullImageName} ${latestImageName}"
-                    }
-
-                    echo "INFO: Docker image build complete."
-
-                    // Optionally, you can store the image as an artifact if your Jenkins setup supports it,
-                    // or rely on pushing it to a registry.
-                    // Example: archiveArtifacts artifacts: 'image.tar', fingerprint: true (after docker save)
-                }
-            }
-            post {
-                success {
-                    echo 'INFO: Docker image build was successful.'
-                }
-                failure {
-                    echo 'ERROR: Docker image build failed.'
-                }
-            }
-        }
-
         // Stage: Run Go Tests (Optional, if not fully covered in Docker build or if you want separate reporting)
         stage('Test Go Application') {
             // when {
@@ -121,28 +73,20 @@ pipeline {
         }
 
         // Stage: Push Docker Image to Registry
-        stage('Push Docker Image') {
+        stage('Test Configuration') {
             // when {
             //    expression { return true } // e.g., only push for main/develop branches
             //    branch 'main'
             // }
             steps {
                 script {
-                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com' // Fallback if not set in environment
-                    def imageName = env.IMAGE_NAME ?: 'threatco'
-                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
-                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
-                    def latestImageName = "${registryUrl}/${imageName}:latest"
-                    sh '/usr/local/bin/aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR.ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com'
-                    sh 'docker tag ${fullImageName} ${latestImageName}'
-                    echo "INFO: Pushing Docker image ${fullImageName} to registry ${registryUrl}..."
-                    sh "docker push ${fullImageName}"
-
-                    if (params.LATEST_TAG) {
-                        echo "INFO: Pushing Docker image ${latestImageName}"
-                        sh "docker push ${latestImageName}"
+                    sh "go build ."
+                    withCredentials([file(credentialsId: 'threatco-config', variable: 'CONFIG_FILE')]) {
+                        echo "INFO: Using config file: ${CONFIG_FILE}"
+                        // Example: sh "docker run --rm -v ${CONFIG_FILE}:/config threatco-config-generator"
+                    // sh "nohup ./threatco -static /var/jenkins/static/ -config ${CONFIG_FILE} -db 'user=rxlx password=thereISnosp0)n host=192.168.86.120 dbname=threatco' -kb /var/jenkins/kb/ &"
                     }
-                    echo "INFO: Docker image push complete."
+                    sh "./threatco -h"
                 }
             }
             post {
@@ -155,9 +99,10 @@ pipeline {
                 always {
                     // Logout after push attempt
                     script {
-                        def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
-                        echo "INFO: Logging out from Docker registry ${registryUrl}"
-                        sh "docker logout ${registryUrl}"
+                        echo "INFO: Logging out from Docker registry..."
+                        // def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
+                        // echo "INFO: Logging out from Docker registry ${registryUrl}"
+                        // sh "docker logout ${registryUrl}"
                     }
                 }
             }
@@ -170,12 +115,6 @@ pipeline {
             // }
             steps {
                 script {
-                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
-                    def imageName = env.IMAGE_NAME ?: 'threatco'
-                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
-                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
-
-                    echo "INFO: Starting security scan for Docker image: ${fullImageName}..."
                     // Add steps to run your Docker image scanning tool (e.g., Trivy, Clair, Snyk, Aqua Security)
                     // Example with Trivy (assuming Trivy is installed on the agent or run via Docker):
                     // sh "trivy image ${fullImageName}"
@@ -188,27 +127,8 @@ pipeline {
 
         // Stage: Deploy to Staging
         stage('Deploy to Staging') {
-            when {
-                // Example: only deploy from develop branch or if specifically triggered
-                // branch 'develop'
-                // expression { return params.DEPLOY_ENV == 'staging' }
-                allOf {
-                    branch 'develop' // Only from develop branch
-                    expression { returnfileExists('deploy/staging-values.yaml') } // Example: check if a config file exists
-                }
-            }
-            input {
-                message "Deploy image ${env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'}/${env.IMAGE_NAME ?: 'threatco'}:${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER} to Staging?"
-                ok "Yes, Deploy to Staging"
-            }
             steps {
                 script {
-                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
-                    def imageName = env.IMAGE_NAME ?: 'threatco'
-                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}"
-                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
-
-                    echo "INFO: Starting deployment of ${fullImageName} to Staging..."
                     // Add your deployment scripts here. This is highly dependent on your infrastructure.
                     // Example for a simple Docker host:
                     // withCredentials([sshUserPrivateKey(credentialsId: 'STAGING_SSH_KEY', keyFileVariable: 'SSH_KEY_FILE')]) {
@@ -224,30 +144,6 @@ pipeline {
         }
 
         // Stage: Deploy to Production
-        stage('Deploy to Production') {
-            when {
-                branch 'main' // Only deploy to production from the main branch
-                // expression { return params.DEPLOY_ENV == 'production' }
-            }
-            input {
-                message "Deploy image ${env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'}/${env.IMAGE_NAME ?: 'threatco'}:${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER} to PRODUCTION? (Branch: ${params.GIT_BRANCH})"
-                ok "Yes, Deploy to PRODUCTION"
-                // submitter 'release-managers'
-            }
-            steps {
-                script {
-                    def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
-                    def imageName = env.IMAGE_NAME ?: 'threatco'
-                    def imageTag = "${params.IMAGE_TAG_PREFIX}-${env.BUILD_NUMBER}" // Ensure this tag is what was tested and approved
-                    def fullImageName = "${registryUrl}/${imageName}:${imageTag}"
-
-                    echo "INFO: Starting deployment of ${fullImageName} to Production..."
-                    // Add your production deployment scripts here
-                    // sh './deploy-production.sh ${fullImageName}'
-                    echo "INFO: Deployment to Production complete."
-                }
-            }
-        }
     }
 
     post {
