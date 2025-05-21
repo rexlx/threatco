@@ -1,167 +1,138 @@
 // Jenkinsfile (Declarative Pipeline)
 
 pipeline {
-    agent any // Or specify a label for an agent with Docker and Go installed, e.g., 'docker-agent'
+    agent any
 
     environment {
-        // Define environment variables
-        // Make sure DOCKER_REGISTRY_URL is set in Jenkins credentials or globally
-        // DOCKER_REGISTRY_URL = 'your.docker.registry.com'
-        // IMAGE_NAME = 'threatco' // Or your application's image name
-        // Credentials ID for your Docker registry
-        // DOCKER_CREDENTIALS_ID = 'your-docker-registry-credentials-id'
-        // Credentials ID for your Git SSH private key
-        // GIT_SSH_CREDENTIALS_ID = 'your-git-ssh-private-key-credentials-id'
         PATH = "/usr/local/go/bin:${env.PATH}"
+        DOCKER_IMAGE_BASE_NAME = "your-docker-registry/your-repo/threatco" // << TODO: REPLACE with your actual registry/repo base name
     }
-
-    // options {
-    //     buildDiscarder(logRotator(numToKeepStr: '10'))
-    //     timestamps()
-    //     timeout(time: 1, unit: 'HOURS')
-    // }
 
     parameters {
         string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to build')
         string(name: 'IMAGE_TAG_PREFIX', defaultValue: 'dev', description: 'Prefix for the image tag (e.g., dev, staging, prod, or version number)')
-        booleanParam(name: 'LATEST_TAG', defaultValue: true, description: 'Also tag this build as latest?')
-        // choice(name: 'DEPLOY_ENV', choices: ['staging', 'production'], description: 'Deployment environment')
     }
 
     stages {
-        // Stage: Checkout - Pulls source code
         stage('Checkout') {
             steps {
                 script {
-                    echo "INFO: Checking out source code from branch ${params.GIT_BRANCH} using SSH..."
-                    // Ensure you have an SSH private key credential configured in Jenkins
-                    // and its ID is stored in GIT_SSH_CREDENTIALS_ID
-                    git url: 'https://github.com/rexlx/threatco.git', branch: 'master' // Or your preferred branch
-                script {
-                    // Print current commit for traceability
+                    echo "INFO: Checking out source code from branch ${params.GIT_BRANCH}..."
+                    git url: 'https://github.com/rexlx/threatco.git', branch: params.GIT_BRANCH
                     sh 'git rev-parse HEAD > .git/commit-id'
                     def commitId = readFile('.git/commit-id').trim()
                     echo "Checked out Git commit: ${commitId}"
-                }
                     echo "INFO: Checkout complete."
                 }
             }
         }
-        // Stage: Run Go Tests (Optional, if not fully covered in Docker build or if you want separate reporting)
-        stage('Test Go Application') {
-            // when {
-            //     expression { return true } // Or some condition
-            // }
+
+        stage('Build and Push Docker Image') {
             steps {
                 script {
-                    echo "INFO: Starting Go application tests..."
-                    // If your Dockerfile doesn't run tests, or you want to run them on the agent:
-                    // This assumes Go is installed on the agent.
-                    // sh 'go test ./...'
+                    echo "INFO: Preparing to build Docker image..."
+                    def commitId = readFile('.git/commit-id').trim()
+                    def shortCommitId = commitId.substring(0, 7)
+                    def commitTag = "${params.IMAGE_TAG_PREFIX}-${shortCommitId}"
 
-                    // If tests are run inside a Docker container (recommended for consistency):
-                    // You might have a separate Dockerfile stage for testing or a script.
-                    // Example: sh "docker run --rm ${fullImageName} go test ./..." // fullImageName might not be defined here yet if build failed
-                    // Or if your primary Docker image already ran tests as part of its build:
-                    echo "INFO: Tests are assumed to be part of the Docker build process or not explicitly run in this stage."
-
-                    // Publish test results if applicable
-                    // junit '**/test-reports/*.xml'
-                    echo "INFO: Go application tests complete."
-                }
-            }
-        }
-
-        // Stage: Push Docker Image to Registry
-        stage('Test Configuration') {
-            // when {
-            //    expression { return true } // e.g., only push for main/develop branches
-            //    branch 'main'
-            // }
-            steps {
-                script {
-                    sh "go build ."
-                    withCredentials([file(credentialsId: 'threatco-config', variable: 'CONFIG_FILE')]) {
-                        echo "INFO: Using config file: ${CONFIG_FILE}"
-                        // Example: sh "docker run --rm -v ${CONFIG_FILE}:/config threatco-config-generator"
-                    // sh "nohup ./threatco -static /var/jenkins/static/ -config ${CONFIG_FILE} -db 'user=rxlx password=thereISnosp0)n host=192.168.86.120 dbname=threatco' -kb /var/jenkins/kb/ &"
+                    withCredentials([file(credentialsId: 'threatco-config', variable: 'CONFIG_FILE_CONTENT_PATH')]) {
+                        echo "INFO: Making Jenkins credential 'threatco-config' available as data/config.json for Docker build."
+                        sh "mkdir -p data"
+                        sh "cp ${CONFIG_FILE_CONTENT_PATH} data/config.json"
+                        echo "WARNING: The content of 'threatco-config' is being copied into 'data/config.json' and will be baked into the Docker image. If it contains secrets, consider runtime mounting for production."
                     }
-                    sh "./threatco -h"
+
+                    echo "INFO: Building Docker image ${env.DOCKER_IMAGE_BASE_NAME} with tags: ${commitTag}, latest..."
+                    sh "docker build -t ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag} -t ${env.DOCKER_IMAGE_BASE_NAME}:latest ."
+                    
+                    echo "INFO: Logging into Docker registry..."
+                    // Example:
+                    // withCredentials([usernamePassword(credentialsId: 'your-docker-registry-credentials-id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    //    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin your-docker-registry.example.com"
+                    // }
+                    
+                    echo "INFO: Pushing Docker image ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag}..."
+                    sh "docker push ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag}"
+                    echo "INFO: Pushing Docker image ${env.DOCKER_IMAGE_BASE_NAME}:latest..."
+                    sh "docker push ${env.DOCKER_IMAGE_BASE_NAME}:latest"
                 }
             }
             post {
                 success {
-                    echo 'INFO: Docker image push was successful.'
+                    echo 'INFO: Docker image build and push were successful.'
                 }
                 failure {
-                    echo 'ERROR: Docker image push failed.'
+                    echo 'ERROR: Docker image build or push failed.'
                 }
                 always {
-                    // Logout after push attempt
                     script {
-                        echo "INFO: Logging out from Docker registry..."
-                        // def registryUrl = env.DOCKER_REGISTRY_URL ?: 'your.docker.registry.com'
-                        // echo "INFO: Logging out from Docker registry ${registryUrl}"
-                        // sh "docker logout ${registryUrl}"
+                        echo "INFO: Cleaning up temporary data/config.json..."
+                        sh "rm -f data/config.json"
+                        sh "rmdir data || true"
+                        echo "INFO: Logging out from Docker registry (if applicable)..."
+                        // Example:
+                        // sh "docker logout your-docker-registry.example.com"
                     }
                 }
             }
         }
 
-        // Stage: Security Scan (Optional - for Docker image)
-        stage('Scan Docker Image') {
-            // when {
-            //    expression { return true } // e.g. after successful push
-            // }
-            steps {
-                script {
-                    // Add steps to run your Docker image scanning tool (e.g., Trivy, Clair, Snyk, Aqua Security)
-                    // Example with Trivy (assuming Trivy is installed on the agent or run via Docker):
-                    // sh "trivy image ${fullImageName}"
-                    // To fail the build on critical vulnerabilities:
-                    // sh "trivy image --exit-code 1 --severity CRITICAL ${fullImageName}"
-                    echo "INFO: Security scan complete."
-                }
-            }
-        }
-
-        // Stage: Deploy to Staging
         stage('Deploy to Staging') {
             steps {
                 script {
-                    // Add your deployment scripts here. This is highly dependent on your infrastructure.
-                    // Example for a simple Docker host:
-                    // withCredentials([sshUserPrivateKey(credentialsId: 'STAGING_SSH_KEY', keyFileVariable: 'SSH_KEY_FILE')]) {
-                    //    sh "ssh -i ${SSH_KEY_FILE} user@staging-server 'docker pull ${fullImageName} && docker stop ${imageName} && docker rm ${imageName} && docker run -d --name ${imageName} -p 8080:8080 ${fullImageName}'"
+                    // Placeholder for your staging deployment logic
+                    // This would typically involve:
+                    // 1. Accessing your staging environment (e.g., via SSH, kubectl context)
+                    // 2. Pulling the new image (e.g., ${env.DOCKER_IMAGE_BASE_NAME}:latest or ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag})
+                    // 3. Stopping/removing the old container/pod
+                    // 4. Running the new container/pod, potentially mounting a staging-specific config if needed.
+                    //
+                    // Example for a simple Docker host deployment (replace with your actual logic):
+                    // def imageToDeploy = "${env.DOCKER_IMAGE_BASE_NAME}:latest"
+                    // withCredentials([file(credentialsId: 'threatco-staging-config', variable: 'STAGING_CONFIG_FILE')]) { // If staging needs a specific config
+                    //     sshagent(['your-ssh-credentials-id']) {
+                    //         sh """
+                    //             ssh your-user@your-staging-host.example.com <<EOF
+                    //             echo 'Pulling new image...'
+                    //             docker pull ${imageToDeploy}
+                    //             echo 'Stopping and removing old container...'
+                    //             docker stop threatco-staging || true
+                    //             docker rm threatco-staging || true
+                    //             echo 'Starting new container...'
+                    //             # scp ${STAGING_CONFIG_FILE} your-user@your-staging-host.example.com:/opt/staging_configs/threatco/config.json # If you need to copy a new config
+                    //             docker run -d --name threatco-staging \\
+                    //               -p 8080:8080 \\
+                    //               -v /opt/staging_configs/threatco/config.json:/app/config.json \\ # Mount the staging config
+                    //               --restart always \\
+                    //               ${imageToDeploy}
+                    //             echo 'Deployment to staging host initiated.'
+                    //             EOF
+                    //         """
+                    //     }
                     // }
-
-                    // Example for Kubernetes using kubectl and a deployment file:
-                    // sh "sed -i 's|image:.*|image: ${fullImageName}|g' kubernetes/staging-deployment.yaml"
-                    // sh "kubectl apply -f kubernetes/staging-deployment.yaml --namespace staging"
-                    echo "INFO: Deployment to Staging complete."
+                    echo "INFO: Deployment to Staging complete (placeholder)."
                 }
             }
         }
 
-        // Stage: Deploy to Production
+        // Add a 'Deploy to Production' stage here when ready, similar to staging but with production configs/approvals.
     }
 
     post {
         always {
             echo 'INFO: Pipeline execution finished.'
-            cleanWs() // Clean up workspace
+            cleanWs()
         }
         success {
             echo 'SUCCESS: Pipeline completed successfully.'
-            // mail to: 'dev-team@example.com', subject: "SUCCESS: Pipeline '${env.JOB_NAME}' (${env.BUILD_NUMBER})", body: "..."
+            // Consider adding notifications here
         }
         failure {
             echo 'FAILURE: Pipeline failed.'
-            // mail to: 'dev-team@example.com', subject: "FAILED: Pipeline '${env.JOB_NAME}' (${env.BUILD_NUMBER})", body: "..."
+            // Consider adding notifications here
         }
         aborted {
             echo 'ABORTED: Pipeline was aborted.'
         }
     }
 }
-
