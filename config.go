@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings" // Added for strings.ToUpper
 )
 
 type Configuration struct {
@@ -34,10 +35,22 @@ func (c *Configuration) PopulateFromJSONFile(fh string) error {
 		return fmt.Errorf("could not open file: %v", err)
 	}
 	defer file.Close()
+
 	d := json.NewDecoder(file)
 	if err := d.Decode(c); err != nil {
 		return fmt.Errorf("could not decode file: %v", err)
 	}
+
+	for i := range c.Services {
+		if c.Services[i].Key == "" && c.Services[i].Kind != "" {
+			envVarName := strings.ToUpper(c.Services[i].Kind) + "_KEY"
+			apiKey := os.Getenv(envVarName)
+			if apiKey != "" {
+				c.Services[i].Key = apiKey
+			}
+		}
+	}
+
 	return nil
 }
 
