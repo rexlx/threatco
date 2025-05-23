@@ -44,7 +44,13 @@ func (c *Configuration) PopulateFromJSONFile(fh string) error {
 	for i := range c.Services {
 		if c.Services[i].Key == "" && c.Services[i].Kind != "" {
 			envVarName := strings.ToUpper(c.Services[i].Kind) + "_KEY"
+			envVarSecret := strings.ToUpper(c.Services[i].Kind) + "_SECRET"
+
 			apiKey := os.Getenv(envVarName)
+			secret := os.Getenv(envVarSecret)
+			if secret != "" {
+				c.Services[i].Secret = secret
+			}
 			if apiKey != "" {
 				c.Services[i].Key = apiKey
 			}
