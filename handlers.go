@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -27,6 +29,29 @@ func PassStore(s *UploadStore) {
 type ParserRequest struct {
 	Blob     string `json:"blob"`
 	Username string `json:"username"`
+}
+
+type LogRequest struct {
+	Username string `json:"username"`
+	Message  string `json:"message"`
+}
+
+func (s *Server) LogHandler(w http.ResponseWriter, r *http.Request) {
+	// defer s.addStat("log_requests", 1)
+	var lr LogRequest
+	err := json.NewDecoder(r.Body).Decode(&lr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if lr.Username == "" || lr.Message == "" {
+		http.Error(w, "missing 'username' or 'message' field", http.StatusBadRequest)
+		return
+	}
+	s.Log.Printf("%s: %s\n", lr.Username, lr.Message)
+	info := fmt.Sprintf("%s: %s", lr.Username, lr.Message)
+	s.LogInfo(info)
+	w.Write([]byte("ok"))
 }
 
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
@@ -720,12 +745,16 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	filename := r.Header.Get("X-filename")
 	safeFilename := filepath.Base(filename)
 
-	filename, err = RemoveTimestamp("_", safeFilename)
+	newFile, err := RemoveTimestamp("_", safeFilename)
 	if err != nil {
 		fmt.Println("error removing timestamp", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		// http.Error(w, err.Error(), http.StatusInternalServerError)
+		// return
 	}
+	if newFile != "" {
+		filename = newFile
+	}
+
 	lastChunk := r.Header.Get("X-last-chunk")
 	// fmt.Println(chunkSize, filename, lastChunk)
 	uploadHanlder, ok := store.GetFile(filename)
@@ -749,9 +778,18 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	go store.AddFile(filename, uploadHanlder)
 
 	if uploadHanlder.Complete {
+		hasher := sha256.New()
+		_, err := hasher.Write(uploadHanlder.Data)
+		if err != nil {
+			http.Error(w, "Error hashing file data", http.StatusInternalServerError)
+			return
+		}
+		hash := hex.EncodeToString(hasher.Sum(nil))
+		info := fmt.Sprintf("File %s uploaded with hash %s", filename, hash)
+		s.LogInfo(info)
 		uid := uuid.New().String()
 		UploadResponse.ID = uid
-		UploadResponse.Status = "complete"
+		UploadResponse.Status = info
 		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
 		go func(id string) {
 			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
