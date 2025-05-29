@@ -8,7 +8,7 @@ import (
 const ()
 
 type CSFalconIOCResponse struct {
-	Resources []map[string]interface{} `json:"resources"` //  Use map[string]interface{} initially, then create a struct
+	Resources []CSResource `json:"resources"`
 	Errors    []struct {
 		ID      string `json:"id"`
 		Code    int    `json:"code"`
@@ -18,6 +18,21 @@ type CSFalconIOCResponse struct {
 		QueryTime float64 `json:"query_time"`
 		// Add other metadata fields as needed
 	} `json:"meta"`
+}
+
+type CSResource struct {
+	ID          string    `json:"id"`
+	Type        string    `json:"type"`
+	Reports     []string  `json:"reports"`
+	Indicator   string    `json:"indicator"`
+	Labels      []CSLabel `json:"labels"`
+	ThreatTypes []string  `json:"threat_types"`
+}
+
+type CSLabel struct {
+	Name        string `json:"name"`
+	CreatedOn   string `json:"created_on"`
+	LastValidOn string `json:"last_valid_on"`
 }
 
 type CSIndicatorRequest struct {
