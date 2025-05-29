@@ -31,8 +31,8 @@ type CSResource struct {
 
 type CSLabel struct {
 	Name        string `json:"name"`
-	CreatedOn   string `json:"created_on"`
-	LastValidOn string `json:"last_valid_on"`
+	CreatedOn   int    `json:"created_on"`
+	LastValidOn int    `json:"last_valid_on"`
 }
 
 type CSIndicatorRequest struct {
