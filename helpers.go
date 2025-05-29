@@ -727,12 +727,6 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 	filter := vendors.CSFalconFilterBuilder(thisType, req.Value)
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intel/combined/indicators/v1")
 	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(filter))
-	// if err != nil {
-	// 	s.Log.Println("CrowdstrikeHelper: server error", err)
-	// 	return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
-	// }
-	// fmt.Println("crowdstrike url", url, req)
-	// request, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	request, err := http.NewRequest("GET", indicatorUrl, nil)
 	if err != nil {
 		s.Log.Println("CrowdstrikeHelper: request error", err)
@@ -757,15 +751,19 @@ func (s *Server) CrowdstrikeHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("CrowdstrikeHelper: no hits")
 		return CreateAndWriteSummarizedEvent(req, false, "no hits")
 	}
-	if len(response.Resources) > 1 {
-		s.Log.Println("CrowdstrikeHelper: multiple hits")
-		return CreateAndWriteSummarizedEvent(req, true, "multiple hits")
+	info := `found %d reports (%v) for value with %v labels`
+	resc := response.Resources[0]
+	reports := strings.Join(resc.Reports, ", ")
+	if len(reports) > 100 {
+		reports = reports[:100] + "..."
 	}
-	fmt.Println(response.Resources[0])
+	info = fmt.Sprintf(info, len(resc.Reports), reports, len(resc.Labels))
+	// s.Log.Printf("CrowdstrikeHelper: found %d reports (%v) for value with %v labels", len(resc.Reports), reports, len(resc.Labels))
 	event := SummarizedEvent{
+		AttrCount:  len(resc.Labels),
 		Timestamp:  time.Now(),
-		Background: "has-background-danger",
-		Info:       "crowdstrike returned some hits for that value",
+		Background: "has-background-warning",
+		Info:       info,
 		From:       req.To,
 		Value:      req.Value,
 		Link:       req.TransactionID,
