@@ -885,6 +885,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 	ind := response.Indicators[0]
+	attrCount := len(ind.AttributedAssociations)
 	info := `mandiant got hits for that value with score %v: %v`
 	if len(ind.AttributedAssociations) > 0 {
 		info = fmt.Sprintf(info, ind.Mscore, GetAttributedAssociationsString(ind))
@@ -893,12 +894,15 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	}
 
 	sum := SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: "has-background-danger",
-		Info:       info,
-		From:       req.To,
-		Value:      req.Value,
-		Link:       req.TransactionID,
+		ID:            ind.ID,
+		AttrCount:     attrCount,
+		ThreatLevelID: strconv.Itoa(ind.ThreatRating.ThreatScore),
+		Timestamp:     time.Now(),
+		Background:    "has-background-danger",
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 		Matched: true,
 	}
