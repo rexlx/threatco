@@ -532,6 +532,7 @@ func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
 			Name:          svc.Name,
 			URL:           svc.URL,
 			UploadService: svc.UploadService,
+			RouteMap:      svc.RouteMap,
 		})
 	}
 	out, err := json.Marshal(sanitized_services)

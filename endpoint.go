@@ -165,8 +165,13 @@ type XAPIKeyAuth struct {
 }
 
 func (p *PrefetchAuth) Apply(req *http.Request) {
+	if p.AppName == "" {
+		fmt.Println("PrefetchAuth.Apply: AppName is not set, using default 'threatco'")
+		p.AppName = "threatco"
+	}
 	req.Header.Set("X-App-Name", p.AppName)
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.Token)
 }
 

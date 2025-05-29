@@ -823,6 +823,19 @@ type mandiantError struct {
 	Error string `json:"error"`
 }
 
+func GetAttributedAssociationsString(indicator vendors.MandiantIndicator) string {
+	var result strings.Builder
+
+	for i, assoc := range indicator.AttributedAssociations {
+		if i > 0 {
+			result.WriteString("; ") // Separator between associations
+		}
+		result.WriteString(fmt.Sprintf("Name: %s, Type: %s", assoc.Name, assoc.Type))
+	}
+
+	return result.String()
+}
+
 func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	ep, ok := s.Targets[req.To]
 	if !ok {
@@ -837,20 +850,19 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 			Values: []string{req.Value},
 		},
 	}
-	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
+	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
 	// fmt.Println("mandiant url", url, req)
 	out, err := json.Marshal(postReq)
 	if err != nil {
 		s.Log.Println("MandiantHelper: server error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
-	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
+	request, err := http.NewRequest("POST", ep.GetURL(), bytes.NewBuffer(out))
 
 	if err != nil {
 		s.Log.Println("MandiantHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
-
 	resp := ep.Do(request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
@@ -872,12 +884,20 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("MandiantHelper: bad vendor response", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
+	ind := response.Indicators[0]
+	info := `mandiant got hits for that value with score %v: %v`
+	if len(ind.AttributedAssociations) > 0 {
+		info = fmt.Sprintf(info, ind.Mscore, GetAttributedAssociationsString(ind))
+	} else {
+		info = fmt.Sprintf(info, ind.Mscore, "no attributed associations")
+	}
+
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
 		Background: "has-background-danger",
-		Info:       "under development",
+		Info:       info,
 		From:       req.To,
-		Value:      "under development",
+		Value:      req.Value,
 		Link:       req.TransactionID,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 		Matched: true,
