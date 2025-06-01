@@ -823,6 +823,107 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+func (s *Server) FileToIOCHandler(w http.ResponseWriter, r *http.Request) {
+	var fileData bytes.Buffer
+	var UploadResponse uploadResponse
+	// Copy the request body (file data) to the buffer
+	_, err := io.Copy(&fileData, r.Body)
+	if err != nil {
+		http.Error(w, "Error reading file data", http.StatusInternalServerError)
+		return
+	}
+	defer s.addStat("upload_file_requests", 1)
+	defer func(start time.Time) {
+		s.Log.Println("UploadFileHandler took", time.Since(start))
+	}(time.Now())
+	chunkSize := r.ContentLength
+	filename := r.Header.Get("X-filename")
+	safeFilename := filepath.Base(filename)
+
+	newFile, err := RemoveTimestamp("_", safeFilename)
+	if err != nil {
+		fmt.Println("error removing timestamp", err)
+		// http.Error(w, err.Error(), http.StatusInternalServerError)
+		// return
+	}
+	if newFile != "" {
+		filename = newFile
+	}
+
+	lastChunk := r.Header.Get("X-last-chunk")
+	// fmt.Println(chunkSize, filename, lastChunk)
+	uploadHanlder, ok := store.GetFile(filename)
+	if !ok {
+		uploadHanlder = UploadHandler{
+			ID:       uuid.New().String(),
+			Data:     fileData.Bytes(),
+			FileSize: chunkSize,
+		}
+		go store.AddFile(filename, uploadHanlder)
+	} else {
+		uploadHanlder.Data = append(uploadHanlder.Data, fileData.Bytes()...)
+		uploadHanlder.FileSize += chunkSize
+	}
+
+	if lastChunk == "true" {
+		fmt.Println("last chunk", uploadHanlder.FileSize)
+		uploadHanlder.Complete = true
+	}
+
+	go store.AddFile(filename, uploadHanlder)
+
+	if uploadHanlder.Complete {
+		hasher := sha256.New()
+		_, err := hasher.Write(uploadHanlder.Data)
+		if err != nil {
+			http.Error(w, "Error hashing file data", http.StatusInternalServerError)
+			return
+		}
+		hash := hex.EncodeToString(hasher.Sum(nil))
+		uid := uuid.New().String()
+		info := fmt.Sprintf("%v: File %s uploaded with hash %s", uid, filename, hash)
+		s.LogInfo(info)
+		UploadResponse.ID = uid
+		UploadResponse.Status = info
+		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
+		go func(id string) {
+			var req ProxyRequest
+			req.To = "misp"
+			req.Type = "sha256"
+			req.Value = hash
+			req.From = "file to ioc handler"
+			req.TransactionID = id
+			res, err := s.ProxyHelper(req)
+			if err != nil {
+				s.RespCh <- ResponseItem{
+					Vendor: "file to ioc handler",
+					ID:     id,
+					Time:   time.Now(),
+					Data:   []byte(fmt.Sprintf("error: %v", err)),
+				}
+				s.Log.Println("error", err)
+				return
+			}
+
+			// w.Write(res)
+			store.DeleteFile(filename)
+			newResponse := ResponseItem{
+				Vendor: "file upload handler",
+				ID:     id,
+				Time:   time.Now(),
+				Data:   res,
+			}
+			s.RespCh <- newResponse
+		}(uid)
+	}
+	out, err := json.Marshal(UploadResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 	s.Log.Println("LogsSSRHandler")
 	s.Memory.RLock()
