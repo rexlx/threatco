@@ -19,6 +19,7 @@ import (
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/types"
+	"github.com/google/uuid"
 	"github.com/rexlx/threatco/vendors"
 )
 
@@ -355,7 +356,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 	// return resp, nil
 }
 
-func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Event) ([]byte, error) {
+func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]byte, error) {
 	// fmt.Println("ParseOtherMispResponse")
 	if len(response) != 0 {
 		if len(response) > 1 {
@@ -409,7 +410,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Eve
 	})
 }
 
-func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Response) ([]byte, error) {
+func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
 			return json.Marshal(SummarizedEvent{
@@ -651,11 +652,11 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.AddResponse("misp", req.TransactionID, resp)
 
-	var response vendors.Response
+	var response vendors.MispEventResponse
 	err = json.Unmarshal(resp, &response)
 
 	if err != nil {
-		var e []vendors.Event
+		var e []vendors.MispEvent
 		err := json.Unmarshal(resp, &e)
 		if err != nil {
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
@@ -981,6 +982,132 @@ func (u *UploadStore) DeleteFile(id string) {
 	delete(u.Files, id)
 }
 
-// func (u *UploadStore) BroadcastUpload(uh UploadHandler)
+// 48646fb84908c16c4b13b0fb4d720549fd0e4fdde8b9bd1276127719659ce798
 
-// func NewUploadHandler
+func (s *Server) addMispAttribute(eventID, attrType, attrValue, category, distribution, comment string, toIDS *bool) ([]byte, error) {
+	defer s.addStat("add_attribute_internal_calls", 1)
+	start := time.Now()
+	defer func() {
+		s.Log.Println("addMispAttribute call took", time.Since(start))
+	}()
+
+	if eventID == "" {
+		return nil, fmt.Errorf("eventID is required")
+	}
+	if attrType == "" {
+		return nil, fmt.Errorf("attribute type is required")
+	}
+	if attrValue == "" {
+		return nil, fmt.Errorf("attribute value is required")
+	}
+
+	mispTarget, ok := s.Targets["misp"]
+	if !ok {
+		return nil, fmt.Errorf("misp endpoint configuration not found in Targets")
+	}
+
+	// Set defaults
+	if category == "" {
+		category = "Network activity"
+	}
+	if distribution == "" {
+		distribution = "0"
+	}
+	finalToIDS := true
+	if toIDS != nil {
+		finalToIDS = *toIDS
+	}
+
+	attributePayload := AddAttrSchema{
+		EventID:      eventID,
+		Category:     category,
+		Type:         attrType,
+		Value:        attrValue,
+		ToIDS:        finalToIDS,
+		UUID:         uuid.New().String(),
+		Distribution: distribution,
+		Comment:      comment,
+	}
+
+	payloadBytes, err := json.Marshal(attributePayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal attribute payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/attributes/add/%s", mispTarget.GetURL(), eventID)
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MISP attribute request: %w", err)
+	}
+	// Headers like Content-Type, Accept, and Authorization should be handled by mispTarget.Do or set here
+	// request.Header.Set("Content-Type", "application/json")
+	// request.Header.Set("Accept", "application/json")
+	// request.Header.Set("Authorization", "YOUR_MISP_API_KEY") // Handled by Endpoint.Do in this example
+
+	s.Log.Println("Sending add attribute request to MISP:", url, "Payload:", string(payloadBytes))
+	respBody := mispTarget.Do(request)
+
+	s.Log.Println("Successfully added attribute to MISP event", eventID, ". Response:", string(respBody))
+	return respBody, nil
+}
+
+func (s *Server) createMispEvent(eventDetails vendors.MispEvent) (string, []byte, error) {
+	defer s.addStat("create_event_internal_calls", 1)
+	start := time.Now()
+	defer func() {
+		s.Log.Println("createMispEvent call took", time.Since(start))
+	}()
+
+	if eventDetails.Info == "" {
+		return "", nil, fmt.Errorf("event info is required to create an event")
+	}
+
+	// Apply defaults if not provided in eventDetails
+	if eventDetails.Distribution == "" {
+		eventDetails.Distribution = "0" // Your organisation only
+	}
+	if eventDetails.ThreatLevelID == "" {
+		eventDetails.ThreatLevelID = "4" // Undefined
+	}
+	if eventDetails.Analysis == "" {
+		eventDetails.Analysis = "0" // Initial
+	}
+	if eventDetails.Date == "" {
+		eventDetails.Date = time.Now().Format("2006-01-02") // Today's date
+	}
+
+	mispTarget, ok := s.Targets["misp"]
+	if !ok {
+		return "", nil, fmt.Errorf("misp endpoint configuration not found in Targets")
+	}
+
+	url := fmt.Sprintf("%s/events", mispTarget.GetURL())
+
+	payloadBytes, err := json.Marshal(eventDetails)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to marshal event creation payload: %w", err)
+	}
+
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create MISP event request: %w", err)
+	}
+	// Headers handled by mispTarget.Do in this example
+
+	s.Log.Println("Sending create event request to MISP:", url, "Payload:", string(payloadBytes))
+	respBody := mispTarget.Do(request)
+
+	// Parse the response to get the event ID
+	var mispResponse vendors.MispEventResponse
+	if err := json.Unmarshal(respBody, &mispResponse); err != nil {
+		s.Log.Println("Failed to unmarshal MISP event creation response:", err, "Body:", string(respBody))
+		return "", respBody, fmt.Errorf("failed to unmarshal MISP event creation response: %w. Body: %s", err, string(respBody))
+	}
+	if len(mispResponse.Response) == 0 {
+		s.Log.Println("MISP event creation response is empty")
+		return "", respBody, fmt.Errorf("misp event creation response is empty")
+	}
+	eventID := mispResponse.Response[0].Event.ID
+	s.Log.Println("Successfully created MISP event with ID:", eventID, ". Response:", string(respBody))
+	return eventID, respBody, nil
+}

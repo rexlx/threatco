@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Event struct {
+type MispEvent struct {
 	ID                 string      `json:"id"`
 	OrgID              string      `json:"org_id"`
 	Distribution       string      `json:"distribution"`
@@ -34,9 +34,9 @@ type Event struct {
 	Attribute          []Attribute `json:"Attribute"`
 }
 
-type Response struct {
+type MispEventResponse struct {
 	Response []struct {
-		Event Event `json:"Event"`
+		Event MispEvent `json:"Event"`
 	} `json:"response"`
 }
 
@@ -54,18 +54,18 @@ type Orgc struct {
 	Local bool   `json:"local"`
 }
 
-func (e *Event) SetTimestampString(tstamp, published, sighted int64) error {
+func (e *MispEvent) SetTimestampString(tstamp, published, sighted int64) error {
 	e.Timestamp = strconv.Itoa(int(tstamp))
 	e.PublishTimestamp = strconv.Itoa(int(published))
 	e.SightingTimestamp = strconv.Itoa(int(sighted))
 	return nil
 }
 
-func NewEvent(org, dist, info, analysis, threat, xuuid string) *Event {
+func NewEvent(org, dist, info, analysis, threat, xuuid string) *MispEvent {
 	attrs := make([]Attribute, 0)
 	now := time.Now().Unix()
 	id := uuid.New()
-	e := &Event{
+	e := &MispEvent{
 		Attribute:     attrs,
 		UUID:          id.String(),
 		OrgID:         org,
