@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -1110,4 +1112,184 @@ func (s *Server) createMispEvent(eventDetails vendors.MispEvent) (string, []byte
 	eventID := mispResponse.Response[0].Event.ID
 	s.Log.Println("Successfully created MISP event with ID:", eventID, ". Response:", string(respBody))
 	return eventID, respBody, nil
+}
+
+func (s *Server) SplunkHelper(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		s.Log.Println("SplunkHelper: target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
+	}
+
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
+	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
+	// fmt.Println("splunk url", url, req)
+	searchString := `search index=main sourcetype=syslog process=threatco value="%s" earliest=-1d latest=now`
+	searchString = fmt.Sprintf(searchString, req.Value)
+	data := struct {
+		Search string `json:"search"`
+		Output string `json:"output_mode"`
+	}{
+		Search: searchString,
+		Output: "json",
+	}
+	out, err := json.Marshal(data)
+	if err != nil {
+		s.Log.Println("SplunkHelper: server error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
+	if err != nil {
+		s.Log.Println("SplunkHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+	go s.addStat(ep.GetURL(), float64(len(resp)))
+	go s.AddResponse("splunk", req.TransactionID, resp)
+
+	var response vendors.SplunkExportResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		s.Log.Println("SplunkHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       "under development",
+		From:       req.To,
+		Value:      req.Value,
+		ID:         "under dev",
+		Link:       req.TransactionID,
+	}
+	return json.Marshal(sum)
+}
+
+// Target represents a Splunk target (adjust as needed)
+type Target struct {
+	URL      string
+	Username string
+	Password string
+}
+
+// GetURL returns the target's URL
+func (t Target) GetURL() string {
+	return t.URL
+}
+
+// ErrorXMLResponse represents a potential XML error response
+type ErrorXMLResponse struct {
+	XMLName  xml.Name `xml:"response"`
+	Messages []struct {
+		Text string `xml:"text"`
+	} `xml:"messages>msg"`
+}
+
+// SearchResult represents an individual search result event
+type SearchResult struct {
+	Raw        string `json:"_raw"`
+	Time       string `json:"_time"`
+	Host       string `json:"host"`
+	Source     string `json:"source"`
+	SourceType string `json:"sourcetype"`
+	Process    string `json:"process"`
+	Value      string `json:"value"`
+}
+
+// StreamResult represents the JSON structure for export endpoint
+type StreamResult struct {
+	Result SearchResult `json:"result"`
+}
+
+// SplunkHelper searches Splunk for events matching the request
+func (s *Server) SplunkHelper2(req ProxyRequest) ([]byte, error) {
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		s.Log.Println("SplunkHelper: target not found")
+		return CreateAndWriteSummarizedEvent(req, true, "target not found")
+	}
+
+	// Use the export endpoint for streaming JSON
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
+	searchString := `search index=main sourcetype=syslog process=threatco value="%s" earliest=-1d latest=now`
+	searchString = fmt.Sprintf(searchString, req.Value)
+	data := url.Values{
+		"search":      {searchString},
+		"output_mode": {"json"},
+	}
+
+	// Alternative with spath if JSON fields are not extracted:
+	// searchString := fmt.Sprintf(`search index=main sourcetype=syslog process=threatco earliest=-1d latest=now | spath input=_raw | search value="%s"`, req.Value)
+	// data := url.Values{
+	//     "search":      {searchString},
+	//     "output_mode": {"json"},
+	// }
+
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		s.Log.Println("SplunkHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(request)
+	if err != nil {
+		s.Log.Println("SplunkHelper: request execution error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request execution error %v", err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			s.Log.Println("SplunkHelper: failed to read error response", err)
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to read error response %v", err))
+		}
+		// Attempt to parse XML error response
+		var xmlErr ErrorXMLResponse
+		if err := xml.Unmarshal(body, &xmlErr); err == nil && len(xmlErr.Messages) > 0 {
+			s.Log.Println("SplunkHelper: API error", xmlErr.Messages[0].Text)
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("API error: %s", xmlErr.Messages[0].Text))
+		}
+		s.Log.Println("SplunkHelper: unexpected status code", resp.StatusCode, string(body))
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unexpected status code %d: %s", resp.StatusCode, string(body)))
+	}
+
+	// Collect streaming JSON results
+	var results []SearchResult
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue // Skip empty lines
+		}
+
+		var streamResult StreamResult
+		if err := json.Unmarshal([]byte(line), &streamResult); err != nil {
+			s.Log.Println("SplunkHelper: failed to decode JSON line", err, line)
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to decode JSON line: %v", err))
+		}
+		results = append(results, streamResult.Result)
+	}
+
+	if err := scanner.Err(); err != nil {
+		s.Log.Println("SplunkHelper: error reading stream", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error reading stream: %v", err))
+	}
+
+	// Marshal results to []byte for return
+	out, err := json.Marshal(results)
+	if err != nil {
+		s.Log.Println("SplunkHelper: failed to marshal results", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to marshal results: %v", err))
+	}
+
+	return out, nil
 }

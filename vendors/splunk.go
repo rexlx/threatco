@@ -11,6 +11,15 @@ type SearchJobResponse struct {
 	Sid string `json:"sid"`
 }
 
+type SplunkExportResponse struct {
+	Preview bool `json:"preview"`
+	LastRow bool `json:"lastrow"`
+	Offset  int  `json:"offset"`
+	Results struct {
+		Raw string `json:"_raw"`
+	}
+}
+
 type JobStatusResponse struct {
 	Entry []struct {
 		Content struct {
