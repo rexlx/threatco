@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -39,6 +38,8 @@ func (s *Server) ProxyHelper(req ProxyRequest) ([]byte, error) {
 		return s.MandiantHelper(req)
 	case "crowdstrike":
 		return s.CrowdstrikeHelper(req)
+	case "splunk":
+		return s.SplunkHelper(req)
 	case "domaintools":
 		switch req.Route {
 		case "domain":
@@ -1238,58 +1239,41 @@ func (s *Server) SplunkHelper2(req ProxyRequest) ([]byte, error) {
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{}
-	resp, err := client.Do(request)
-	if err != nil {
-		s.Log.Println("SplunkHelper: request execution error", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request execution error %v", err))
+	res := ep.Do(request)
+	if len(res) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			s.Log.Println("SplunkHelper: failed to read error response", err)
-			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to read error response %v", err))
+	go s.addStat(ep.GetURL(), float64(len(res)))
+	go s.AddResponse("splunk", req.TransactionID, res)
+	var results []StreamResult
+	decoder := json.NewDecoder(bytes.NewReader(res))
+	for {
+		var result StreamResult
+		if err := decoder.Decode(&result); err != nil {
+			if err == io.EOF {
+				break // End of stream
+			}
+			s.Log.Println("SplunkHelper: error decoding JSON", err)
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error decoding JSON %v", err))
 		}
-		// Attempt to parse XML error response
-		var xmlErr ErrorXMLResponse
-		if err := xml.Unmarshal(body, &xmlErr); err == nil && len(xmlErr.Messages) > 0 {
-			s.Log.Println("SplunkHelper: API error", xmlErr.Messages[0].Text)
-			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("API error: %s", xmlErr.Messages[0].Text))
-		}
-		s.Log.Println("SplunkHelper: unexpected status code", resp.StatusCode, string(body))
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unexpected status code %d: %s", resp.StatusCode, string(body)))
+		results = append(results, result)
 	}
-
-	// Collect streaming JSON results
-	var results []SearchResult
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue // Skip empty lines
-		}
-
-		var streamResult StreamResult
-		if err := json.Unmarshal([]byte(line), &streamResult); err != nil {
-			s.Log.Println("SplunkHelper: failed to decode JSON line", err, line)
-			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to decode JSON line: %v", err))
-		}
-		results = append(results, streamResult.Result)
+	if len(results) == 0 {
+		s.Log.Println("SplunkHelper: no hits found")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
 	}
-
-	if err := scanner.Err(); err != nil {
-		s.Log.Println("SplunkHelper: error reading stream", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error reading stream: %v", err))
+	info := fmt.Sprintf("found %d events matching the value", len(results))
+	s.Log.Println("SplunkHelper: found", len(results), "events matching the value")
+	sum := SummarizedEvent{
+		Timestamp:     time.Now(),
+		Background:    "has-background-warning",
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		ID:            req.TransactionID,
+		Link:          req.TransactionID,
+		ThreatLevelID: "0",
+		AttrCount:     len(results),
 	}
-
-	// Marshal results to []byte for return
-	out, err := json.Marshal(results)
-	if err != nil {
-		s.Log.Println("SplunkHelper: failed to marshal results", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to marshal results: %v", err))
-	}
-
-	return out, nil
+	return json.Marshal(sum)
 }

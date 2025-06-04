@@ -349,6 +349,22 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		go s.DB.StoreResponse(uid, resp)
 		w.Write(resp)
 		return
+	case "splunk":
+		resp, err := s.SplunkHelper(req)
+		if err != nil {
+			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+			if err != nil {
+				s.Log.Println("bigtime error", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			go s.DB.StoreResponse(uid, r)
+			w.Write(r)
+			return
+		}
+		go s.DB.StoreResponse(uid, resp)
+		w.Write(resp)
+		return
 	case "virustotal":
 		// s.Log.Println("virustotal", req)
 		resp, err := s.VirusTotalHelper(req)
