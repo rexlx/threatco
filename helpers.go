@@ -1312,6 +1312,7 @@ func (s *Server) SplunkHelper2(req ProxyRequest) ([]byte, error) {
 		Value:      req.Value,
 		Link:       req.TransactionID,
 		AttrCount:  len(results),
+		Matched:    true,
 	}
 	out, err = json.Marshal(sum)
 	if err != nil {
