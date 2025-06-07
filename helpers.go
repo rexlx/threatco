@@ -235,7 +235,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 		info = "domaintools rate limit exceeded"
 		return json.Marshal(SummarizedEvent{
 			Timestamp:  time.Now(),
-			Background: "has-background-warning",
+			Background: "has-background-info",
 			Info:       info,
 			From:       req.To,
 			Value:      req.Value,
@@ -256,7 +256,7 @@ func (s *Server) DomainToolsHelper(req ProxyRequest) ([]byte, error) {
 	info = "domaintools returned some hits for that value"
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-danger",
+		Background: "has-background-warning",
 		Info:       info,
 		From:       req.To,
 		Value:      req.Value,
@@ -325,7 +325,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 		case float64:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
-				Background: "has-background-danger",
+				Background: "has-background-warning",
 				Info:       fmt.Sprintf("domaintools results count was %v", results),
 				From:       req.To,
 				Value:      req.Value,
@@ -349,7 +349,7 @@ func (s *Server) DomainToolsClassicHelper(req ProxyRequest) ([]byte, error) {
 	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-danger",
+		Background: "has-background-warning",
 		Info:       info,
 		From:       req.To,
 		Value:      req.Value,
@@ -372,7 +372,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Mis
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
-				Background:    "has-background-danger",
+				Background:    "has-background-warning",
 				From:          req.To,
 				ID:            "multiple hits",
 				AttrCount:     attrs,
@@ -389,7 +389,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Mis
 			}
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
-				Background:    "has-background-danger",
+				Background:    "has-background-warning",
 				From:          req.To,
 				ID:            response[0].ID,
 				AttrCount:     attrs,
@@ -420,7 +420,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Mis
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
-				Background:    "has-background-danger",
+				Background:    "has-background-warning",
 				From:          req.To,
 				ID:            "multiple",
 				Value:         req.Value,
@@ -432,7 +432,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Mis
 		} else {
 			return json.Marshal(SummarizedEvent{
 				Timestamp:     time.Now(),
-				Background:    "has-background-danger",
+				Background:    "has-background-warning",
 				Info:          response.Response[0].Event.Info,
 				From:          req.To,
 				ID:            response.Response[0].Event.ID,
@@ -498,7 +498,7 @@ func (s *Server) VirusTotalHelper(req ProxyRequest) ([]byte, error) {
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-danger",
+		Background: "has-background-warning",
 		Info:       info,
 		From:       req.To,
 		Value:      response.Data.ID,
@@ -550,22 +550,30 @@ func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]b
 
 }
 
+type matchResponse struct {
+	Matched bool   `json:"matched"`
+	Kind    string `json:"kind"`
+	Value   string `json:"value"`
+	ID      int    `json:"id,omitempty"`
+	Created int64  `json:"created,omitempty"`
+}
+
 func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
+
 	ep, ok := s.Targets[req.To]
 	if !ok {
 		s.Log.Println("DeepFryHelper: target not found")
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 
-	thisUrl := fmt.Sprintf("%s/get/ip4", ep.GetURL())
+	thisUrl := fmt.Sprintf("%s/search", ep.GetURL())
 	// fmt.Println("deep fry url", url, req)
 	data := struct {
-		Message string `json:"message"`
-		Value   string `json:"value"`
-		Error   bool   `json:"error"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
 	}{
-		Message: "",
-		Value:   req.Value,
+		Kind:  req.Type,
+		Value: req.Value,
 	}
 
 	out, err := json.Marshal(data)
@@ -585,41 +593,27 @@ func (s *Server) DeepFryHelper(req ProxyRequest) ([]byte, error) {
 	}
 	go s.addStat(ep.GetURL(), float64(len(resp)))
 	go s.AddResponse("deepfry", req.TransactionID, resp)
-	response := struct {
-		ID      int    `json:"id"`
-		Message string `json:"message"`
-		Value   string `json:"value"`
-		Error   bool   `json:"error"`
-	}{
-		Message: "",
-		Value:   "",
-	}
+	var response matchResponse
+	var sum SummarizedEvent
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
-	var matched bool
-	var id string
-	bg := "has-background-dark"
-	if !response.Error {
-		matched = true
-		bg = "has-background-primary-dark"
-		id = strconv.Itoa(response.ID)
+	if !response.Matched {
+		s.Log.Println("DeepFryHelper: no hits")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits")
 	}
-	fmt.Println(response)
-	sum := SummarizedEvent{
-		Timestamp:     time.Now(),
-		AttrCount:     0,
-		ThreatLevelID: "1",
-		ID:            id,
-		Background:    bg,
-		Info:          "that IP looks nosey!",
-		From:          req.To,
-		Value:         response.Value,
-		Link:          req.TransactionID,
-		// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched: matched,
+	s.Log.Printf("DeepFryHelper: found %s with id %d", response.Value, response.ID)
+	sum = SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       fmt.Sprintf("found %s with id %d", response.Value, response.ID),
+		From:       req.To,
+		Value:      response.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
 	}
+
 	return json.Marshal(sum)
 }
 
@@ -901,7 +895,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		AttrCount:     attrCount,
 		ThreatLevelID: strconv.Itoa(ind.ThreatRating.ThreatScore),
 		Timestamp:     time.Now(),
-		Background:    "has-background-danger",
+		Background:    "has-background-warning",
 		Info:          info,
 		From:          req.To,
 		Value:         req.Value,
@@ -916,7 +910,7 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 	if e {
 		return json.Marshal(SummarizedEvent{
 			Timestamp:  time.Now(),
-			Background: "has-background-warning",
+			Background: "has-background-grey",
 			Info:       info,
 			From:       req.To,
 			ID:         "no hits",

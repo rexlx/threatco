@@ -39,7 +39,7 @@ func NewContextualizer(checks *PrivateChecks) *Contextualizer {
 			"url":      regexp.MustCompile(`((https?|ftp):\/\/[^\s/$.?#].[^\s]*)`),
 			"domain":   regexp.MustCompile(`([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`),
 			"filepath": regexp.MustCompile(`([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)`),
-			"filename": regexp.MustCompile(`^[\w\-. ]+\.[\w]{2,4}$`),
+			"filename": regexp.MustCompile(`^[\w\-. ]+\.[a-zA-Z]{2,4}$`),
 		},
 	}
 }

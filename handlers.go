@@ -472,7 +472,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			Timestamp:     time.Now(),
 			From:          req.To,
 			Error:         true,
-			Background:    "has-background-danger",
+			Background:    "has-background-grey",
 			Info:          fmt.Sprintf("unknown target %s", req.To),
 			ThreatLevelID: "0",
 			Value:         req.Value,
