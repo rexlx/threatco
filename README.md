@@ -1,5 +1,5 @@
 # threatco
-companion application for the insights extension. proxy requests to third party APIs for IOC enrichment.
+companion application for the [insights](https://github.com/rexlx/insights) [extension](https://chromewebstore.google.com/detail/insights/ahjeboeknahakdlhjilhhjlddijbcooi). proxy requests to third party APIs for IOC enrichment.
 
 ### key features
 - enrich users query by fanning out to all available plugins (third-party APIs)
@@ -40,7 +40,7 @@ in the example below the app would look for MISP_KEY and MISP_SECRET (even thoug
  ```
 
 ## adding the first user (or any!)
-```
+```bash
 # create a regular extension user (no password is required, so none is set)
 curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", "admin": false}'
 
@@ -52,9 +52,10 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 - [misp](https://github.com/MISP/MISP)
 - crowdstrike
 - mandiant
-- vmray (limited to file upload)
+- vmray (*limited to file upload*)
 - virustotal
 - domaintools
+- splunk (*limited access*)
 - [deepfry](https://github.com/rexlx/deepfry)
 
 
