@@ -83,7 +83,6 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for k, v := range out {
-		fmt.Println("parser", k, v)
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
 				if t == k && len(v) > 0 { // later check is service is rate limited
@@ -105,7 +104,6 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 						pr.From = "parser"
 						uid := uuid.New().String()
 						pr.TransactionID = uid
-						fmt.Println("parser match", pr)
 						wg.Add(1)
 						go func(id string, first *bool) {
 							defer wg.Done()
@@ -520,15 +518,10 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Cache.Responses[id] = event
 	}
-	// out, err := json.Marshal(event)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+
 	if event.Data == nil || len(event.Data) == 0 {
 		w.Write([]byte("no data for this event, but a record exists"))
 	}
-	fmt.Println("event", string(event.Data))
 	w.Write(event.Data)
 }
 
@@ -788,7 +781,7 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if lastChunk == "true" {
-		fmt.Println("last chunk", uploadHanlder.FileSize)
+		// fmt.Println("last chunk", uploadHanlder.FileSize)
 		uploadHanlder.Complete = true
 	}
 
@@ -882,7 +875,7 @@ func (s *Server) FileToIOCHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if lastChunk == "true" {
-		fmt.Println("last chunk", uploadHanlder.FileSize)
+		// fmt.Println("last chunk", uploadHanlder.FileSize)
 		uploadHanlder.Complete = true
 	}
 

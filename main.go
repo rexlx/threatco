@@ -16,9 +16,6 @@ import (
 func main() {
 	var logger *log.Logger
 	flag.Parse()
-	//dsn := "user=postgres password=monkeyintheattic host=%v dbname=threatco"
-	//*dbLocation = fmt.Sprintf(dsn, GetDBHost())
-	fmt.Println(*dbLocation)
 	var c Configuration
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -34,7 +31,7 @@ func main() {
 		file, err := os.OpenFile("threatco.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
 			fmt.Println("Error opening log file:", err)
-			os.Exit(1) // Or handle the error more gracefully
+			os.Exit(1)
 		}
 		defer file.Close()
 		logger = log.New(file, "", log.LstdFlags)

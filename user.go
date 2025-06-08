@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,7 +70,6 @@ func (u *User) SetPassword(password string) error {
 	}
 	u.Hash = hash
 	u.Password = string(hash)
-	fmt.Println("SetPassword", u.Email)
 	return nil
 }
 
