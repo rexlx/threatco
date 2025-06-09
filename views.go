@@ -162,6 +162,6 @@ func (s *Server) ViewServicesHandlerBad(w http.ResponseWriter, r *http.Request) 
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
 
-func (s *Server) ViewUserOnboarding(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, views.OnboardingView)
-}
+// func (s *Server) ViewUserOnboarding(w http.ResponseWriter, r *http.Request) {
+// 	fmt.Fprintf(w, views.OnboardingView)
+// }
