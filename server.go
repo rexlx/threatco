@@ -121,6 +121,9 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
 	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
+	if dbLocation == "" {
+		dbLocation = os.Getenv("THREATCO_DB_LOCATION")
+	}
 	switch dbType {
 	case "bbolt":
 		db, err := bbolt.Open(dbLocation, 0600, nil)
