@@ -36,7 +36,7 @@ func main() {
 		defer file.Close()
 		logger = log.New(file, "", log.LstdFlags)
 	}
-	s := NewServer("1", ":8081", *dbMode, *dbLocation, logger)
+	s := NewServer("1", ":8080", *dbMode, *dbLocation, logger)
 
 	s.InitializeFromConfig(&c, true)
 	PassStore(&UploadStore{Files: make(map[string]UploadHandler), Memory: &sync.RWMutex{}, ServerConfig: &c})

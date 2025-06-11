@@ -1,13 +1,12 @@
 {
-    "server_id": "micah",
-    "database_type": "postgres",
+    "server_id": "trudy",
     "first_user_mode": true,
     "bind_address": "",
     "fqdn": "example.com",
     "services": [
         {
             "name": "misp-dev",
-            "url": "https://192.168.86.91:443",
+            "url": "https://192.168.122.68:443",
             "rate_limited": false,
             "insecure": true,
             "auth_type": "token",
@@ -24,7 +23,7 @@
             "rate_limited": false,
             "insecure": false,
             "auth_type": "basic",
-            "key": "xxxx-xxxx-xxxx-xxxx",
+            "key": "",
             "description": "DomainTools API, limited to 1000 requests per day",
             "route_map": [
                 {
@@ -54,34 +53,14 @@
             ]
         },
         {
-            "kind": "fake1" ,
-            "name": "username",
-            "url": "https://api.domaintools.com",
-            "type": ["email", "url", "domain"],
-            "rate_limited": false,
-            "insecure": false,
-            "auth_type": "basic",
-            "key": "xxxx-xxxx-xxxx-xxxx"
-        },
-        {
-            "kind": "fake2" ,
-            "name": "username",
-            "url": "https://api.domaintools.com",
-            "type": ["email", "url", "domain"],
-            "rate_limited": false,
-            "insecure": false,
-            "auth_type": "basic",
-            "key": "xxxx-xxxx-xxxx-xxxx"
-        },
-        {
             "name": "deepfry-ip",
-            "url": "http://localhost:8080",
+            "url": "http://kenmeri:8081",
             "rate_limited": false,
             "insecure": false,
             "auth_type": "key",
-            "key": "onnek",
+            "key": "",
             "kind": "deepfry",
-            "type": ["ipv4"],
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
             "description": "deepfry is for testing only, but tells you is a ip or url has been sent to it already"
         },
         {
@@ -126,7 +105,7 @@
             }]
         }
     ],
-    "http_port": "8081",
+    "http_port": "8080",
     "https_port": "8443",
     "http_too": true,
     "tls_cert": "/path/to/tls.cert",
