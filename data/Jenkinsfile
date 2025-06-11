@@ -84,7 +84,7 @@ pipeline {
                         docker stop threatco-prod || true
                         docker rm threatco-prod || true
                         docker run -d --name threatco-prod \\
-                                  -p 8081:8080 \\
+                                  -p 8081:8081 \\
                                   --restart always \\
                                   -e THREATCO_DB_LOCATION="${PROD_DB_LOCATION}" \\
                                   -e MISP_KEY="${PROD_MISP_KEY}" \\
