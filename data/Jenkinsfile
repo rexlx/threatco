@@ -1,11 +1,9 @@
-// Jenkinsfile (Declarative Pipeline)
-
 pipeline {
-    agent any
+    agent { label 'dreadco' }
 
     environment {
         PATH = "/usr/local/go/bin:${env.PATH}"
-        DOCKER_IMAGE_BASE_NAME = "your-docker-registry/your-repo/threatco" // << TODO: REPLACE with your actual registry/repo base name
+        DOCKER_IMAGE_BASE_NAME = "your-docker-registry/your-repo/threatco"
     }
 
     parameters {
@@ -45,16 +43,12 @@ pipeline {
                     echo "INFO: Building Docker image ${env.DOCKER_IMAGE_BASE_NAME} with tags: ${commitTag}, latest..."
                     sh "docker build -t ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag} -t ${env.DOCKER_IMAGE_BASE_NAME}:latest ."
                     
-                    echo "INFO: Logging into Docker registry..."
-                    // Example:
-                    // withCredentials([usernamePassword(credentialsId: 'your-docker-registry-credentials-id', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    //    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin your-docker-registry.example.com"
-                    // }
+                    // echo "INFO: Logging into Docker registry..."
                     
-                    echo "INFO: Pushing Docker image ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag}..."
-                    sh "docker push ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag}"
-                    echo "INFO: Pushing Docker image ${env.DOCKER_IMAGE_BASE_NAME}:latest..."
-                    sh "docker push ${env.DOCKER_IMAGE_BASE_NAME}:latest"
+                    // echo "INFO: Pushing Docker image ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag}..."
+                    // sh "docker push ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag}"
+                    // echo "INFO: Pushing Docker image ${env.DOCKER_IMAGE_BASE_NAME}:latest..."
+                    // sh "docker push ${env.DOCKER_IMAGE_BASE_NAME}:latest"
                 }
             }
             post {
@@ -70,52 +64,37 @@ pipeline {
                         sh "rm -f data/config.json"
                         sh "rmdir data || true"
                         echo "INFO: Logging out from Docker registry (if applicable)..."
-                        // Example:
-                        // sh "docker logout your-docker-registry.example.com"
                     }
                 }
             }
         }
 
-        stage('Deploy to Staging') {
+        stage('Deploy to Production (Example)') {
             steps {
                 script {
-                    // Placeholder for your staging deployment logic
-                    // This would typically involve:
-                    // 1. Accessing your staging environment (e.g., via SSH, kubectl context)
-                    // 2. Pulling the new image (e.g., ${env.DOCKER_IMAGE_BASE_NAME}:latest or ${env.DOCKER_IMAGE_BASE_NAME}:${commitTag})
-                    // 3. Stopping/removing the old container/pod
-                    // 4. Running the new container/pod, potentially mounting a staging-specific config if needed.
-                    //
-                    // Example for a simple Docker host deployment (replace with your actual logic):
-                    // def imageToDeploy = "${env.DOCKER_IMAGE_BASE_NAME}:latest"
-                    // withCredentials([file(credentialsId: 'threatco-staging-config', variable: 'STAGING_CONFIG_FILE')]) { // If staging needs a specific config
-                    //     sshagent(['your-ssh-credentials-id']) {
-                    //         sh """
-                    //             ssh your-user@your-staging-host.example.com <<EOF
-                    //             echo 'Pulling new image...'
-                    //             docker pull ${imageToDeploy}
-                    //             echo 'Stopping and removing old container...'
-                    //             docker stop threatco-staging || true
-                    //             docker rm threatco-staging || true
-                    //             echo 'Starting new container...'
-                    //             # scp ${STAGING_CONFIG_FILE} your-user@your-staging-host.example.com:/opt/staging_configs/threatco/config.json # If you need to copy a new config
-                    //             docker run -d --name threatco-staging \\
-                    //               -p 8080:8080 \\
-                    //               -v /opt/staging_configs/threatco/config.json:/app/config.json \\ # Mount the staging config
-                    //               --restart always \\
-                    //               ${imageToDeploy}
-                    //             echo 'Deployment to staging host initiated.'
-                    //             EOF
-                    //         """
-                    //     }
-                    // }
-                    echo "INFO: Deployment to Staging complete (placeholder)."
+                    echo "INFO: Initiating deployment to Production."
+                    def imageToDeploy = "${env.DOCKER_IMAGE_BASE_NAME}:latest"
+
+                    withCredentials([
+                        string(credentialsId: 'threatco-db-location-prod', variable: 'PROD_DB_LOCATION'),
+                        string(credentialsId: 'misp-key-prod', variable: 'PROD_MISP_KEY'),
+                        string(credentialsId: 'virustotal-key-prod', variable: 'PROD_VIRUSTOTAL_KEY')
+                    ]) {
+                        sh """
+                        docker run -d --name threatco-prod \\
+                                  -p 8080:8080 \\
+                                  --restart always \\
+                                  -e THREATCO_DB_LOCATION="${PROD_DB_LOCATION}" \\
+                                  -e MISP_KEY="${PROD_MISP_KEY}" \\
+                                  -e VIRUSTOTAL_KEY="${PROD_VIRUSTOTAL_KEY}" \\
+                                  ${imageToDeploy}
+                        """
+                                echo 'Deployment to production host initiated.'
+                    }
+                    echo "INFO: Deployment to Production complete."
                 }
             }
         }
-
-        // Add a 'Deploy to Production' stage here when ready, similar to staging but with production configs/approvals.
     }
 
     post {
@@ -125,11 +104,9 @@ pipeline {
         }
         success {
             echo 'SUCCESS: Pipeline completed successfully.'
-            // Consider adding notifications here
         }
         failure {
             echo 'FAILURE: Pipeline failed.'
-            // Consider adding notifications here
         }
         aborted {
             echo 'ABORTED: Pipeline was aborted.'
