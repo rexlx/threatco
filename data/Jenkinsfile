@@ -3,11 +3,11 @@ pipeline {
 
     environment {
         PATH = "/usr/local/go/bin:${env.PATH}"
-        DOCKER_IMAGE_BASE_NAME = "your-docker-registry/your-repo/threatco"
+        DOCKER_IMAGE_BASE_NAME = "threatco"
     }
 
     parameters {
-        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        string(name: 'GIT_BRANCH', defaultValue: 'master', description: 'Git branch to build')
         string(name: 'IMAGE_TAG_PREFIX', defaultValue: 'dev', description: 'Prefix for the image tag (e.g., dev, staging, prod, or version number)')
     }
 
@@ -76,20 +76,22 @@ pipeline {
                     def imageToDeploy = "${env.DOCKER_IMAGE_BASE_NAME}:latest"
 
                     withCredentials([
-                        string(credentialsId: 'threatco-db-location-prod', variable: 'PROD_DB_LOCATION'),
-                        string(credentialsId: 'misp-key-prod', variable: 'PROD_MISP_KEY'),
-                        string(credentialsId: 'virustotal-key-prod', variable: 'PROD_VIRUSTOTAL_KEY')
+                        string(credentialsId: 'PROD_DB_LOCATION', variable: 'PROD_DB_LOCATION'),
+                        string(credentialsId: 'PROD_MISP_KEY', variable: 'PROD_MISP_KEY'),
+                        string(credentialsId: 'PROD_VIRUSTOTAL_KEY', variable: 'PROD_VIRUSTOTAL_KEY')
                     ]) {
                         sh """
+                        docker stop threatco-prod || true
+                        docker rm threatco-prod || true
                         docker run -d --name threatco-prod \\
-                                  -p 8080:8080 \\
+                                  -p 8081:8080 \\
                                   --restart always \\
                                   -e THREATCO_DB_LOCATION="${PROD_DB_LOCATION}" \\
                                   -e MISP_KEY="${PROD_MISP_KEY}" \\
                                   -e VIRUSTOTAL_KEY="${PROD_VIRUSTOTAL_KEY}" \\
                                   ${imageToDeploy}
                         """
-                                echo 'Deployment to production host initiated.'
+                                echo "Deployment to production host initiated. ${imageToDeploy} is running in detached mode."
                     }
                     echo "INFO: Deployment to Production complete."
                 }
