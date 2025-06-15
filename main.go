@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -39,7 +38,7 @@ func main() {
 	s := NewServer("1", ":8080", *dbMode, *dbLocation, logger)
 
 	s.InitializeFromConfig(&c, true)
-	PassStore(&UploadStore{Files: make(map[string]UploadHandler), Memory: &sync.RWMutex{}, ServerConfig: &c})
+	PassStore(NewUploadStore(&c))
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	go func() {
 		for {
