@@ -1114,11 +1114,35 @@ func NewUploadStore(config *Configuration) *UploadStore {
 	}
 }
 
-// func (u *UploadStore) FanOut(id string) {
-// 	u.Memory.RLock()
-// 	file, ok := u.Files[id]
-// 	u.Memory.RUnlock()
-// }
+func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[string]*Endpoint) {
+	var wg sync.WaitGroup
+	u.Memory.RLock()
+	file, ok := u.Files[id]
+	u.Memory.RUnlock()
+	if !ok {
+		fmt.Println("File not found in UploadStore:", id)
+		return
+	}
+	for name, target := range endpoints {
+		// or if the upload bool is true?
+		kind, ok := u.Targets[name]
+		if !ok {
+			fmt.Println("UploadStore: target not found in UploadOperators:", name)
+			continue
+		}
+		wg.Add(1)
+		go func(c chan ResponseItem, t *Endpoint, f UploadHandler, k UploadOperator) {
+			defer wg.Done()
+			err := k(resch, f, *t)
+			if err != nil {
+				fmt.Println("UploadStore: error in upload operator for target", name, ":", err)
+				// c <- ResponseItem{}
+			}
+
+		}(resch, target, file, kind)
+	}
+	wg.Wait()
+}
 
 // 48646fb84908c16c4b13b0fb4d720549fd0e4fdde8b9bd1276127719659ce798
 

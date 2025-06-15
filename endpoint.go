@@ -18,6 +18,7 @@ type AuthMethod interface {
 }
 
 type Endpoint struct {
+	Name        string            `json:"name"`
 	Memory      *sync.RWMutex     `json:"-"`
 	RespCH      chan ResponseItem `json:"-"`
 	RateMark    time.Time         `json:"-"`
@@ -33,7 +34,7 @@ type Endpoint struct {
 	Gateway     *http.Client      `json:"-"`
 }
 
-func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem) *Endpoint {
+func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem, name string) *Endpoint {
 	mem := &sync.RWMutex{}
 	if insecure {
 		client := &http.Client{

@@ -307,7 +307,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		switch authName {
 		case "key":
 			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
@@ -315,7 +315,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Unlock()
 		case "token":
 			thisAuthType := &KeyAuth{Token: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
@@ -323,7 +323,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Unlock()
 		case "basic":
 			thisAuthType := &BasicAuth{Username: svc.Secret, Password: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
@@ -336,7 +336,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 				Secret:  svc.Secret,
 				Expires: svc.Expires,
 			}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
@@ -344,7 +344,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Unlock()
 		case "vmray":
 			thisAuthType := &VmRayAuth{Token: svc.Key}
-			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh)
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			s.Memory.Lock()
