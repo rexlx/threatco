@@ -310,6 +310,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
@@ -318,6 +319,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
@@ -326,6 +328,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
@@ -339,6 +342,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
@@ -347,6 +351,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()

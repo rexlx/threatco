@@ -18,20 +18,21 @@ type AuthMethod interface {
 }
 
 type Endpoint struct {
-	Name        string            `json:"name"`
-	Memory      *sync.RWMutex     `json:"-"`
-	RespCH      chan ResponseItem `json:"-"`
-	RateMark    time.Time         `json:"-"`
-	RateLimited bool              `json:"-"`
-	InFlight    int               `json:"-"`
-	MaxRequests int               `json:"-"`
-	RefillRate  time.Duration     `json:"-"`
-	Backlog     []*http.Request   `json:"-"`
-	Auth        AuthMethod        `json:"-"`
-	Path        string            `json:"path"`
-	URL         string            `json:"url"`
-	Key         string            `json:"key"`
-	Gateway     *http.Client      `json:"-"`
+	UploadService bool              `json:"upload_service"`
+	Name          string            `json:"name"`
+	Memory        *sync.RWMutex     `json:"-"`
+	RespCH        chan ResponseItem `json:"-"`
+	RateMark      time.Time         `json:"-"`
+	RateLimited   bool              `json:"-"`
+	InFlight      int               `json:"-"`
+	MaxRequests   int               `json:"-"`
+	RefillRate    time.Duration     `json:"-"`
+	Backlog       []*http.Request   `json:"-"`
+	Auth          AuthMethod        `json:"-"`
+	Path          string            `json:"path"`
+	URL           string            `json:"url"`
+	Key           string            `json:"key"`
+	Gateway       *http.Client      `json:"-"`
 }
 
 func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem, name string) *Endpoint {
