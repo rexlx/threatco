@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1479,4 +1480,26 @@ func (s *Server) SplunkHelper2(req ProxyRequest) ([]byte, error) {
 	}
 
 	return out, nil
+}
+
+func CheckConnectivity(url string) error {
+	parts := strings.Split(url, ":")
+	cleanUrl := parts[0]
+	fmt.Println(url, "Checking connectivity to", cleanUrl, parts)
+	// test fqdn
+	ips, err := net.LookupIP(cleanUrl)
+	if err != nil {
+		return fmt.Errorf("failed to resolve %s: %w", cleanUrl, err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("no IP addresses found for %s", cleanUrl)
+	}
+	fmt.Println("Resolved IPs for", cleanUrl, ":", ips)
+	conn, err := net.DialTimeout("tcp", url, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %w", url, err)
+	}
+	defer conn.Close()
+	fmt.Println("Successfully connected to", url)
+	return nil
 }

@@ -101,6 +101,12 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 	}
 	resp, err := e.Gateway.Do(req)
 	if err != nil {
+		e := CheckConnectivity(e.URL)
+		if e != nil {
+			fmt.Println("CheckConnectivity -> Endpoint.Do: error doing request", e)
+		} else {
+			fmt.Println("Endpoint.Do: failed to perorm request but passed connectivity check...")
+		}
 		return []byte(err.Error())
 	}
 	defer resp.Body.Close()
