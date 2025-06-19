@@ -34,9 +34,10 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Expose the application port
-ARG PORT=8080
-ENV PORT=${PORT}
-EXPOSE ${PORT}
+# ARG PORT=8080
+# ENV PORT=${PORT}
+# EXPOSE ${PORT}
+EXPOSE 8080
 
 # Run the entrypoint script on container startup.
 ENTRYPOINT ["/entrypoint.sh"]
