@@ -63,6 +63,12 @@ func main() {
 		Handler: s.Session.LoadAndSave(s.Gateway),
 	}
 	go s.ProcessTransientResponses()
+	fmt.Println("configured server with address:", s.Details.Address)
+	fmt.Println("configured server with address:", s.Details.Address)
+	fmt.Println("configured server with address:", s.Details.Address)
+	fmt.Println("configured server with address:", s.Details.Address)
+	fmt.Println("configured server with address:", s.Details.Address)
+	fmt.Println("configured server with address:", s.Details.Address)
 	s.LogInfo(fmt.Sprintf("Server started at %s", s.Details.Address))
 	log.Fatal(svr.ListenAndServe())
 }
