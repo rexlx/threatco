@@ -150,6 +150,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		},
 	}
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
+	fmt.Println("Server initialized with ID:", svr.ID, svr.Details.Address)
 	return svr
 }
 
@@ -366,6 +367,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Details.SupportedServices = cfg.Services
 	s.Details.FQDN = cfg.FQDN
 	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
+	fmt.Println("Server address:", s.Details.Address, cfg.BindAddress, cfg.HTTPPort)
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
 	s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode
