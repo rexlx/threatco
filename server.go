@@ -297,6 +297,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Log.Println("config file deleted")
 		}
 	}
+	fmt.Println(cfg.HTTPPort)
 	for _, svc := range cfg.Services {
 		u := svc.URL
 		parts := strings.Split(svc.AuthType, "|")
@@ -366,6 +367,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Details.SupportedServices = cfg.Services
 	s.Details.FQDN = cfg.FQDN
 	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
+	fmt.Println("configured server with address:", s.Details.Address)
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
 	s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode
