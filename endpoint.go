@@ -18,22 +18,24 @@ type AuthMethod interface {
 }
 
 type Endpoint struct {
-	Memory      *sync.RWMutex     `json:"-"`
-	RespCH      chan ResponseItem `json:"-"`
-	RateMark    time.Time         `json:"-"`
-	RateLimited bool              `json:"-"`
-	InFlight    int               `json:"-"`
-	MaxRequests int               `json:"-"`
-	RefillRate  time.Duration     `json:"-"`
-	Backlog     []*http.Request   `json:"-"`
-	Auth        AuthMethod        `json:"-"`
-	Path        string            `json:"path"`
-	URL         string            `json:"url"`
-	Key         string            `json:"key"`
-	Gateway     *http.Client      `json:"-"`
+	UploadService bool              `json:"upload_service"`
+	Name          string            `json:"name"`
+	Memory        *sync.RWMutex     `json:"-"`
+	RespCH        chan ResponseItem `json:"-"`
+	RateMark      time.Time         `json:"-"`
+	RateLimited   bool              `json:"-"`
+	InFlight      int               `json:"-"`
+	MaxRequests   int               `json:"-"`
+	RefillRate    time.Duration     `json:"-"`
+	Backlog       []*http.Request   `json:"-"`
+	Auth          AuthMethod        `json:"-"`
+	Path          string            `json:"path"`
+	URL           string            `json:"url"`
+	Key           string            `json:"key"`
+	Gateway       *http.Client      `json:"-"`
 }
 
-func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem) *Endpoint {
+func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem, name string) *Endpoint {
 	mem := &sync.RWMutex{}
 	if insecure {
 		client := &http.Client{
@@ -99,6 +101,12 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 	}
 	resp, err := e.Gateway.Do(req)
 	if err != nil {
+		e := CheckConnectivity(e.URL)
+		if e != nil {
+			fmt.Println("CheckConnectivity -> Endpoint.Do: error doing request", e)
+		} else {
+			fmt.Println("Endpoint.Do: failed to perorm request but passed connectivity check...")
+		}
 		return []byte(err.Error())
 	}
 	defer resp.Body.Close()
@@ -214,7 +222,7 @@ func (p *PrefetchAuth) GetAndStoreToken(stop chan bool) {
 			continue
 		}
 		p.Token = res.Token
-		fmt.Println("PrefetchAuth.GetAndStoreToken: token updated")
+		fmt.Println("PrefetchAuth.GetAndStoreToken: token updated", len(p.Token), "chars, expires in", res.Expires, "seconds")
 		select {
 		case <-ticker.C:
 			continue

@@ -5,6 +5,7 @@
     "fqdn": "example.com",
     "services": [
         {
+            "comment": "this is a simple service example, using misp",
             "name": "misp-dev",
             "url": "https://192.168.122.68:443",
             "rate_limited": false,
@@ -16,57 +17,25 @@
             "description": "MISP development instance contact admin@admin.net for access"
         },
         {
-            "kind": "domaintools" ,
-            "name": "username",
-            "url": "https://api.domaintools.com",
-            "type": ["email", "url", "domain"],
-            "rate_limited": false,
-            "insecure": false,
-            "auth_type": "basic",
-            "key": "",
-            "description": "DomainTools API, limited to 1000 requests per day",
-            "route_map": [
-                {
-                    "type": "email",
-                    "route": "iris-investigate"
-                },
-                {
-                    "type": "url",
-                    "route": "iris-investigate"
-                },
-                {
-                    "type": "domain",
-                    "route": "iris-investigate"
-                },
-                {
-                    "type": "ipv4",
-                    "route": "iris-investigate"
-                },
-                {
-                    "type": "ipv6",
-                    "route": "iris-investigate"
-                },
-                {
-                    "type": "domain",
-                    "route": "iris-enrich"
-                }
-            ]
-        },
-        {
-            "name": "deepfry-ip",
-            "url": "http://kenmeri:8081",
+            "comment": "this is an example of a file upload service",
+            "upload_service": true,
+            "name": "livery-analytics",
+            "url": "http://dreadco:8083",
             "rate_limited": false,
             "insecure": false,
             "auth_type": "key",
             "key": "",
-            "kind": "deepfry",
-            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
-            "description": "deepfry is for testing only, but tells you is a ip or url has been sent to it already"
+            "kind": "livery",
+            "type": ["upload"],
+            "description": "Livery Analytics is a service for uploading files and getting insights on them. It is not a threat intelligence service, but can be used to upload files for analysis."
         },
         {
+            "comment": "this is an example of a rate limited service",
             "name": "virustotal-free",
             "url": "https://www.virustotal.com/api/v3",
-            "rate_limited": false,
+            "rate_limited": true,
+            "max_requests": 4,
+            "refill_rate": 60,
             "auth_type": "key",
             "insecure": false,
             "key": "",
@@ -103,6 +72,17 @@
                 "type": "filename",
                 "route": "files"
             }]
+        },
+        {
+            "name": "deepfry-ip",
+            "url": "http://kenmeri:8081",
+            "rate_limited": false,
+            "insecure": false,
+            "auth_type": "key",
+            "key": "",
+            "kind": "deepfry",
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
+            "description": "deepfry is for testing only, but tells you is a ip or url has been sent to it already"
         }
     ],
     "http_port": "8080",

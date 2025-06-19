@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -550,6 +551,127 @@ func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]b
 
 }
 
+func (s *Server) LiveryHelper2(name string, file UploadHandler) ([]byte, error) {
+	chunkSize := 1024 * 1024
+	totalChunks := (len(file.Data) + chunkSize - 1) / chunkSize
+	ep, ok := s.Targets["livery"]
+	if !ok {
+		return nil, fmt.Errorf("target not found")
+	}
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "/upload-chunk")
+	for i := 0; i < totalChunks; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > len(file.Data) {
+			end = len(file.Data)
+		}
+		part := file.Data[start:end]
+		// Upload the chunk
+		isLastChunk := i == totalChunks-1
+		req, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(part))
+		if err != nil {
+			return nil, fmt.Errorf("request error: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("X-File-ID", file.ID)
+		req.Header.Set("X-Filename", name)
+		req.Header.Set("X-Last-Chunk", strconv.FormatBool(isLastChunk))
+		resp := ep.Do(req)
+		if len(resp) == 0 {
+			return nil, fmt.Errorf("got a zero length response")
+		}
+		s.Log.Println(string(resp))
+		if !isLastChunk {
+			// If not the last chunk, we can continue to the next chunk
+			continue
+		}
+		s.Log.Printf("LiveryHelper: uploaded chunk %d of %d for file %s", i+1, totalChunks, name)
+		return resp, nil
+	}
+	s.Log.Println("LiveryHelper: all chunks uploaded successfully")
+	return nil, nil
+}
+
+type ResultsRequest struct {
+	FileID string `json:"file_id"`
+}
+
+// LiveryHelper handles the chunked upload of a file and then fetches its analysis results.
+// It sends the file data in chunks to the "/upload-chunk" endpoint and, upon completion,
+// makes a POST request to the "/results" endpoint with a JSON payload to retrieve analysis data.
+func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
+	const chunkSize = 1024 * 1024
+	totalChunks := (len(file.Data) + chunkSize - 1) / chunkSize
+
+	ep, ok := s.Targets["livery"]
+	if !ok {
+		return nil, fmt.Errorf("target 'livery' not found in server targets")
+	}
+
+	uploadUrl := fmt.Sprintf("%s/upload-chunk", ep.GetURL())
+	s.Log.Printf("LiveryHelper: Starting upload for file '%s' (ID: %s) to %s", name, file.ID, uploadUrl)
+
+	for i := 0; i < totalChunks; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > len(file.Data) {
+			end = len(file.Data)
+		}
+		part := file.Data[start:end]
+
+		isLastChunk := i == totalChunks-1
+
+		req, err := http.NewRequest("POST", uploadUrl, bytes.NewBuffer(part))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create upload request for chunk %d: %w", i, err)
+		}
+
+		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("X-File-ID", file.ID)
+		req.Header.Set("X-Filename", name)
+		req.Header.Set("X-Last-Chunk", strconv.FormatBool(isLastChunk))
+		req.ContentLength = int64(len(part))
+
+		respBodyBytes := ep.Do(req)
+		if len(respBodyBytes) == 0 {
+			return nil, fmt.Errorf("received an empty or error response from server for chunk %d of file '%s'", i+1, name)
+		}
+		s.Log.Printf("LiveryHelper: Uploaded chunk %d/%d for file '%s'. Server response: %s", i+1, totalChunks, name, strings.TrimSpace(string(respBodyBytes)))
+
+		if isLastChunk {
+			// file.ID = strings.TrimSpace(string(respBodyBytes))
+			s.Log.Printf("LiveryHelper: All chunks uploaded successfully for file '%s' (ID: %s). Server acknowledged with final ID: %s", name, file.ID, file.ID)
+		}
+	}
+
+	time.Sleep(2 * time.Second) // Optional: wait a bit before fetching results
+	// Prepare the JSON request body for the ResultsHandler
+	resultsReqBody := ResultsRequest{FileID: file.ID}
+	jsonBody, err := json.Marshal(resultsReqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal results request body for file ID '%s': %w", file.ID, err)
+	}
+
+	resultsUrl := fmt.Sprintf("%s/results", ep.GetURL()) // The /results endpoint itself
+	s.Log.Printf("LiveryHelper: Attempting to fetch analysis results for FileID '%s' from %s", file.ID, resultsUrl)
+
+	// Create a POST request for fetching results with JSON payload
+	resultsReq, err := http.NewRequest("POST", resultsUrl, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create results fetch request for file ID '%s': %w", file.ID, err)
+	}
+	resultsReq.Header.Set("Content-Type", "application/json") // Set content type for JSON request
+	resultsReq.ContentLength = int64(len(jsonBody))           // Set content length for JSON body
+
+	resultsRespBodyBytes := ep.Do(resultsReq)
+	if len(resultsRespBodyBytes) == 0 {
+		return nil, fmt.Errorf("received an empty or error response from /results for file ID '%s'", file.ID)
+	}
+
+	s.Log.Printf("LiveryHelper: Successfully fetched analysis results for FileID '%s'. Response length: %d bytes", file.ID, len(resultsRespBodyBytes))
+	return resultsRespBodyBytes, nil
+}
+
 type matchResponse struct {
 	Matched bool   `json:"matched"`
 	Kind    string `json:"kind"`
@@ -932,6 +1054,7 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 }
 
 type UploadHandler struct {
+	FileName string        `json:"file_name"`
 	SendCh   chan struct{} `json:"-"`
 	Complete bool          `json:"complete"`
 	ID       string        `json:"id"`
@@ -954,7 +1077,9 @@ func (u *UploadHandler) WriteToDisk(filename string) error {
 	return nil
 }
 
+// TODO: targets might work better as a slice of functions to call
 type UploadStore struct {
+	Targets      map[string]UploadOperator
 	ServerConfig *Configuration
 	SendCh       chan struct{}
 	Files        map[string]UploadHandler
@@ -978,6 +1103,46 @@ func (u *UploadStore) DeleteFile(id string) {
 	u.Memory.Lock()
 	defer u.Memory.Unlock()
 	delete(u.Files, id)
+}
+
+func NewUploadStore(config *Configuration) *UploadStore {
+	return &UploadStore{
+		Targets:      UploadOperators,
+		ServerConfig: config,
+		SendCh:       make(chan struct{}, 100), // Buffered channel to handle uploads
+		Files:        make(map[string]UploadHandler),
+		Memory:       &sync.RWMutex{},
+	}
+}
+
+func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[string]*Endpoint) {
+	var wg sync.WaitGroup
+	u.Memory.RLock()
+	file, ok := u.Files[id]
+	u.Memory.RUnlock()
+	if !ok {
+		fmt.Println("File not found in UploadStore:", id)
+		return
+	}
+	for name, target := range endpoints {
+		// or if the upload bool is true?
+		kind, ok := u.Targets[name]
+		if !ok {
+			fmt.Println("UploadStore: target not found in UploadOperators:", name)
+			continue
+		}
+		wg.Add(1)
+		go func(c chan ResponseItem, t *Endpoint, f UploadHandler, k UploadOperator) {
+			defer wg.Done()
+			err := k(resch, f, *t)
+			if err != nil {
+				fmt.Println("UploadStore: error in upload operator for target", name, ":", err)
+				// c <- ResponseItem{}
+			}
+
+		}(resch, target, file, kind)
+	}
+	wg.Wait()
 }
 
 // 48646fb84908c16c4b13b0fb4d720549fd0e4fdde8b9bd1276127719659ce798
@@ -1315,4 +1480,26 @@ func (s *Server) SplunkHelper2(req ProxyRequest) ([]byte, error) {
 	}
 
 	return out, nil
+}
+
+func CheckConnectivity(url string) error {
+	parts := strings.Split(url, ":")
+	cleanUrl := parts[0]
+	fmt.Println(url, "Checking connectivity to", cleanUrl, parts)
+	// test fqdn
+	ips, err := net.LookupIP(cleanUrl)
+	if err != nil {
+		return fmt.Errorf("failed to resolve %s: %w", cleanUrl, err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("no IP addresses found for %s", cleanUrl)
+	}
+	fmt.Println("Resolved IPs for", cleanUrl, ":", ips)
+	conn, err := net.DialTimeout("tcp", url, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %w", url, err)
+	}
+	defer conn.Close()
+	fmt.Println("Successfully connected to", url)
+	return nil
 }

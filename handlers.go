@@ -768,14 +768,16 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	lastChunk := r.Header.Get("X-last-chunk")
 	// fmt.Println(chunkSize, filename, lastChunk)
 	uploadHanlder, ok := store.GetFile(filename)
+	uid := uuid.New().String()
 	if !ok {
 		uploadHanlder = UploadHandler{
-			ID:       uuid.New().String(),
+			ID:       uid,
 			Data:     fileData.Bytes(),
 			FileSize: chunkSize,
 		}
 		go store.AddFile(filename, uploadHanlder)
 	} else {
+		uid = uploadHanlder.ID
 		uploadHanlder.Data = append(uploadHanlder.Data, fileData.Bytes()...)
 		uploadHanlder.FileSize += chunkSize
 	}
@@ -788,41 +790,17 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	go store.AddFile(filename, uploadHanlder)
 
 	if uploadHanlder.Complete {
-		hasher := sha256.New()
-		_, err := hasher.Write(uploadHanlder.Data)
-		if err != nil {
-			http.Error(w, "Error hashing file data", http.StatusInternalServerError)
-			return
+		copiedTargets := make(map[string]*Endpoint)
+		s.Memory.RLock()
+		for k, v := range s.Targets {
+			if v.UploadService {
+				copiedTargets[k] = v
+			}
 		}
-		hash := hex.EncodeToString(hasher.Sum(nil))
-		info := fmt.Sprintf("File %s uploaded with hash %s", filename, hash)
-		s.LogInfo(info)
-		uid := uuid.New().String()
-		UploadResponse.ID = uid
-		UploadResponse.Status = info
-		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
-		go func(id string) {
-			res, err := s.VmRayFileSubmissionHelper(filename, uploadHanlder) // use AddResponse(id, []b)
-			if err != nil {
-				s.RespCh <- ResponseItem{
-					Vendor: "file upload handler",
-					ID:     id,
-					Time:   time.Now(),
-					Data:   []byte(fmt.Sprintf("error: %v", err)),
-				}
-				s.Log.Println("error", err)
-				return
-			}
-			// w.Write(res)
-			store.DeleteFile(filename)
-			newResponse := ResponseItem{
-				Vendor: "file upload handler",
-				ID:     id,
-				Time:   time.Now(),
-				Data:   res,
-			}
-			s.RespCh <- newResponse
-		}(uid)
+		s.Memory.RUnlock()
+
+		store.FanOut(s.RespCh, uid, copiedTargets)
+		store.DeleteFile(filename)
 	}
 	out, err := json.Marshal(UploadResponse)
 	if err != nil {

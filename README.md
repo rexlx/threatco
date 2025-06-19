@@ -42,7 +42,7 @@ in the example below the app would look for MISP_KEY and MISP_SECRET (even thoug
 ## adding the first user (or any!)
 ```bash
 # create a regular extension user (no password is required, so none is set)
-curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", "admin": false}'
+curl -X POST http://localhost:8080/adduser -d '{"email": "rxlx@nullferatu.com", "admin": false}'
 
 # or with password to get frontend access (the admin flag doesnt currently do anything)
 curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", "admin": true, "password": "beepbo0p"}'
@@ -57,6 +57,7 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 - domaintools
 - splunk (*limited access*)
 - [deepfry](https://github.com/rexlx/deepfry)
+- [livery](https://github.com/rexlx/livery)
 
 
 
