@@ -4,11 +4,19 @@ pipeline {
     environment {
         PATH = "/usr/local/go/bin:${env.PATH}"
         DOCKER_IMAGE_BASE_NAME = "threatco"
+        THREATCO_DB_LOCATION_COMPOSED = "user=${params.PROD_DB_USER} password=${params.PROD_DB_PASSWORD} host=db dbname=${params.PROD_DB_NAME}"
     }
 
     parameters {
         string(name: 'GIT_BRANCH', defaultValue: 'master', description: 'Git branch to build')
         string(name: 'IMAGE_TAG_PREFIX', defaultValue: 'dev', description: 'Prefix for the image tag (e.g., dev, staging, prod, or version number)')
+        string(name: 'APP_HOST_PORT_PROD', defaultValue: '8081', description: 'Host port for the application in production')
+        string(name: 'DB_HOST_PORT_PROD', defaultValue: '5554', description: 'Host port for the database in production')
+
+        // New parameters for DB configuration
+        string(name: 'PROD_DB_USER', defaultValue: 'threatco', description: 'Production Database User')
+        string(name: 'PROD_DB_PASSWORD', defaultValue: 'threatCOMPANION!', description: 'Production Database Password')
+        string(name: 'PROD_DB_NAME', defaultValue: 'threatco', description: 'Production Database Name')
     }
 
     stages {
@@ -33,11 +41,11 @@ pipeline {
                     def shortCommitId = commitId.substring(0, 7)
                     def commitTag = "${params.IMAGE_TAG_PREFIX}-${shortCommitId}"
 
-                    withCredentials([file(credentialsId: 'threatco-config', variable: 'CONFIG_FILE_CONTENT_PATH')]) {
-                        echo "INFO: Making Jenkins credential 'threatco-config' available as data/config.json for Docker build."
+                    withCredentials([file(credentialsId: 'DREADCO-CONFIG', variable: 'CONFIG_FILE_CONTENT_PATH')]) {
+                        echo "INFO: Making Jenkins credential 'DREADCO-CONFIG' available as data/config.json for Docker build."
                         sh "mkdir -p data"
                         sh "cp ${CONFIG_FILE_CONTENT_PATH} data/config.json"
-                        echo "WARNING: The content of 'threatco-config' is being copied into 'data/config.json' and will be baked into the Docker image. If it contains secrets, consider runtime mounting for production."
+                        echo "WARNING: The content of 'DREADCO-CONFIG' is being copied into 'data/config.json' and will be baked into the Docker image. If it contains secrets, consider runtime mounting for production."
                     }
 
                     echo "INFO: Building Docker image ${env.DOCKER_IMAGE_BASE_NAME} with tags: ${commitTag}, latest..."
@@ -76,22 +84,28 @@ pipeline {
                     def imageToDeploy = "${env.DOCKER_IMAGE_BASE_NAME}:latest"
 
                     withCredentials([
-                        string(credentialsId: 'PROD_DB_LOCATION', variable: 'PROD_DB_LOCATION'),
                         string(credentialsId: 'PROD_MISP_KEY', variable: 'PROD_MISP_KEY'),
-                        string(credentialsId: 'PROD_VIRUSTOTAL_KEY', variable: 'PROD_VIRUSTOTAL_KEY')
+                        string(credentialsId: 'PROD_VIRUSTOTAL_KEY', variable: 'PROD_VIRUSTOTAL_KEY'),
+                        file(credentialsId: 'DREADCO-CONFIG', variable: 'CONFIG_FILE_PATH_ON_AGENT')
                     ]) {
                         sh """
-                        docker stop threatco-prod || true
-                        docker rm threatco-prod || true
-                        docker run -d --name threatco-prod \\
-                                  -p 8081:8081 \\
-                                  --restart always \\
-                                  -e THREATCO_DB_LOCATION="${PROD_DB_LOCATION}" \\
-                                  -e MISP_KEY="${PROD_MISP_KEY}" \\
-                                  -e VIRUSTOTAL_KEY="${PROD_VIRUSTOTAL_KEY}" \\
-                                  ${imageToDeploy}
+                        echo "DB_USER=${params.PROD_DB_USER}" > .env.prod
+                        echo "DB_PASSWORD=${params.PROD_DB_PASSWORD}" >> .env.prod
+                        echo "DB_NAME=${params.PROD_DB_NAME}" >> .env.prod
+                        echo "DB_HOST=db" >> .env.prod
+                        echo "APP_PORT=${params.APP_HOST_PORT_PROD}" >> .env.prod
+                        echo "DB_PORT=${params.DB_HOST_PORT_PROD}" >> .env.prod
+                        echo "THREATCO_DB_LOCATION=\\"user=${params.PROD_DB_USER} password=${params.PROD_DB_PASSWORD} host=db dbname=${params.PROD_DB_NAME}\\"" >> .env.prod
+                        # Add other production specific env vars here if needed
+                        echo "MISP_KEY=${PROD_MISP_KEY}" >> .env.prod
+                        echo "VIRUSTOTAL_KEY=${PROD_VIRUSTOTAL_KEY}" >> .env.prod
                         """
-                                echo "Deployment to production host initiated. ${imageToDeploy} is running in detached mode."
+                        sh "cp ${CONFIG_FILE_PATH_ON_AGENT} data/config.json"
+                        sh """
+                        docker-compose -f docker-compose.yml --env-file .env.prod down --remove-orphans || true
+                        docker-compose -f docker-compose.yml --env-file .env.prod pull # Ensure latest images are pulled if they are external
+                        docker-compose -f docker-compose.yml --env-file .env.prod up -d
+                        """
                     }
                     echo "INFO: Deployment to Production complete."
                 }

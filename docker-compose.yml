@@ -17,7 +17,10 @@ services:
     build: .
     container_name: go_app
     environment:
-       DB_HOST: ${DB_HOST}
+       DB_HOST: db
+       THREATCO_DB_LOCATION: ${THREATCO_DB_LOCATION}
+       MISP_KEY: ${MISP_KEY}
+       VIRUSTOTAL_KEY: ${VIRUSTOTAL_KEY}
     ports:
       - "${APP_PORT:-8080}:8080"
     depends_on:
