@@ -104,7 +104,7 @@ pipeline {
                         sh """
                         docker-compose -f docker-compose.yml --env-file .env.prod down --remove-orphans || true
                         docker-compose -f docker-compose.yml --env-file .env.prod pull # Ensure latest images are pulled if they are external
-                        docker-compose -f docker-compose.yml --env-file .env.prod up -d
+                        docker-compose -f docker-compose.yml --env-file .env.prod up -d --build
                         """
                     }
                     echo "INFO: Deployment to Production complete."
