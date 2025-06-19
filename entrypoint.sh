@@ -16,4 +16,4 @@ killall server
 sleep 2
 
 # Restart the server in normal mode
-/server -delete
+/server -syslog -syslog-host 192.168.86.120:514 -delete
