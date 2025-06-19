@@ -222,7 +222,7 @@ func (p *PrefetchAuth) GetAndStoreToken(stop chan bool) {
 			continue
 		}
 		p.Token = res.Token
-		fmt.Println("PrefetchAuth.GetAndStoreToken: token updated")
+		fmt.Println("PrefetchAuth.GetAndStoreToken: token updated", len(p.Token), "chars, expires in", res.Expires, "seconds")
 		select {
 		case <-ticker.C:
 			continue
