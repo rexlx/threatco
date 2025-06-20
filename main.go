@@ -34,6 +34,7 @@ func main() {
 		}
 		defer file.Close()
 		logger = log.New(file, "", log.LstdFlags)
+		// logger = log.New(os.Stdout, "", log.LstdFlags| log.Lshortfile)
 	}
 	s := NewServer("1", ":8080", *dbMode, *dbLocation, logger)
 

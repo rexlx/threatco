@@ -788,7 +788,7 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		uploadHanlder.Complete = true
 	}
 
-	go store.AddFile(filename, uploadHanlder)
+	store.AddFile(filename, uploadHanlder)
 
 	if uploadHanlder.Complete {
 		copiedTargets := make(map[string]*Endpoint)
