@@ -224,7 +224,15 @@ func (s *Server) ProcessTransientResponses() {
 		select {
 		case resp := <-s.RespCh:
 			s.Memory.Lock()
-			s.Cache.Responses[resp.ID] = resp
+			// TODO: check if the response already exists in the cache, if so append to the existing entry?
+			r, ok := s.Cache.Responses[resp.ID]
+			if !ok {
+				s.Cache.Responses[resp.ID] = resp
+			} else {
+				r.Time = resp.Time
+				r.Data = append(r.Data, resp.Data...)
+				s.Cache.Responses[resp.ID] = r
+			}
 			s.Memory.Unlock()
 		case <-ticker.C:
 			s.Log.Println("Processing transient responses: removing old entries")
@@ -382,7 +390,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
 	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
-	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.FileToIOCHandler)))
+	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))

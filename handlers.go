@@ -738,6 +738,7 @@ type uploadResponse struct {
 	ID     string `json:"id"`
 }
 
+// TODO should use summarized event here i think. will have to handle mutliple ids perhaps idk
 func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	var fileData bytes.Buffer
 	var UploadResponse uploadResponse
@@ -799,8 +800,12 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Memory.RUnlock()
 
-		store.FanOut(s.RespCh, uid, copiedTargets)
+		store.FanOut(s.RespCh, filename, copiedTargets)
 		store.DeleteFile(filename)
+		UploadResponse.ID = uid
+		UploadResponse.Status = fmt.Sprintf("File %s uploaded successfully with ID %s", filename, uid)
+		info := fmt.Sprintf("%v: File %s uploaded with ID %s", uid, filename, uid)
+		s.LogInfo(info)
 	}
 	out, err := json.Marshal(UploadResponse)
 	if err != nil {
