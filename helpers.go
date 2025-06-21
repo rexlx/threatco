@@ -644,7 +644,7 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 		}
 	}
 
-	time.Sleep(2 * time.Second) // Optional: wait a bit before fetching results
+	time.Sleep(100 * time.Millisecond) // Optional: wait a bit before fetching results
 	// Prepare the JSON request body for the ResultsHandler
 	resultsReqBody := ResultsRequest{FileID: file.ID}
 	jsonBody, err := json.Marshal(resultsReqBody)

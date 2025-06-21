@@ -55,44 +55,77 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 		if len(respBodyBytes) == 0 {
 			return fmt.Errorf("received an empty or error response from server for chunk %d of file '%s'", i+1, file.FileName)
 		}
-		fmt.Printf("LiveryHelper: Uploaded chunk %d/%d for file '%s'. Server response: %s", i+1, totalChunks, file.FileName, strings.TrimSpace(string(respBodyBytes)))
+		fmt.Printf("LiveryHelper: Uploaded chunk %d/%d for file '%s'. Server response: %s\n", i+1, totalChunks, file.FileName, strings.TrimSpace(string(respBodyBytes)))
 
 		if isLastChunk {
+			// In a real scenario, the file.ID might be updated here from the server response
 			// file.ID = strings.TrimSpace(string(respBodyBytes))
-			fmt.Printf("LiveryHelper: All chunks uploaded successfully for file '%s' (ID: %s). Server acknowledged with final ID: %s", file.FileName, file.ID, file.ID)
+			fmt.Printf("LiveryHelper: All chunks uploaded successfully for file '%s' (ID: %s). Server acknowledged with final ID: %s\n", file.FileName, file.ID, file.ID)
 		}
 	}
 
-	time.Sleep(2 * time.Second) // Optional: wait a bit before fetching results
-	// Prepare the JSON request body for the ResultsHandler
+	// --- Exponential Backoff Logic for Fetching Results ---
+	const (
+		initialBackoff = 100 * time.Millisecond // Start with 100ms
+		maxBackoff     = 2 * time.Second        // Cap individual sleep at 2 seconds
+		totalTimeout   = 20 * time.Second       // Total wait time up to 20 seconds
+	)
+
+	currentBackoff := initialBackoff
+	startTime := time.Now()
+	resultsFetched := false
+
 	resultsReqBody := ResultsRequest{FileID: file.ID}
 	jsonBody, err := json.Marshal(resultsReqBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal results request body for file ID '%s': %w", file.ID, err)
 	}
 
-	resultsUrl := fmt.Sprintf("%s/results", ep.GetURL()) // The /results endpoint itself
-	fmt.Printf("LiveryHelper: Attempting to fetch analysis results for FileID '%s' from %s", file.ID, resultsUrl)
+	resultsUrl := fmt.Sprintf("%s/results", ep.GetURL())
 
-	// Create a POST request for fetching results with JSON payload
-	resultsReq, err := http.NewRequest("POST", resultsUrl, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to create results fetch request for file ID '%s': %w", file.ID, err)
-	}
-	resultsReq.Header.Set("Content-Type", "application/json") // Set content type for JSON request
-	resultsReq.ContentLength = int64(len(jsonBody))           // Set content length for JSON body
+	for time.Since(startTime) < totalTimeout {
+		fmt.Printf("LiveryHelper: Attempting to fetch analysis results for FileID '%s' from %s (attempt after %v wait, total elapsed: %v)\n",
+			file.ID, resultsUrl, currentBackoff, time.Since(startTime).Round(time.Millisecond))
 
-	resultsRespBodyBytes := ep.Do(resultsReq)
-	if len(resultsRespBodyBytes) == 0 {
-		return fmt.Errorf("received an empty or error response from /results for file ID '%s'", file.ID)
+		resultsReq, err := http.NewRequest("POST", resultsUrl, bytes.NewBuffer(jsonBody))
+		if err != nil {
+			return fmt.Errorf("failed to create results fetch request for file ID '%s': %w", file.ID, err)
+		}
+		resultsReq.Header.Set("Content-Type", "application/json")
+		resultsReq.ContentLength = int64(len(jsonBody))
+
+		resultsRespBodyBytes := ep.Do(resultsReq)
+		responseStr := strings.TrimSpace(string(resultsRespBodyBytes))
+
+		if len(resultsRespBodyBytes) > 0 && responseStr != "No results found for the provided FileID" {
+			// Assuming a non-empty response means results are ready
+			// In a real application, you might parse the JSON and check a status field.
+			resch <- ResponseItem{
+				ID:     id,
+				Vendor: "livery",
+				Data:   resultsRespBodyBytes,
+				Time:   time.Now(),
+			}
+			fmt.Printf("LiveryHelper: Successfully fetched analysis results for FileID '%s'. Response length: %d bytes (took %v total)\n",
+				file.ID, len(resultsRespBodyBytes), time.Since(startTime).Round(time.Millisecond))
+			resultsFetched = true
+			break // Exit loop, results fetched
+		} else {
+			fmt.Printf("LiveryHelper: Results not yet ready for FileID '%s'. Retrying in %v...\n", file.ID, currentBackoff)
+			time.Sleep(currentBackoff) // Wait before next retry
+
+			// Exponentially increase backoff, capping at maxBackoff
+			currentBackoff *= 2
+			if currentBackoff > maxBackoff {
+				currentBackoff = maxBackoff
+			}
+		}
 	}
-	resch <- ResponseItem{
-		ID:     id,
-		Vendor: "livery",
-		Data:   resultsRespBodyBytes,
-		Time:   time.Now(),
+
+	if !resultsFetched {
+		return fmt.Errorf("LiveryHelper: Timed out after %v waiting for results for file ID '%s'", totalTimeout, file.ID)
 	}
-	fmt.Printf("LiveryHelper: Successfully fetched analysis results for FileID '%s'. Response length: %d bytes", file.ID, len(resultsRespBodyBytes))
+
 	return nil
 }
 
