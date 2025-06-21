@@ -375,7 +375,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Details.SupportedServices = cfg.Services
 	s.Details.FQDN = cfg.FQDN
 	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
-	fmt.Println("Server address:", s.Details.Address, cfg.BindAddress, cfg.HTTPPort)
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
 	s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode

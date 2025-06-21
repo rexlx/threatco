@@ -754,7 +754,6 @@ func (s *Server) MispHelper(req ProxyRequest) ([]byte, error) {
 		return CreateAndWriteSummarizedEvent(req, true, "target not found")
 	}
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
-	// fmt.Println("misp url", url, req)
 	go s.addStat(ep.GetURL(), float64(len(out)))
 
 	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
@@ -1115,7 +1114,7 @@ func NewUploadStore(config *Configuration) *UploadStore {
 	}
 }
 
-func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[string]*Endpoint) {
+func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[string]*Endpoint, transactionID string) {
 	var wg sync.WaitGroup
 	u.Memory.RLock()
 	file, ok := u.Files[id]
@@ -1125,22 +1124,23 @@ func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[s
 		return
 	}
 	for name, target := range endpoints {
-		// or if the upload bool is true?
+		// fmt.Println("FanOut: working on", name, target.GetURL())
 		kind, ok := u.Targets[name]
 		if !ok {
-			fmt.Println("UploadStore: target not found in UploadOperators:", name)
+			fmt.Println("(can continue) UploadStore: target not found in UploadOperators:", name)
 			continue
 		}
 		wg.Add(1)
-		go func(c chan ResponseItem, t *Endpoint, f UploadHandler, k UploadOperator) {
+		go func(c chan ResponseItem, t *Endpoint, f UploadHandler, k UploadOperator, i string) {
 			defer wg.Done()
-			err := k(resch, f, *t)
+			// this was previously resch not c
+			err := k(c, f, *t, i)
 			if err != nil {
 				fmt.Println("UploadStore: error in upload operator for target", name, ":", err)
 				// c <- ResponseItem{}
 			}
 
-		}(resch, target, file, kind)
+		}(resch, target, file, kind, transactionID)
 	}
 	wg.Wait()
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type UploadOperator func(resch chan ResponseItem, file UploadHandler, ep Endpoint) error
+type UploadOperator func(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error
 
 var UploadOperators = map[string]UploadOperator{
 	"livery": LiveryHelper,
@@ -24,7 +24,7 @@ var UploadOperators = map[string]UploadOperator{
 	"misp":   MispFileHelper,
 }
 
-func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint) error {
+func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error {
 	const chunkSize = 1024 * 1024
 	totalChunks := (len(file.Data) + chunkSize - 1) / chunkSize
 
@@ -87,7 +87,7 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint) erro
 		return fmt.Errorf("received an empty or error response from /results for file ID '%s'", file.ID)
 	}
 	resch <- ResponseItem{
-		ID:     file.ID,
+		ID:     id,
 		Vendor: "livery",
 		Data:   resultsRespBodyBytes,
 		Time:   time.Now(),
@@ -96,7 +96,7 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint) erro
 	return nil
 }
 
-func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint) error {
+func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error {
 
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "rest/sample/submit")
 
@@ -124,7 +124,7 @@ func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep E
 		return fmt.Errorf("got a zero length response")
 	}
 	resch <- ResponseItem{
-		ID:     file.ID,
+		ID:     id,
 		Vendor: "vmray",
 		Data:   resp,
 		Time:   time.Now(),
@@ -133,7 +133,7 @@ func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep E
 
 }
 
-func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint) error {
+func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error {
 	hasher := sha256.New()
 	_, err := hasher.Write(file.Data)
 	if err != nil {
@@ -165,7 +165,7 @@ func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint) er
 		return fmt.Errorf("received an empty response for file %s", file.FileName)
 	}
 	resch <- ResponseItem{
-		ID:     file.ID,
+		ID:     id,
 		Vendor: "misp",
 		Data:   res,
 		Time:   time.Now(),

@@ -741,7 +741,7 @@ type uploadResponse struct {
 // TODO should use summarized event here i think. will have to handle mutliple ids perhaps idk
 func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	var fileData bytes.Buffer
-	var UploadResponse uploadResponse
+	var UploadResponse SummarizedEvent
 	// Copy the request body (file data) to the buffer
 	_, err := io.Copy(&fileData, r.Body)
 	if err != nil {
@@ -800,10 +800,11 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Memory.RUnlock()
 
-		store.FanOut(s.RespCh, filename, copiedTargets)
+		store.FanOut(s.RespCh, filename, copiedTargets, uid)
 		store.DeleteFile(filename)
 		UploadResponse.ID = uid
-		UploadResponse.Status = fmt.Sprintf("File %s uploaded successfully with ID %s", filename, uid)
+		UploadResponse.Link = uid
+		UploadResponse.Info = fmt.Sprintf("File %s uploaded successfully with ID %s", filename, uid)
 		info := fmt.Sprintf("%v: File %s uploaded with ID %s", uid, filename, uid)
 		s.LogInfo(info)
 	}
