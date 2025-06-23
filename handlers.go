@@ -122,7 +122,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 							allBytes = append(allBytes, out...)
 							*first = false
 							mu.Unlock()
-							s.DB.StoreResponse(id, out)
+							s.DB.StoreResponse(id, out, pr.To)
 						}(uid, &first)
 						// do thing
 					}
@@ -340,11 +340,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
+			go s.DB.StoreResponse(uid, r, req.To)
 			w.Write(r)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
+		go s.DB.StoreResponse(uid, resp, req.To)
 		w.Write(resp)
 		return
 	case "splunk":
@@ -356,11 +356,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
+			go s.DB.StoreResponse(uid, r, req.To)
 			w.Write(r)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
+		go s.DB.StoreResponse(uid, resp, req.To)
 		w.Write(resp)
 		return
 	case "virustotal":
@@ -373,11 +373,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
+			go s.DB.StoreResponse(uid, r, req.To)
 			w.Write(r)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
+		go s.DB.StoreResponse(uid, resp, req.To)
 		w.Write(resp)
 		return
 	case "mandiant":
@@ -389,11 +389,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
+			go s.DB.StoreResponse(uid, r, req.To)
 			w.Write(r)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
+		go s.DB.StoreResponse(uid, resp, req.To)
 		w.Write(resp)
 		return
 	case "deepfry":
@@ -405,11 +405,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
+			go s.DB.StoreResponse(uid, r, req.To)
 			w.Write(r)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
+		go s.DB.StoreResponse(uid, resp, req.To)
 		w.Write(resp)
 		return
 	case "crowdstrike":
@@ -421,11 +421,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			go s.DB.StoreResponse(uid, r)
+			go s.DB.StoreResponse(uid, r, req.To)
 			w.Write(r)
 			return
 		}
-		go s.DB.StoreResponse(uid, resp)
+		go s.DB.StoreResponse(uid, resp, req.To)
 		w.Write(resp)
 		return
 	case "domaintools":
@@ -440,11 +440,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-				go s.DB.StoreResponse(uid, r)
+				go s.DB.StoreResponse(uid, r, req.To)
 				w.Write(r)
 				return
 			}
-			go s.DB.StoreResponse(uid, resp)
+			go s.DB.StoreResponse(uid, resp, req.To)
 			w.Write(resp)
 			return
 		default:
@@ -457,11 +457,11 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-				go s.DB.StoreResponse(uid, r)
+				go s.DB.StoreResponse(uid, r, req.To)
 				w.Write(r)
 				return
 			}
-			go s.DB.StoreResponse(uid, resp)
+			go s.DB.StoreResponse(uid, resp, req.To)
 			w.Write(resp)
 			return
 		}
@@ -1013,8 +1013,17 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 	</tr>`
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
-	for k, v := range s.Cache.Responses {
-		out += fmt.Sprintf(tmpl, v.Time, v.Vendor, k, k)
+	responses, err := s.DB.GetResponses(time.Now().Add(-24 * time.Hour))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(responses) == 0 {
+		fmt.Fprint(w, "No responses in cache")
+		return
+	}
+	for _, v := range responses {
+		out += fmt.Sprintf(tmpl, v.Time, v.Vendor, v.ID, v.ID)
 	}
 	out = fmt.Sprintf(table, out)
 	fmt.Fprint(w, out)

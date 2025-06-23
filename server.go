@@ -234,6 +234,7 @@ func (s *Server) ProcessTransientResponses() {
 				s.Cache.Responses[resp.ID] = r
 			}
 			s.Memory.Unlock()
+			go s.DB.StoreResponse(resp.ID, resp.Data, resp.Vendor)
 		case <-ticker.C:
 			s.Log.Println("Processing transient responses: removing old entries")
 			s.Memory.Lock()
