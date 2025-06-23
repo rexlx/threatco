@@ -19,7 +19,7 @@ type Database interface {
 	AddService(st ServiceType) error
 	GetTokenByValue(tk string) (Token, error)
 	SaveToken(t Token) error
-	StoreResponse(id string, data []byte) error
+	StoreResponse(id string, data []byte, vendor string) error
 	GetResponse(id string) ([]byte, error)
 	GetResponses(expiration time.Time) ([]ResponseItem, error)
 	DeleteResponse(id string) error
@@ -80,7 +80,7 @@ func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 	return user, err
 }
 
-func (db *BboltDB) StoreResponse(id string, data []byte) error {
+func (db *BboltDB) StoreResponse(id string, data []byte, vendor string) error {
 	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
 		if err != nil {
@@ -282,10 +282,11 @@ func (db *PostgresDB) createTables() error {
             route_map JSONB
         );
 		CREATE TABLE IF NOT EXISTS responses (
-			id TEXT PRIMARY KEY,
-			data BYTEA NOT NULL,
-			created TIMESTAMP
-		);
+    	id TEXT PRIMARY KEY,
+    	data BYTEA NOT NULL,
+    	created TIMESTAMP,
+    	vendor TEXT NOT NULL -- Added the vendor field
+);
 		CREATE TABLE IF NOT EXISTS users (
 				email TEXT PRIMARY KEY,
 				admin BOOLEAN,
@@ -311,8 +312,10 @@ func (db *PostgresDB) CleanResponses() error {
 	return err
 }
 
-func (db *PostgresDB) StoreResponse(id string, data []byte) error {
-	_, err := db.Pool.Exec(context.Background(), "INSERT INTO responses (id, data, created) VALUES ($1, $2, $3)", id, data, time.Now())
+func (db *PostgresDB) StoreResponse(id string, data []byte, vendor string) error {
+	_, err := db.Pool.Exec(context.Background(),
+		"INSERT INTO responses (id, data, created, vendor) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, created = EXCLUDED.created, vendor = EXCLUDED.vendor",
+		id, data, time.Now(), vendor)
 	return err
 }
 
@@ -345,6 +348,9 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
 			return nil, err
 		}
 		resp.Data = data
+		if resp.Vendor == "" {
+			resp.Vendor = "restored from previous instance"
+		}
 		responses = append(responses, resp)
 	}
 	if err := rows.Err(); err != nil {
