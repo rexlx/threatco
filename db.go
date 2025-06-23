@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,6 +21,7 @@ type Database interface {
 	SaveToken(t Token) error
 	StoreResponse(id string, data []byte) error
 	GetResponse(id string) ([]byte, error)
+	GetResponses(expiration time.Time) ([]ResponseItem, error)
 	DeleteResponse(id string) error
 	TestAndRecconect() error
 }
@@ -31,6 +33,29 @@ type BboltDB struct {
 func (db *BboltDB) TestAndRecconect() error {
 	fmt.Println("TestAndRecconect")
 	return nil
+}
+
+// TODO verify me
+func (db *BboltDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
+	var responses []ResponseItem
+	err := db.DB.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("responses"))
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k, v []byte) error {
+			var resp ResponseItem
+			if err := json.Unmarshal(v, &resp); err != nil {
+				return fmt.Errorf("unmarshal response: %w", err)
+			}
+			if resp.Time.After(expiration) {
+				resp.ID = string(k)
+				responses = append(responses, resp)
+			}
+			return nil
+		})
+	})
+	return responses, err
 }
 
 func (db *BboltDB) GetUserByEmail(email string) (User, error) {
@@ -304,6 +329,28 @@ func (db *PostgresDB) DeleteResponse(id string) error {
 
 func (db *PostgresDB) TestAndRecconect() error {
 	return db.Pool.Ping(context.Background())
+}
+
+func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
+	rows, err := db.Pool.Query(context.Background(), "SELECT id, data, created FROM responses WHERE created >= $1", expiration)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var responses []ResponseItem
+	for rows.Next() {
+		var resp ResponseItem
+		var data []byte
+		if err := rows.Scan(&resp.ID, &data, &resp.Time); err != nil {
+			return nil, err
+		}
+		resp.Data = data
+		responses = append(responses, resp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return responses, nil
 }
 
 func (db *PostgresDB) GetUserByEmail(email string) (User, error) {
