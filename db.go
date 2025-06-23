@@ -335,7 +335,7 @@ func (db *PostgresDB) TestAndRecconect() error {
 }
 
 func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
-	rows, err := db.Pool.Query(context.Background(), "SELECT id, data, created FROM responses WHERE created >= $1", expiration)
+	rows, err := db.Pool.Query(context.Background(), "SELECT id, data, created, vendor FROM responses WHERE created > $1", expiration)
 	if err != nil {
 		return nil, err
 	}
@@ -344,13 +344,10 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
 	for rows.Next() {
 		var resp ResponseItem
 		var data []byte
-		if err := rows.Scan(&resp.ID, &data, &resp.Time); err != nil {
+		if err := rows.Scan(&resp.ID, &data, &resp.Time, &resp.Vendor); err != nil {
 			return nil, err
 		}
 		resp.Data = data
-		if resp.Vendor == "" {
-			resp.Vendor = "restored from previous instance"
-		}
 		responses = append(responses, resp)
 	}
 	if err := rows.Err(); err != nil {
