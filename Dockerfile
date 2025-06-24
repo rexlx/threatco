@@ -22,7 +22,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
 # https://hub.docker.com/_/alpine
 # https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
 FROM alpine:3
-RUN apk add --no-cache ca-certificates curl
+RUN apk add --no-cache ca-certificates curl tzdata
+ENV TZ=America/Chicago
+RUN ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime && echo "${TZ}" > /etc/timezone
 
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/server /server
