@@ -104,64 +104,6 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serviceDiv += `</div></div>`
-	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv) // Use the local ViewSection variable
+	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
-
-func (s *Server) ViewServicesHandlerBad(w http.ResponseWriter, r *http.Request) {
-	s.Memory.RLock()
-	defer s.Memory.RUnlock()
-
-	serviceDiv := `<div class="box has-background-black-ter">
-<div class="columns is-multiline">`
-
-	for _, service := range s.Details.SupportedServices {
-		// Create a unique modal ID for each service
-		modalID := fmt.Sprintf("modal-%s", service.Kind)
-
-		serviceDiv += fmt.Sprintf(`
-<div class="column is-3">
-    <div class="card has-background-black-ter" style="height: 200px;">
-        <div class="card-content" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
-            <div>
-                <p class="title has-text-primary is-4">%s</p>
-                <div class="content">
-                    <p class="has-text-white">%v</p>
-                </div>
-            </div>
-            <div class="has-text-centered">
-                <button class="button open-modal is-primary" data-modal-id="%s">View Details</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="%s">
-        <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head has-background-black">
-                <p class="modal-card-title has-text-primary">%s types</p>
-                <button class="delete close-modal" aria-label="close"></button>
-            </header>
-            <section class="modal-card-body has-background-black">
-                <ul>
-`, service.Kind, service.Description, modalID, modalID, service.Kind)
-
-		// Loop through service types
-		for _, t := range service.Type {
-			serviceDiv += fmt.Sprintf(`<li class="has-text-primary">%s</li>`, t)
-		}
-
-		serviceDiv += `</ul></section>
-        </div>
-    </div>
-</div>`
-	}
-
-	serviceDiv += `</div></div>`
-	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv) // Assuming views.ViewSection and views.BaseView are defined elsewhere
-	fmt.Fprintf(w, views.BaseView, tempDiv)
-}
-
-// func (s *Server) ViewUserOnboarding(w http.ResponseWriter, r *http.Request) {
-// 	fmt.Fprintf(w, views.OnboardingView)
-// }

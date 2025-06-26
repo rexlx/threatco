@@ -66,9 +66,9 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 
 	// --- Exponential Backoff Logic for Fetching Results ---
 	const (
-		initialBackoff = 100 * time.Millisecond // Start with 100ms
-		maxBackoff     = 2 * time.Second        // Cap individual sleep at 2 seconds
-		totalTimeout   = 20 * time.Second       // Total wait time up to 20 seconds
+		initialBackoff = 100 * time.Millisecond
+		maxBackoff     = 2 * time.Second
+		totalTimeout   = 20 * time.Second
 	)
 
 	currentBackoff := initialBackoff
@@ -109,10 +109,10 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 			fmt.Printf("LiveryHelper: Successfully fetched analysis results for FileID '%s'. Response length: %d bytes (took %v total)\n",
 				file.ID, len(resultsRespBodyBytes), time.Since(startTime).Round(time.Millisecond))
 			resultsFetched = true
-			break // Exit loop, results fetched
+			break
 		} else {
 			fmt.Printf("LiveryHelper: Results not yet ready for FileID '%s'. Retrying in %v...\n", file.ID, currentBackoff)
-			time.Sleep(currentBackoff) // Wait before next retry
+			time.Sleep(currentBackoff)
 
 			// Exponentially increase backoff, capping at maxBackoff
 			currentBackoff *= 2

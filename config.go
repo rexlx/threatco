@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings" // Added for strings.ToUpper
+	"strings"
 )
 
 type Configuration struct {

@@ -644,15 +644,14 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 		}
 	}
 
-	time.Sleep(100 * time.Millisecond) // Optional: wait a bit before fetching results
-	// Prepare the JSON request body for the ResultsHandler
+	time.Sleep(100 * time.Millisecond)
 	resultsReqBody := ResultsRequest{FileID: file.ID}
 	jsonBody, err := json.Marshal(resultsReqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal results request body for file ID '%s': %w", file.ID, err)
 	}
 
-	resultsUrl := fmt.Sprintf("%s/results", ep.GetURL()) // The /results endpoint itself
+	resultsUrl := fmt.Sprintf("%s/results", ep.GetURL())
 	s.Log.Printf("LiveryHelper: Attempting to fetch analysis results for FileID '%s' from %s", file.ID, resultsUrl)
 
 	// Create a POST request for fetching results with JSON payload
@@ -660,8 +659,8 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create results fetch request for file ID '%s': %w", file.ID, err)
 	}
-	resultsReq.Header.Set("Content-Type", "application/json") // Set content type for JSON request
-	resultsReq.ContentLength = int64(len(jsonBody))           // Set content length for JSON body
+	resultsReq.Header.Set("Content-Type", "application/json")
+	resultsReq.ContentLength = int64(len(jsonBody))
 
 	resultsRespBodyBytes := ep.Do(resultsReq)
 	if len(resultsRespBodyBytes) == 0 {
@@ -946,7 +945,7 @@ func GetAttributedAssociationsString(indicator vendors.MandiantIndicator) string
 
 	for i, assoc := range indicator.AttributedAssociations {
 		if i > 0 {
-			result.WriteString("; ") // Separator between associations
+			result.WriteString("; ")
 		}
 		result.WriteString(fmt.Sprintf("Name: %s, Type: %s", assoc.Name, assoc.Type))
 	}
@@ -1108,7 +1107,7 @@ func NewUploadStore(config *Configuration) *UploadStore {
 	return &UploadStore{
 		Targets:      UploadOperators,
 		ServerConfig: config,
-		SendCh:       make(chan struct{}, 100), // Buffered channel to handle uploads
+		SendCh:       make(chan struct{}, 100),
 		Files:        make(map[string]UploadHandler),
 		Memory:       &sync.RWMutex{},
 	}
@@ -1227,16 +1226,16 @@ func (s *Server) createMispEvent(eventDetails vendors.MispEvent) (string, []byte
 
 	// Apply defaults if not provided in eventDetails
 	if eventDetails.Distribution == "" {
-		eventDetails.Distribution = "0" // Your organisation only
+		eventDetails.Distribution = "0"
 	}
 	if eventDetails.ThreatLevelID == "" {
-		eventDetails.ThreatLevelID = "4" // Undefined
+		eventDetails.ThreatLevelID = "4"
 	}
 	if eventDetails.Analysis == "" {
-		eventDetails.Analysis = "0" // Initial
+		eventDetails.Analysis = "0"
 	}
 	if eventDetails.Date == "" {
-		eventDetails.Date = time.Now().Format("2006-01-02") // Today's date
+		eventDetails.Date = time.Now().Format("2006-01-02")
 	}
 
 	mispTarget, ok := s.Targets["misp"]
@@ -1438,7 +1437,7 @@ func (s *Server) SplunkHelper2(req ProxyRequest) ([]byte, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
-			continue // Skip empty lines
+			continue
 		}
 
 		var streamResult StreamResult

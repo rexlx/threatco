@@ -58,7 +58,7 @@ func (s *Server) LogHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	var wg sync.WaitGroup
-	allBytes := []byte{'['} //  Don't initialize here, will be used later
+	allBytes := []byte{'['}
 	first := true
 	var mu sync.Mutex
 	// defer s.addStat("parser_requests", 1)
@@ -86,7 +86,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	for k, v := range out {
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
-				if t == k && len(v) > 0 { // later check is service is rate limited
+				if t == k && len(v) > 0 {
 					if svc.RateLimited {
 						continue
 					}
@@ -1027,7 +1027,7 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 		return responses[i].Time.After(responses[j].Time)
 	})
 	if len(responses) > 100 {
-		responses = responses[:100] // limit to 100 most recent responses
+		responses = responses[:100]
 	}
 	for _, v := range responses {
 		out += fmt.Sprintf(tmpl, v.Time, v.Vendor, v.ID, v.ID)
