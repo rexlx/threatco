@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1021,6 +1022,12 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 	if len(responses) == 0 {
 		fmt.Fprint(w, "No responses in cache")
 		return
+	}
+	sort.Slice(responses, func(i, j int) bool {
+		return responses[i].Time.After(responses[j].Time)
+	})
+	if len(responses) > 100 {
+		responses = responses[:100] // limit to 100 most recent responses
 	}
 	for _, v := range responses {
 		out += fmt.Sprintf(tmpl, v.Time, v.Vendor, v.ID, v.ID)
