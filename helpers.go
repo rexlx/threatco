@@ -371,6 +371,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Mis
 				attrs = 0
 			}
 			return json.Marshal(SummarizedEvent{
+				Matched:       true,
 				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
 				Background:    "has-background-warning",
@@ -389,6 +390,7 @@ func (s *Server) ParseOtherMispResponse(req ProxyRequest, response []vendors.Mis
 				attrs = 0
 			}
 			return json.Marshal(SummarizedEvent{
+				Matched:       true,
 				Timestamp:     time.Now(),
 				Background:    "has-background-warning",
 				From:          req.To,
@@ -419,6 +421,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Mis
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
 			return json.Marshal(SummarizedEvent{
+				Matched:       true,
 				Timestamp:     time.Now(),
 				Info:          "received multiple hits for the given value",
 				Background:    "has-background-warning",
@@ -432,6 +435,7 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Mis
 			})
 		} else {
 			return json.Marshal(SummarizedEvent{
+				Matched:       true,
 				Timestamp:     time.Now(),
 				Background:    "has-background-warning",
 				Info:          response.Response[0].Event.Info,

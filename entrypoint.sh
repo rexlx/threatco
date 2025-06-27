@@ -10,7 +10,7 @@ sleep 3
 curl -X POST http://localhost:8080/adduser -d '{"email": "admin@aol.com", "password": "admin"}'
 
 # Stop the server
-killall server
+pkill server
 
 # Wait for the server to stop
 sleep 2

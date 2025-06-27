@@ -1,7 +1,7 @@
 # Use the official Golang image to create a build artifact.
 # This is based on Debian and sets the GOPATH to /go.
 # https://hub.docker.com/_/golang
-FROM golang:1.24.4-alpine as builder
+FROM golang:1.24.4-bookworm as builder
 
 # Create and change to the app directory.
 WORKDIR /app
@@ -18,17 +18,27 @@ COPY . ./
 # -mod=readonly ensures immutable go.mod and go.sum in container builds.
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
 
-# Use the official Alpine image for a lean production container.
-# https://hub.docker.com/_/alpine
-# https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
-FROM alpine:3
-RUN apk add --no-cache ca-certificates curl tzdata
+# Use a lean Debian image for the production container.
+# https://hub.docker.com/_/debian/
+FROM debian:bookworm-slim
+
+# Install necessary packages for a production environment.
+# curl and ca-certificates are common for network communication.
+# tzdata is needed for timezone configuration.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    tzdata \
+    procps && rm -rf /var/lib/apt/lists/*
+
+# Set the timezone.
 ENV TZ=America/Chicago
-RUN ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime && echo "${TZ}" > /etc/timezone
+RUN echo "${TZ}" > /etc/timezone && dpkg-reconfigure -f noninteractive tzdata
 
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/server /server
 
+# Copy static assets and configuration.
 COPY static /static
 COPY kb /kb
 COPY data/config.json /config.json
@@ -36,9 +46,6 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Expose the application port
-# ARG PORT=8080
-# ENV PORT=${PORT}
-# EXPOSE ${PORT}
 EXPOSE 8080
 
 # Run the entrypoint script on container startup.
