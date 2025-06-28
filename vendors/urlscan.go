@@ -30,12 +30,12 @@ type URLIOScanResultResponse struct {
 }
 
 type URLIOScanData struct {
-	Requests []URLIORequestResponse `json:"requests"`
-	Cookies  []URLIOCookie          `json:"cookies"`
-	Console  []URLIOConsoleMessage  `json:"console"`
-	Links    []URLIOLink            `json:"links"`
+	Requests []URLIORequestResponse `json:"requests,omitempty"`
+	Cookies  []URLIOCookie          `json:"cookies,omitempty"`
+	Console  []URLIOConsoleMessage  `json:"console,omitempty"`
+	Links    []URLIOLink            `json:"links,omitempty"`
 	Timing   URLIOTiming            `json:"timing"`
-	Globals  []URLIOGlobal          `json:"globals"`
+	Globals  []URLIOGlobal          `json:"globals,omitempty"`
 }
 
 type URLIORequestResponse struct {
@@ -106,7 +106,7 @@ type URLIOHTTPResponse struct {
 	AlternateProtocolUsage string                `json:"alternateProtocolUsage"`
 	SecurityState          string                `json:"securityState"`
 	SecurityDetails        URLIOSecurityDetails  `json:"securityDetails"`
-	SecurityHeaders        []URLIOSecurityHeader `json:"securityHeaders"`
+	SecurityHeaders        []URLIOSecurityHeader `json:"securityHeaders,omitempty"`
 }
 
 type URLIOTimingDetails struct {
@@ -138,11 +138,11 @@ type URLIOSecurityDetails struct {
 	Cipher                            string        `json:"cipher"`
 	CertificateID                     int           `json:"certificateId"`
 	SubjectName                       string        `json:"subjectName"`
-	SANList                           []string      `json:"sanList"`
+	SANList                           []string      `json:"sanList,omitempty"`
 	Issuer                            string        `json:"issuer"`
 	ValidFrom                         int           `json:"validFrom"`
 	ValidTo                           int           `json:"validTo"`
-	SignedCertificateTimestampList    []interface{} `json:"signedCertificateTimestampList"`
+	SignedCertificateTimestampList    []interface{} `json:"signedCertificateTimestampList,omitempty"`
 	CertificateTransparencyCompliance string        `json:"certificateTransparencyCompliance"`
 	ServerSignatureAlgorithm          int           `json:"serverSignatureAlgorithm"`
 	EncryptedClientHello              bool          `json:"encryptedClientHello"`
@@ -166,10 +166,10 @@ type URLIOASNInfo struct {
 
 type URLIOGeoIPInfo struct {
 	Country     string    `json:"country"`
-	Region      string    `json:"region"`
+	Region      string    `json:"region,omitempty"`
 	Timezone    string    `json:"timezone"`
-	City        string    `json:"city"`
-	LL          []float64 `json:"ll"`
+	City        string    `json:"city,omitempty"`
+	LL          []float64 `json:"ll,omitempty"`
 	CountryName string    `json:"country_name"`
 	Metro       int       `json:"metro"`
 }
@@ -195,7 +195,7 @@ type URLIOCookie struct {
 	HTTPOnly     bool    `json:"httpOnly"`
 	Secure       bool    `json:"secure"`
 	Session      bool    `json:"session"`
-	SameSite     string  `json:"sameSite"`
+	SameSite     string  `json:"sameSite,omitempty"`
 	Priority     string  `json:"priority"`
 	SameParty    bool    `json:"sameParty"`
 	SourceScheme string  `json:"sourceScheme"`
@@ -233,12 +233,12 @@ type URLIOGlobal struct {
 }
 
 type URLIOScanStats struct {
-	ResourceStats    []URLIOResourceStat  `json:"resourceStats"`
-	ProtocolStats    []URLIOProtocolStat  `json:"protocolStats"`
-	TLSStats         []URLIOTLSStat       `json:"tlsStats"`
-	ServerStats      []URLIOServerStat    `json:"serverStats"`
-	DomainStats      []URLIODomainStat    `json:"domainStats"`
-	RegDomainStats   []URLIORegDomainStat `json:"regDomainStats"`
+	ResourceStats    []URLIOResourceStat  `json:"resourceStats,omitempty"`
+	ProtocolStats    []URLIOProtocolStat  `json:"protocolStats,omitempty"`
+	TLSStats         []URLIOTLSStat       `json:"tlsStats,omitempty"`
+	ServerStats      []URLIOServerStat    `json:"serverStats,omitempty"`
+	DomainStats      []URLIODomainStat    `json:"domainStats,omitempty"`
+	RegDomainStats   []URLIORegDomainStat `json:"regDomainStats,omitempty"`
 	SecureRequests   int                  `json:"secureRequests"`
 	SecurePercentage int                  `json:"securePercentage"`
 	IPv6Percentage   int                  `json:"IPv6Percentage"`
@@ -246,7 +246,7 @@ type URLIOScanStats struct {
 	TotalLinks       int                  `json:"totalLinks"`
 	Malicious        int                  `json:"malicious"`
 	AdBlocked        int                  `json:"adBlocked"`
-	IPStats          []URLIOIPStat        `json:"ipStats"`
+	IPStats          []URLIOIPStat        `json:"ipStats,omitempty"`
 }
 
 type URLIOResourceStat struct {
@@ -254,8 +254,8 @@ type URLIOResourceStat struct {
 	Size        int      `json:"size"`
 	EncodedSize int      `json:"encodedSize"`
 	Latency     int      `json:"latency"`
-	Countries   []string `json:"countries"`
-	IPs         []string `json:"ips"`
+	Countries   []string `json:"countries,omitempty"`
+	IPs         []string `json:"ips,omitempty"`
 	Type        string   `json:"type"`
 	Compression string   `json:"compression"`
 	Percentage  int      `json:"percentage"`
@@ -265,9 +265,9 @@ type URLIOProtocolStat struct {
 	Count         int                    `json:"count"`
 	Size          int                    `json:"size"`
 	EncodedSize   int                    `json:"encodedSize"`
-	IPs           []string               `json:"ips"`
-	Countries     []string               `json:"countries"`
-	SecurityState map[string]interface{} `json:"securityState"`
+	IPs           []string               `json:"ips,omitempty"`
+	Countries     []string               `json:"countries,omitempty"`
+	SecurityState map[string]interface{} `json:"securityState,omitempty"`
 	Protocol      string                 `json:"protocol"`
 }
 
@@ -275,9 +275,9 @@ type URLIOTLSStat struct {
 	Count         int            `json:"count"`
 	Size          int            `json:"size"`
 	EncodedSize   int            `json:"encodedSize"`
-	IPs           []string       `json:"ips"`
-	Countries     []string       `json:"countries"`
-	Protocols     map[string]int `json:"protocols"`
+	IPs           []string       `json:"ips,omitempty"`
+	Countries     []string       `json:"countries,omitempty"`
+	Protocols     map[string]int `json:"protocols,omitempty"`
 	SecurityState string         `json:"securityState"`
 }
 
@@ -285,32 +285,32 @@ type URLIOServerStat struct {
 	Count       int      `json:"count"`
 	Size        int      `json:"size"`
 	EncodedSize int      `json:"encodedSize"`
-	IPs         []string `json:"ips"`
-	Countries   []string `json:"countries"`
+	IPs         []string `json:"ips,omitempty"`
+	Countries   []string `json:"countries,omitempty"`
 	Server      string   `json:"server"`
 }
 
 type URLIODomainStat struct {
 	Count       int      `json:"count"`
-	IPs         []string `json:"ips"`
+	IPs         []string `json:"ips,omitempty"`
 	Domain      string   `json:"domain"`
 	Size        int      `json:"size"`
 	EncodedSize int      `json:"encodedSize"`
-	Countries   []string `json:"countries"`
+	Countries   []string `json:"countries,omitempty"`
 	Index       int      `json:"index"`
-	Initiators  []string `json:"initiators"`
+	Initiators  []string `json:"initiators,omitempty"`
 	Redirects   int      `json:"redirects"`
 }
 
 type URLIORegDomainStat struct {
 	Count       int              `json:"count"`
-	IPs         []string         `json:"ips"`
+	IPs         []string         `json:"ips,omitempty"`
 	RegDomain   string           `json:"regDomain"`
 	Size        int              `json:"size"`
 	EncodedSize int              `json:"encodedSize"`
-	Countries   []string         `json:"countries"`
+	Countries   []string         `json:"countries,omitempty"`
 	Index       int              `json:"index"`
-	SubDomains  []URLIOSubDomain `json:"subDomains"`
+	SubDomains  []URLIOSubDomain `json:"subDomains,omitempty"`
 	Redirects   int              `json:"redirects"`
 }
 
@@ -321,18 +321,18 @@ type URLIOSubDomain struct {
 
 type URLIOIPStat struct {
 	Requests    int                    `json:"requests"`
-	Domains     []string               `json:"domains"`
+	Domains     []string               `json:"domains,omitempty"`
 	IP          string                 `json:"ip"`
 	ASN         URLIOASNInfo           `json:"asn"`
-	DNS         map[string]interface{} `json:"dns"`
+	DNS         map[string]interface{} `json:"dns,omitempty"`
 	GeoIP       URLIOGeoIPInfo         `json:"geoip"`
 	Size        int                    `json:"size"`
 	EncodedSize int                    `json:"encodedSize"`
-	Countries   []string               `json:"countries"`
+	Countries   []string               `json:"countries,omitempty"`
 	Index       int                    `json:"index"`
 	IPv6        bool                   `json:"ipv6"`
 	Redirects   int                    `json:"redirects"`
-	Count       interface{}            `json:"count"`
+	Count       interface{}            `json:"count,omitempty"`
 	RDNS        *URLIORDNSInfo         `json:"rdns,omitempty"`
 }
 
@@ -349,7 +349,7 @@ type URLIOProcessors struct {
 }
 
 type URLIOUmbrellaProcessor struct {
-	Data []URLIOUmbrellaData `json:"data"`
+	Data []URLIOUmbrellaData `json:"data,omitempty"`
 }
 
 type URLIOUmbrellaData struct {
@@ -358,7 +358,7 @@ type URLIOUmbrellaData struct {
 }
 
 type URLIOGeoIPProcessor struct {
-	Data []URLIOGeoIPData `json:"data"`
+	Data []URLIOGeoIPData `json:"data,omitempty"`
 }
 
 type URLIOGeoIPData struct {
@@ -367,24 +367,24 @@ type URLIOGeoIPData struct {
 }
 
 type URLIORDNSProcessor struct {
-	Data []URLIORDNSInfo `json:"data"`
+	Data []URLIORDNSInfo `json:"data,omitempty"`
 }
 
 type URLIOASNProcessor struct {
-	Data []URLIOASNInfo `json:"data"`
+	Data []URLIOASNInfo `json:"data,omitempty"`
 }
 
 type URLIOWappaProcessor struct {
-	Data []URLIOWappaData `json:"data"`
+	Data []URLIOWappaData `json:"data,omitempty"`
 }
 
 type URLIOWappaData struct {
-	Confidence      []URLIOConfidence `json:"confidence"`
+	Confidence      []URLIOConfidence `json:"confidence,omitempty"`
 	ConfidenceTotal int               `json:"confidenceTotal"`
 	App             string            `json:"app"`
 	Icon            string            `json:"icon"`
 	Website         string            `json:"website"`
-	Categories      []URLIOCategory   `json:"categories"`
+	Categories      []URLIOCategory   `json:"categories,omitempty"`
 }
 
 type URLIOConfidence struct {
@@ -404,7 +404,7 @@ type URLIOScanTask struct {
 	Visibility    string        `json:"visibility"`
 	Method        string        `json:"method"`
 	Source        string        `json:"source"`
-	Tags          []interface{} `json:"tags"`
+	Tags          []interface{} `json:"tags,omitempty"`
 	ReportURL     string        `json:"reportURL"`
 	ScreenshotURL string        `json:"screenshotURL"`
 	DomURL        string        `json:"domURL"`
@@ -414,7 +414,7 @@ type URLIOScanPage struct {
 	URL     string `json:"url"`
 	Domain  string `json:"domain"`
 	Country string `json:"country"`
-	City    string `json:"city"`
+	City    string `json:"city,omitempty"`
 	Server  string `json:"server"`
 	IP      string `json:"ip"`
 	ASN     string `json:"asn"`
@@ -422,15 +422,15 @@ type URLIOScanPage struct {
 }
 
 type URLIOScanLists struct {
-	IPs          []string           `json:"ips"`
-	Countries    []string           `json:"countries"`
-	ASNs         []string           `json:"asns"`
-	Domains      []string           `json:"domains"`
-	Servers      []string           `json:"servers"`
-	URLs         []string           `json:"urls"`
-	LinkDomains  []string           `json:"linkDomains"`
-	Certificates []URLIOCertificate `json:"certificates"`
-	Hashes       []string           `json:"hashes"`
+	IPs          []string           `json:"ips,omitempty"`
+	Countries    []string           `json:"countries,omitempty"`
+	ASNs         []string           `json:"asns,omitempty"`
+	Domains      []string           `json:"domains,omitempty"`
+	Servers      []string           `json:"servers,omitempty"`
+	URLs         []string           `json:"urls,omitempty"`
+	LinkDomains  []string           `json:"linkDomains,omitempty"`
+	Certificates []URLIOCertificate `json:"certificates,omitempty"`
+	Hashes       []string           `json:"hashes,omitempty"`
 }
 
 type URLIOCertificate struct {
@@ -449,29 +449,29 @@ type URLIOScanVerdicts struct {
 
 type URLIOVerdict struct {
 	Score       int           `json:"score"`
-	Categories  []interface{} `json:"categories"`
-	Brands      []interface{} `json:"brands"`
-	Tags        []interface{} `json:"tags"`
+	Categories  []interface{} `json:"categories,omitempty"`
+	Brands      []interface{} `json:"brands,omitempty"`
+	Tags        []interface{} `json:"tags,omitempty"`
 	Malicious   bool          `json:"malicious"`
 	HasVerdicts bool          `json:"hasVerdicts"`
 }
 
 type URLIOEnginesVerdict struct {
 	Score             int           `json:"score"`
-	Categories        []interface{} `json:"categories"`
+	Categories        []interface{} `json:"categories,omitempty"`
 	EnginesTotal      int           `json:"enginesTotal"`
 	MaliciousTotal    int           `json:"maliciousTotal"`
 	BenignTotal       int           `json:"benignTotal"`
-	MaliciousVerdicts []interface{} `json:"maliciousVerdicts"`
-	BenignVerdicts    []interface{} `json:"benignVerdicts"`
+	MaliciousVerdicts []interface{} `json:"maliciousVerdicts,omitempty"`
+	BenignVerdicts    []interface{} `json:"benignVerdicts,omitempty"`
 	Malicious         bool          `json:"malicious"`
 	HasVerdicts       bool          `json:"hasVerdicts"`
 }
 
 type URLIOCommunityVerdict struct {
 	Score          int           `json:"score"`
-	Categories     []interface{} `json:"categories"`
-	Brands         []interface{} `json:"brands"`
+	Categories     []interface{} `json:"categories,omitempty"`
+	Brands         []interface{} `json:"brands,omitempty"`
 	VotesTotal     int           `json:"votesTotal"`
 	VotesMalicious int           `json:"votesMalicious"`
 	VotesBenign    int           `json:"votesBenign"`
