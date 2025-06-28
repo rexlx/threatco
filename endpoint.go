@@ -159,6 +159,10 @@ type VmRayAuth struct {
 	Token string
 }
 
+type URLScanAuth struct {
+	Token string `json:"token"`
+}
+
 type PrefetchAuth struct {
 	AppName string `json:"x_app"`
 	URL     string `json:"url"`
@@ -170,6 +174,20 @@ type PrefetchAuth struct {
 
 type XAPIKeyAuth struct {
 	Token string `json:"token"`
+}
+
+func (u *URLScanAuth) GetAndStoreToken(stop chan bool) {
+	fmt.Println("no need to rotate token")
+}
+
+func (u *URLScanAuth) Apply(req *http.Request) {
+	if u.Token == "" {
+		fmt.Println("URLScanAuth.Apply: Token is not set, using default 'threatco'")
+		u.Token = "threatco"
+	}
+	req.Header.Set("api-key", u.Token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 }
 
 func (p *PrefetchAuth) Apply(req *http.Request) {
