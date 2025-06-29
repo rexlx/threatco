@@ -55,6 +55,102 @@ func (s *Server) LogHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func (s *Server) ParserHandler2(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	var wg sync.WaitGroup
+	allBytes := []byte{'['}
+	first := true
+	var mu sync.Mutex
+	// defer s.addStat("parser_requests", 1)
+	cx := parser.NewContextualizer(&parser.PrivateChecks{Ipv4: true})
+	var pr ParserRequest
+	err := json.NewDecoder(r.Body).Decode(&pr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer func(start time.Time, req ParserRequest) {
+		reqOut, err := json.Marshal(req)
+		if err != nil {
+			s.Log.Println("ProxyHandler error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
+	}(start, pr)
+	out := make(map[string][]parser.Match)
+	for k, v := range cx.Expressions {
+		out[k] = cx.GetMatches(pr.Blob, k, v)
+	}
+	for k, v := range out {
+		for _, svc := range s.Details.SupportedServices {
+			for _, t := range svc.Type {
+				if t == k && len(v) > 0 {
+					// if svc.RateLimited {
+					// 	continue
+					// }
+					for _, value := range v {
+						var pr ProxyRequest
+						if len(svc.RouteMap) > 0 {
+							for _, rm := range svc.RouteMap {
+								if rm.Type == k {
+									pr.Route = rm.Route
+								}
+							}
+						}
+						pr.To = svc.Kind
+						pr.Type = k
+						pr.Value = value.Value
+						pr.From = "parser"
+						uid := uuid.New().String()
+						pr.TransactionID = uid
+						wg.Add(1)
+						go func(name string, id string, first *bool) {
+							defer wg.Done()
+							op, ok := s.ProxyOperators[name]
+							if !ok {
+								fmt.Println("no operator for service", name)
+								return
+							}
+							ep, ok := s.Targets[name]
+							if !ok {
+								fmt.Println("no endpoint for service", name)
+								return
+							}
+							out, err := op(s.RespCh, *ep, pr)
+							if err != nil {
+								fmt.Println("error", err)
+								// continue
+							}
+							mu.Lock()
+							if len(out) == 0 {
+								return
+							}
+							if !*first {
+								allBytes = append(allBytes, ',')
+							}
+							allBytes = append(allBytes, out...)
+							*first = false
+							mu.Unlock()
+							s.RespCh <- ResponseItem{
+								ID:     id,
+								Vendor: name,
+								Data:   out,
+								Time:   time.Now(),
+							}
+							s.DB.StoreResponse(id, out, pr.To)
+						}(svc.Kind, uid, &first)
+					}
+				}
+			}
+		}
+	}
+	wg.Wait()
+	allBytes = append(allBytes, ']')
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(allBytes)
+}
+
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	var wg sync.WaitGroup
@@ -306,6 +402,58 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(out)
+}
+
+func (s *Server) ProxyHandler2(w http.ResponseWriter, r *http.Request) {
+	// var written int
+	var req ProxyRequest
+	defer s.addStat("proxy_requests", 1)
+	start := time.Now()
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		s.Log.Println("ProxyHandler decoder error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer func(start time.Time, req ProxyRequest) {
+		reqOut, err := json.Marshal(req)
+		if err != nil {
+			s.Log.Println("ProxyHandler error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.Log.Println("__ProxyHandler2__ took:", time.Since(start), req.Username, string(reqOut))
+	}(start, req)
+	// s.Log.Println("ProxyHandler", req)
+	uid := uuid.New().String()
+	req.TransactionID = uid
+	s.Memory.Lock()
+	defer s.Memory.Unlock()
+	op, ok := s.ProxyOperators[req.To]
+	if !ok {
+		s.Log.Printf("no proxy operator for service %s, skipping", req.To)
+		http.Error(w, fmt.Sprintf("no proxy operator for service %s", req.To), http.StatusBadRequest)
+		return
+	}
+	ep, ok := s.Targets[req.To]
+	if !ok {
+		s.Log.Printf("no endpoint for service %s, skipping", req.To)
+		http.Error(w, fmt.Sprintf("no endpoint for service %s", req.To), http.StatusBadRequest)
+		return
+	}
+	resp, err := op(s.RespCh, *ep, req)
+	if err != nil {
+		r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+		if err != nil {
+			s.Log.Println("bigtime error", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// go s.DB.StoreResponse(uid, r, req.To)
+		w.Write(r)
+		return
+	}
+	w.Write(resp)
 }
 
 func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {

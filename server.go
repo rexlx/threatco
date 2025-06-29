@@ -39,17 +39,18 @@ var (
 )
 
 type Server struct {
-	Session *scs.SessionManager  `json:"-"`
-	RespCh  chan ResponseItem    `json:"-"`
-	StopCh  chan bool            `json:"-"`
-	Cache   *Cache               `json:"-"`
-	DB      Database             `json:"-"`
-	Gateway *http.ServeMux       `json:"-"`
-	Log     *log.Logger          `json:"-"`
-	Memory  *sync.RWMutex        `json:"-"`
-	Targets map[string]*Endpoint `json:"targets"`
-	ID      string               `json:"id"`
-	Details Details              `json:"details"`
+	Session        *scs.SessionManager      `json:"-"`
+	RespCh         chan ResponseItem        `json:"-"`
+	StopCh         chan bool                `json:"-"`
+	Cache          *Cache                   `json:"-"`
+	DB             Database                 `json:"-"`
+	Gateway        *http.ServeMux           `json:"-"`
+	Log            *log.Logger              `json:"-"`
+	Memory         *sync.RWMutex            `json:"-"`
+	Targets        map[string]*Endpoint     `json:"targets"`
+	ProxyOperators map[string]ProxyOperator `json:"-"`
+	ID             string                   `json:"id"`
+	Details        Details                  `json:"details"`
 }
 
 type Details struct {
@@ -91,6 +92,7 @@ type LogItem struct {
 func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
 	var database Database
 	targets := make(map[string]*Endpoint)
+	operators := make(map[string]ProxyOperator)
 	memory := &sync.RWMutex{}
 	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
@@ -131,16 +133,17 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		log.Fatalf("unsupported database type: %s", dbType)
 	}
 	svr := &Server{
-		StopCh:  stopCh,
-		Session: sessionMgr,
-		RespCh:  resch,
-		Cache:   cache,
-		DB:      database,
-		Gateway: gateway,
-		Log:     logger,
-		Memory:  memory,
-		Targets: targets,
-		ID:      id,
+		ProxyOperators: operators,
+		StopCh:         stopCh,
+		Session:        sessionMgr,
+		RespCh:         resch,
+		Cache:          cache,
+		DB:             database,
+		Gateway:        gateway,
+		Log:            logger,
+		Memory:         memory,
+		Targets:        targets,
+		ID:             id,
 		Details: Details{
 			FQDN:              *fqdn,
 			SupportedServices: SupportedServices,
@@ -233,6 +236,8 @@ func (s *Server) ProcessTransientResponses() {
 				r.Data = append(r.Data, resp.Data...)
 				s.Cache.Responses[resp.ID] = r
 			}
+			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
+			s.Details.Stats["vendor_responses"]++
 			s.Memory.Unlock()
 			go s.DB.StoreResponse(resp.ID, resp.Data, resp.Vendor)
 		case <-ticker.C:
@@ -380,15 +385,22 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode
 	s.Session.Lifetime = time.Duration(cfg.SessionTokenTTL) * time.Hour
-	for _, service := range s.Targets {
+	for name, service := range s.Targets {
 		thisAuth := service.Auth
 		go thisAuth.GetAndStoreToken(s.StopCh)
+		op, ok := ProxyOperators[name]
+		if !ok {
+			s.Log.Printf("no proxy operator for service %s, skipping", name)
+			continue
+		}
+		s.ProxyOperators[name] = op
+		s.Log.Printf("service %s initialized with operator %s", name, op)
 		// s.Log.Printf("service %s: +%v\n", serviceName, service)
 	}
 	s.Gateway.HandleFunc("/stats", s.GetStatHistoryHandler)
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
 	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
-	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
+	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler2)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
@@ -411,7 +423,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/view-logs", http.HandlerFunc(s.ValidateSessionToken(s.LogViewHandler)))
 	s.Gateway.HandleFunc("/getresponses", http.HandlerFunc(s.ValidateSessionToken(s.GetResponseCacheHandler)))
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
-	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
+	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler2)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))

@@ -460,6 +460,105 @@ func (s *Server) ParseCorrectMispResponse(req ProxyRequest, response vendors.Mis
 	})
 }
 
+func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]byte, error) {
+	// fmt.Println("ParseOtherMispResponse")
+	if len(response) != 0 {
+		if len(response) > 1 {
+			attrs, err := strconv.Atoi(response[0].AttributeCount)
+			if err != nil {
+				fmt.Println("got bad attr data from misp...")
+				attrs = 0
+			}
+			return json.Marshal(SummarizedEvent{
+				Matched:       true,
+				Timestamp:     time.Now(),
+				Info:          "received multiple hits for the given value",
+				Background:    "has-background-warning",
+				From:          req.To,
+				ID:            "multiple hits",
+				AttrCount:     attrs,
+				ThreatLevelID: "0",
+				Value:         req.Value,
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+			})
+		} else {
+			attrs, err := strconv.Atoi(response[0].AttributeCount)
+			if err != nil {
+				fmt.Println("got bad attr data from misp...")
+				attrs = 0
+			}
+			return json.Marshal(SummarizedEvent{
+				Matched:       true,
+				Timestamp:     time.Now(),
+				Background:    "has-background-warning",
+				From:          req.To,
+				ID:            response[0].ID,
+				AttrCount:     attrs,
+				ThreatLevelID: response[0].ThreatLevelID,
+				Value:         req.Value,
+				Info:          response[0].Info,
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+			})
+		}
+	}
+	return json.Marshal(SummarizedEvent{
+		Timestamp:     time.Now(),
+		Background:    "has-background-primary-dark",
+		Info:          "no hits for the given value",
+		From:          req.To,
+		ID:            "no hits",
+		AttrCount:     0,
+		ThreatLevelID: "0",
+		Value:         req.Value,
+		Link:          req.TransactionID,
+	})
+}
+
+func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
+	if len(response.Response) != 0 {
+		if len(response.Response) > 1 {
+			return json.Marshal(SummarizedEvent{
+				Matched:       true,
+				Timestamp:     time.Now(),
+				Info:          "received multiple hits for the given value",
+				Background:    "has-background-warning",
+				From:          req.To,
+				ID:            "multiple",
+				Value:         req.Value,
+				AttrCount:     0,
+				ThreatLevelID: "1",
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+			})
+		} else {
+			return json.Marshal(SummarizedEvent{
+				Matched:       true,
+				Timestamp:     time.Now(),
+				Background:    "has-background-warning",
+				Info:          response.Response[0].Event.Info,
+				From:          req.To,
+				ID:            response.Response[0].Event.ID,
+				Value:         req.Value,
+				AttrCount:     len(response.Response[0].Event.Attribute),
+				ThreatLevelID: response.Response[0].Event.ThreatLevelID,
+				Link:          req.TransactionID,
+				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
+			})
+		}
+	}
+	return json.Marshal(SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-primary-dark",
+		Info:       "no hits for the given value",
+		From:       req.To,
+		ID:         "no hits",
+		Value:      req.Value,
+		Link:       req.TransactionID,
+	})
+}
+
 type ErrorMessage struct {
 	Error bool   `json:"error"`
 	Info  string `json:"info"`
