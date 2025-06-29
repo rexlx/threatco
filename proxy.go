@@ -23,6 +23,7 @@ var ProxyOperators = map[string]ProxyOperator{
 	"mandiant":    MandiantProxyHelper,
 	"virustotal":  VirusTotalProxyHelper,
 	"crowdstrike": CrowdstrikeProxyHelper,
+	"splunk":      SplunkProxyHelper,
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
@@ -338,4 +339,281 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 	}
 	return json.Marshal(event)
 
+}
+
+func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
+	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
+	// fmt.Println("splunk url", url, req)
+	searchString := `search index=main sourcetype=syslog process=threatco value="%s" earliest=-1d latest=now`
+	searchString = fmt.Sprintf(searchString, req.Value)
+	data := struct {
+		Search string `json:"search"`
+		Output string `json:"output_mode"`
+	}{
+		Search: searchString,
+		Output: "json",
+	}
+	out, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("SplunkHelper: server error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
+	if err != nil {
+		fmt.Println("SplunkHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+	resch <- ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: "splunk",
+		Data:   resp,
+		Time:   time.Now(),
+	}
+
+	var response vendors.SplunkExportResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("SplunkHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       "under development",
+		From:       req.To,
+		Value:      req.Value,
+		ID:         "under dev",
+		Link:       req.TransactionID,
+	}
+	return json.Marshal(sum)
+}
+
+func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	var uname, key, uri, thisUrl, info string
+	var resp []byte
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key = myAuth.(*BasicAuth).GetInfo()
+	default:
+		uname, key = "", ""
+	}
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+
+	sig := Sign(uname, key, timestamp, uri)
+	switch req.Route {
+	case "whois":
+		thisUrl = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	default:
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+		thisUrl = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	}
+
+	request, err := http.NewRequest("GET", thisUrl, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp = ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	resch <- ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: "domaintools",
+		Data:   resp,
+		Time:   time.Now(),
+	}
+	var response vendors.DomainProfileResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		var nextTry map[string]interface{}
+		err := json.Unmarshal(resp, &nextTry)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := nextTry["response"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		newResponse := val.(map[string]interface{})
+		results, ok := newResponse["results_count"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		switch results.(type) {
+		case float64:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-warning",
+				Info:       fmt.Sprintf("domaintools results count was %v", results),
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+				Matched:    true,
+				AttrCount:  int(results.(float64)),
+			})
+		default:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Matched:    false,
+				Info:       "domaintools returned a bad response",
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+			})
+		}
+
+	}
+	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
+}
+
+func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	var uname, key, uri, thisUrl, info string
+	var resp []byte
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key = myAuth.(*BasicAuth).GetInfo()
+	default:
+		uname, key = "", ""
+	}
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	if req.Route != "" {
+		uri = fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	} else {
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+	}
+	sig := Sign(uname, key, timestamp, uri)
+	switch req.Route {
+	case "whois":
+		thisUrl = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-investigate":
+		thisUrl = IrisInvestigateURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-profile":
+		thisUrl = IrisProfileURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-detect":
+		thisUrl = IrisDetectURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-enrich":
+		thisUrl = IrisEnrichURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-pivot":
+		thisUrl = IrisPivotURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	default:
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+		thisUrl = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	}
+	request, err := http.NewRequest("GET", thisUrl, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp = ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	resch <- ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: "domaintools",
+		Data:   resp,
+		Time:   time.Now(),
+	}
+	var response vendors.DomainToolsIrisEnrichResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		var nextTry map[string]interface{}
+		err := json.Unmarshal(resp, &nextTry)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := nextTry["response"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		newResponse := val.(map[string]interface{})
+		results, ok := newResponse["results_count"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		switch results.(type) {
+		case float64:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Info:       fmt.Sprintf("domaintools results count was %v", results),
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+				Matched:    true,
+				AttrCount:  int(results.(float64)),
+			})
+		default:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Matched:    false,
+				Info:       "domaintools returned a bad response",
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+			})
+		}
+
+	}
+	if response.Response.LimitExceeded {
+		info = "domaintools rate limit exceeded"
+		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
+			Background: "has-background-info",
+			Info:       info,
+			From:       req.To,
+			Value:      req.Value,
+			Link:       req.TransactionID,
+		})
+	}
+	if response.Response.ResultsCount == 0 {
+		info = "domaintools returned no hits for that value"
+		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
+			Background: "has-background-primary-dark",
+			Info:       info,
+			From:       req.To,
+			Value:      req.Value,
+			Link:       req.TransactionID,
+		})
+	}
+	info = "domaintools returned some hits for that value"
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
 }
