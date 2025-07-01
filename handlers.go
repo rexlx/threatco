@@ -529,6 +529,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error adding token to session", http.StatusInternalServerError)
 		return
 	}
+	s.CleanUserServices(&u)
 	s.Log.Println("login successful", email)
 	http.Redirect(w, r, "/services", http.StatusSeeOther)
 	s.Memory.Lock()

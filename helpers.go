@@ -24,6 +24,34 @@ import (
 	"github.com/rexlx/threatco/vendors"
 )
 
+func (s *Server) CleanUserServices(u *User) {
+	supportedKindsMap := make(map[string]bool)
+	newServices := make([]ServiceType, 0)
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	if u == nil || len(u.Services) == 0 {
+		return
+	}
+	for _, svc := range s.Details.SupportedServices {
+		supportedKindsMap[svc.Kind] = true
+	}
+
+	for _, svc := range u.Services {
+		if _, ok := supportedKindsMap[svc.Kind]; ok {
+			newServices = append(newServices, svc)
+		} else {
+			s.Log.Printf("CleanUserServices: removing unsupported service %s for user %s", svc.Kind, u.Email)
+		}
+	}
+	if len(newServices) == 0 {
+		s.Log.Printf("CleanUserServices: no supported services left for user %s", u.Email)
+		u.Services = make([]ServiceType, 0)
+		return
+	}
+	u.Services = newServices
+
+}
+
 func Sign(username, key, time, uri string) string {
 	p := username + time + uri
 	h := hmac.New(sha1.New, []byte(key))
