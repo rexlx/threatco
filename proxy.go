@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,12 +20,14 @@ type ProxyOperator func(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 // TODO rethink this tomorrow. it does no good to name these here, they have to built
 // based of the config.
 var ProxyOperators = map[string]ProxyOperator{
-	"misp":        MispProxyHelper,
-	"deepfry":     DeepFryProxyHelper,
-	"mandiant":    MandiantProxyHelper,
-	"virustotal":  VirusTotalProxyHelper,
-	"crowdstrike": CrowdstrikeProxyHelper,
-	"splunk":      SplunkProxyHelper,
+	"misp":                MispProxyHelper,
+	"deepfry":             DeepFryProxyHelper,
+	"mandiant":            MandiantProxyHelper,
+	"virustotal":          VirusTotalProxyHelper,
+	"crowdstrike":         CrowdstrikeProxyHelper,
+	"splunk":              SplunkProxyHelper,
+	"domaintools":         DomainToolsProxyHelper,
+	"domaintools-classic": DomainToolsClassicProxyHelper,
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
@@ -343,55 +347,90 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 
 func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
 
-	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
-	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
+	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
 	// fmt.Println("splunk url", url, req)
 	searchString := `search index=main sourcetype=syslog process=threatco value="%s" earliest=-1d latest=now`
 	searchString = fmt.Sprintf(searchString, req.Value)
-	data := struct {
-		Search string `json:"search"`
-		Output string `json:"output_mode"`
-	}{
-		Search: searchString,
-		Output: "json",
-	}
-	out, err := json.Marshal(data)
-	if err != nil {
-		fmt.Println("SplunkHelper: server error", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
-	}
-	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
+	out := url.Values{}
+	out.Set("search", searchString)
+	out.Set("output_mode", "json")
+	out.Set("earliest_time", "-1d")
+	out.Set("latest_time", "now")
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBufferString(out.Encode()))
 	if err != nil {
 		fmt.Println("SplunkHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	request.Header.Set("Content-Type", "application/json")
-	resp := ep.Do(request)
-	if len(resp) == 0 {
-		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// cant use traditional endpoint.Do because of streamed response
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key := myAuth.(*BasicAuth).GetInfo()
+		request.SetBasicAuth(uname, key)
+	default:
+		fmt.Println("SplunkHelper: unsupported auth type, using default 'threatco'")
+		request.SetBasicAuth("threatco", "threatco")
+	}
+	resp, err := client.Do(request)
+	if err != nil {
+		fmt.Println("SplunkHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("SplunkHelper: got a non-200 response", resp.StatusCode)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("got a non-200 response %d", resp.StatusCode))
+	}
+	var results []SearchResult
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue // skip empty lines
+		}
+		var res StreamResult
+		err := json.Unmarshal([]byte(line), &res)
+		if err != nil {
+			fmt.Println("SplunkHelper: error unmarshalling line", err)
+			continue
+		}
+		results = append(results, res.Result)
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Println("SplunkHelper: error reading response body", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error reading response body %v", err))
+	}
+	if len(results) == 0 {
+		fmt.Println("SplunkHelper: no hits found")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
+	}
+	data, err := json.Marshal(results)
+	if err != nil {
+		fmt.Println("SplunkHelper: error marshalling results", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error marshalling results %v", err))
 	}
 	resch <- ResponseItem{
 		ID:     req.TransactionID,
 		Vendor: "splunk",
-		Data:   resp,
+		Data:   data,
 		Time:   time.Now(),
-	}
-
-	var response vendors.SplunkExportResponse
-	err = json.Unmarshal(resp, &response)
-	if err != nil {
-		fmt.Println("SplunkHelper: bad vendor response", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
 		Background: "has-background-warning",
-		Info:       "under development",
+		Info:       fmt.Sprintf("found %d results for value", len(results)),
 		From:       req.To,
 		Value:      req.Value,
-		ID:         "under dev",
+		ID:         "",
 		Link:       req.TransactionID,
 	}
 	return json.Marshal(sum)
