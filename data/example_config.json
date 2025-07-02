@@ -74,6 +74,20 @@
             }]
         },
         {
+            "comment": "free tier of urlscan.io",
+            "name": "urlscan",
+            "url": "https://urlscan.io",
+            "rate_limited": true,
+            "max_requests": 10,
+            "refill_rate": 60,
+            "insecure": false,
+            "auth_type": "urlscan",
+            "key": "",
+            "kind": "urlscan",
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
+            "description": "URLScan.io"
+        },
+        {
             "name": "deepfry-ip",
             "url": "http://kenmeri:8081",
             "rate_limited": false,

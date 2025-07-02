@@ -28,6 +28,7 @@ var ProxyOperators = map[string]ProxyOperator{
 	"splunk":              SplunkProxyHelper,
 	"domaintools":         DomainToolsProxyHelper,
 	"domaintools-classic": DomainToolsClassicProxyHelper,
+	"urlscan":             URLScanProxyHelper,
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
@@ -346,7 +347,6 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 }
 
 func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
-
 	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
 	// fmt.Println("splunk url", url, req)
@@ -655,4 +655,53 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 	}
 	return json.Marshal(sum)
 	// return resp, nil
+}
+
+func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "api/v1/search")
+	request, err := http.NewRequest("GET", thisUrl, nil)
+	if err != nil {
+		fmt.Println("URLScanHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	query := request.URL.Query()
+	query.Set("q", req.Value)
+	query.Set("size", "100")
+	query.Add("search_after", "string")
+	query.Set("datasource", "scans")
+	request.URL.RawQuery = query.Encode()
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		fmt.Println("URLScanHelper: got a zero length response")
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+	resch <- ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: "urlscan",
+		Data:   resp,
+		Time:   time.Now(),
+	}
+	var response vendors.URLScanSearchResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("URLScanHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+	if len(response.Results) == 0 {
+		fmt.Println("URLScanHelper: no hits found")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
+	}
+	info := fmt.Sprintf("found %d results for value", len(response.Results))
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		ID:         "",
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+
 }
