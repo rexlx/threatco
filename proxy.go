@@ -667,7 +667,6 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	query := request.URL.Query()
 	query.Set("q", req.Value)
 	query.Set("size", "100")
-	query.Add("search_after", "string")
 	query.Set("datasource", "scans")
 	request.URL.RawQuery = query.Encode()
 	resp := ep.Do(request)
@@ -692,6 +691,10 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
 	}
 	info := fmt.Sprintf("found %d results for value", len(response.Results))
+	if len(response.Results) > 0 && response.Results[0].Result != "" {
+		info += fmt.Sprintf(", first result: %s", response.Results[0].Result)
+	}
+
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
 		Background: "has-background-warning",

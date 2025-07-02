@@ -342,8 +342,8 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// s.Log.Println("ProxyHandler", req)
 	uid := uuid.New().String()
 	req.TransactionID = uid
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
 	op, ok := s.ProxyOperators[req.To]
 	if !ok {
 		s.Log.Printf("no proxy operator for service %s, skipping", req.To)
