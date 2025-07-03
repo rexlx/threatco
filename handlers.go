@@ -86,20 +86,21 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 					// 	continue
 					// }
 					for _, value := range v {
-						var pr ProxyRequest
+						var proxyReq ProxyRequest
 						if len(svc.RouteMap) > 0 {
 							for _, rm := range svc.RouteMap {
 								if rm.Type == k {
-									pr.Route = rm.Route
+									proxyReq.Route = rm.Route
 								}
 							}
 						}
-						pr.To = svc.Kind
-						pr.Type = k
-						pr.Value = value.Value
-						pr.From = "parser"
+						proxyReq.To = svc.Kind
+						proxyReq.Type = k
+						proxyReq.Value = value.Value
+						proxyReq.Username = pr.Username
+						proxyReq.From = "api parser"
 						uid := uuid.New().String()
-						pr.TransactionID = uid
+						proxyReq.TransactionID = uid
 						wg.Add(1)
 						go func(name string, id string, first *bool) {
 							defer wg.Done()
@@ -113,7 +114,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								fmt.Println("no endpoint for service", name)
 								return
 							}
-							out, err := op(s.RespCh, *ep, pr)
+							out, err := op(s.RespCh, *ep, proxyReq)
 							if err != nil {
 								fmt.Println("error", err)
 								// continue
@@ -134,7 +135,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								Data:   out,
 								Time:   time.Now(),
 							}
-							s.DB.StoreResponse(id, out, pr.To)
+							s.DB.StoreResponse(id, out, proxyReq.To)
 						}(svc.Kind, uid, &first)
 					}
 				}
@@ -330,6 +331,8 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	uid := uuid.New().String()
+	req.TransactionID = uid
 	defer func(start time.Time, req ProxyRequest) {
 		reqOut, err := json.Marshal(req)
 		if err != nil {
@@ -340,8 +343,6 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, req)
 	// s.Log.Println("ProxyHandler", req)
-	uid := uuid.New().String()
-	req.TransactionID = uid
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	op, ok := s.ProxyOperators[req.To]
@@ -519,6 +520,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "password does not match", http.StatusUnauthorized)
 		return
 	}
+	s.CleanUserServices(&u)
 	err = s.DB.AddUser(u)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -543,7 +545,6 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error adding token to session", http.StatusInternalServerError)
 		return
 	}
-	s.CleanUserServices(&u)
 	s.Log.Println("login successful", email)
 	http.Redirect(w, r, "/services", http.StatusSeeOther)
 	s.Memory.Lock()

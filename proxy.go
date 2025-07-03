@@ -58,13 +58,23 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "zero length response")
 	}
-	//go s.AddResponse("misp", req.TransactionID, resp)
-	resch <- ResponseItem{
+	out, err = json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "misp",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response vendors.MispEventResponse
 	err = json.Unmarshal(resp, &response)
 
@@ -122,14 +132,23 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	// go s.addStat(ep.GetURL(), float64(len(resp)))
-	// go s.AddResponse("deepfry", req.TransactionID, resp)
-	resch <- ResponseItem{
+	out, err = json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "deepfry",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response matchResponse
 	var sum SummarizedEvent
 	err = json.Unmarshal(resp, &response)
@@ -178,14 +197,23 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	// go s.addStat(ep.GetURL(), float64(len(resp)))
-	// go s.AddResponse("mandiant", req.TransactionID, resp)
-	resch <- ResponseItem{
+	out, err = json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "mandiant",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	var response vendors.MandiantIndicatorResponse
 	err = json.Unmarshal(resp, &response)
@@ -243,12 +271,23 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 		fmt.Println("VirusTotalHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "virustotal",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	var response vendors.VirusTotalResponse
 	err = json.Unmarshal(resp, &response)
@@ -308,12 +347,23 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "crowdstrike",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	var response vendors.CSFalconIOCResponse
 	err = json.Unmarshal(resp, &response)
@@ -417,12 +467,23 @@ func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) (
 		fmt.Println("SplunkHelper: error marshalling results", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error marshalling results %v", err))
 	}
-	resch <- ResponseItem{
+	_out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "splunk",
-		Data:   data,
+		Vendor: req.To,
+		Data:   _out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, data)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
@@ -467,12 +528,23 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req Pro
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "domaintools",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response vendors.DomainProfileResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
@@ -573,12 +645,23 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "domaintools",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response vendors.DomainToolsIrisEnrichResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
@@ -674,12 +757,23 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 		fmt.Println("URLScanHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "urlscan",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response vendors.URLScanSearchResponse
 	err = json.Unmarshal(resp, &response)
 	if err != nil {
