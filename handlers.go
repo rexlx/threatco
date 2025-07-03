@@ -337,7 +337,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		s.Log.Println("__ProxyHandler2__ took:", time.Since(start), req.Username, string(reqOut))
+		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, req)
 	// s.Log.Println("ProxyHandler", req)
 	uid := uuid.New().String()
@@ -400,11 +400,25 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Cache.Responses[id] = event
 	}
+	// pretty print logic
+	var generic any
+	err := json.Unmarshal(event.Data, &generic)
+	if err != nil {
+		w.Write(event.Data)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	pretty, err := json.MarshalIndent(generic, "", "  ")
+	if err != nil {
+		s.Log.Println("error pretty printing event", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	if event.Data == nil || len(event.Data) == 0 {
+	if len(pretty) == 0 {
 		w.Write([]byte("no data for this event, but a record exists"))
 	}
-	w.Write(event.Data)
+	w.Write(pretty)
 }
 
 func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {

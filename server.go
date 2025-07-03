@@ -230,10 +230,22 @@ func (s *Server) ProcessTransientResponses() {
 			// TODO: check if the response already exists in the cache, if so append to the existing entry?
 			r, ok := s.Cache.Responses[resp.ID]
 			if !ok {
+				initialData, err := MergeJSONData(nil, resp.Data)
+				if err != nil {
+					s.Log.Printf("ERROR: could not initialize JSON array for ID %s: %v", resp.ID, err)
+					s.Memory.Unlock()
+					continue
+				}
+				resp.Data = initialData
 				s.Cache.Responses[resp.ID] = resp
 			} else {
 				r.Time = resp.Time
-				r.Data = append(r.Data, resp.Data...)
+				mergedData, err := MergeJSONData(r.Data, resp.Data)
+				if err != nil {
+					s.Log.Printf("ERROR: could not merge JSON for ID %s: %v", r.ID, err)
+				} else {
+					r.Data = mergedData
+				}
 				s.Cache.Responses[resp.ID] = r
 			}
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))

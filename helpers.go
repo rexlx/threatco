@@ -52,6 +52,27 @@ func (s *Server) CleanUserServices(u *User) {
 
 }
 
+func MergeJSONData(existingData, newData []byte) ([]byte, error) {
+	if len(newData) == 0 {
+		return existingData, nil
+	}
+
+	if len(existingData) == 0 {
+		initialArray := []json.RawMessage{json.RawMessage(newData)}
+		return json.Marshal(initialArray)
+	}
+
+	var objects []json.RawMessage
+
+	if err := json.Unmarshal(existingData, &objects); err != nil {
+		objects = []json.RawMessage{json.RawMessage(existingData)}
+	}
+
+	objects = append(objects, json.RawMessage(newData))
+
+	return json.Marshal(objects)
+}
+
 func Sign(username, key, time, uri string) string {
 	p := username + time + uri
 	h := hmac.New(sha1.New, []byte(key))
