@@ -102,7 +102,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 						uid := uuid.New().String()
 						proxyReq.TransactionID = uid
 						wg.Add(1)
-						go func(name string, id string, first *bool) {
+						go func(name string, id string, first *bool, proxyReq ProxyRequest) {
 							defer wg.Done()
 							op, ok := s.ProxyOperators[name]
 							if !ok {
@@ -136,7 +136,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								Time:   time.Now(),
 							}
 							s.DB.StoreResponse(id, out, proxyReq.To)
-						}(svc.Kind, uid, &first)
+						}(svc.Kind, uid, &first, proxyReq)
 					}
 				}
 			}
