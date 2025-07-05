@@ -11,6 +11,17 @@ type SearchJobResponse struct {
 	Sid string `json:"sid"`
 }
 
+type SplunkErrorXML struct {
+	XMLName  xml.Name `xml:"response"` // Root element is <response>
+	Messages struct {
+		XMLName xml.Name `xml:"messages"`
+		Msg     []struct {
+			Type string `xml:"type,attr"` // 'type' is an attribute of <msg>
+			Text string `xml:",chardata"` // Content of the <msg> tag
+		} `xml:"msg"` // Slice of <msg> elements
+	} `xml:"messages"` // The <messages> element is nested under <response>
+}
+
 type SplunkExportResponse struct {
 	Preview bool `json:"preview"`
 	LastRow bool `json:"lastrow"`

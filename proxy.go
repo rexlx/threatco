@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,11 +20,15 @@ type ProxyOperator func(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 // TODO rethink this tomorrow. it does no good to name these here, they have to built
 // based of the config.
 var ProxyOperators = map[string]ProxyOperator{
-	"misp":        MispProxyHelper,
-	"deepfry":     DeepFryProxyHelper,
-	"mandiant":    MandiantProxyHelper,
-	"virustotal":  VirusTotalProxyHelper,
-	"crowdstrike": CrowdstrikeProxyHelper,
+	"misp":                MispProxyHelper,
+	"deepfry":             DeepFryProxyHelper,
+	"mandiant":            MandiantProxyHelper,
+	"virustotal":          VirusTotalProxyHelper,
+	"crowdstrike":         CrowdstrikeProxyHelper,
+	"splunk":              SplunkProxyHelper,
+	"domaintools":         DomainToolsProxyHelper,
+	"domaintools-classic": DomainToolsClassicProxyHelper,
+	"urlscan":             URLScanProxyHelper,
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
@@ -52,13 +58,23 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "zero length response")
 	}
-	//go s.AddResponse("misp", req.TransactionID, resp)
-	resch <- ResponseItem{
+	out, err = json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "misp",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response vendors.MispEventResponse
 	err = json.Unmarshal(resp, &response)
 
@@ -116,14 +132,23 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	// go s.addStat(ep.GetURL(), float64(len(resp)))
-	// go s.AddResponse("deepfry", req.TransactionID, resp)
-	resch <- ResponseItem{
+	out, err = json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "deepfry",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 	var response matchResponse
 	var sum SummarizedEvent
 	err = json.Unmarshal(resp, &response)
@@ -172,14 +197,23 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	// go s.addStat(ep.GetURL(), float64(len(resp)))
-	// go s.AddResponse("mandiant", req.TransactionID, resp)
-	resch <- ResponseItem{
+	out, err = json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "mandiant",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	var response vendors.MandiantIndicatorResponse
 	err = json.Unmarshal(resp, &response)
@@ -237,12 +271,23 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 		fmt.Println("VirusTotalHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "virustotal",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	var response vendors.VirusTotalResponse
 	err = json.Unmarshal(resp, &response)
@@ -302,12 +347,23 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
 
-	resch <- ResponseItem{
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
 		ID:     req.TransactionID,
-		Vendor: "crowdstrike",
-		Data:   resp,
+		Vendor: req.To,
+		Data:   out,
 		Time:   time.Now(),
 	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
 
 	var response vendors.CSFalconIOCResponse
 	err = json.Unmarshal(resp, &response)
@@ -337,5 +393,412 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 		Link:       req.TransactionID,
 	}
 	return json.Marshal(event)
+
+}
+
+func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
+	// fmt.Println("splunk url", url, req)
+	searchString := `search index=main sourcetype=syslog process=threatco value="%s" earliest=-1d latest=now`
+	searchString = fmt.Sprintf(searchString, req.Value)
+	out := url.Values{}
+	out.Set("search", searchString)
+	out.Set("output_mode", "json")
+	out.Set("earliest_time", "-1d")
+	out.Set("latest_time", "now")
+	request, err := http.NewRequest("POST", thisUrl, bytes.NewBufferString(out.Encode()))
+	if err != nil {
+		fmt.Println("SplunkHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// cant use traditional endpoint.Do because of streamed response
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key := myAuth.(*BasicAuth).GetInfo()
+		request.SetBasicAuth(uname, key)
+	default:
+		fmt.Println("SplunkHelper: unsupported auth type, using default 'threatco'")
+		request.SetBasicAuth("threatco", "threatco")
+	}
+	resp, err := client.Do(request)
+	if err != nil {
+		fmt.Println("SplunkHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("SplunkHelper: got a non-200 response", resp.StatusCode)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("got a non-200 response %d", resp.StatusCode))
+	}
+	var results []SearchResult
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue // skip empty lines
+		}
+		var res StreamResult
+		err := json.Unmarshal([]byte(line), &res)
+		if err != nil {
+			fmt.Println("SplunkHelper: error unmarshalling line", err)
+			continue
+		}
+		results = append(results, res.Result)
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Println("SplunkHelper: error reading response body", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error reading response body %v", err))
+	}
+	if len(results) == 0 {
+		fmt.Println("SplunkHelper: no hits found")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
+	}
+	data, err := json.Marshal(results)
+	if err != nil {
+		fmt.Println("SplunkHelper: error marshalling results", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error marshalling results %v", err))
+	}
+	_out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   _out,
+		Time:   time.Now(),
+	}
+	mergedData, err := MergeJSONData(resItem.Data, data)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
+
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       fmt.Sprintf("found %d results for value", len(results)),
+		From:       req.To,
+		Value:      req.Value,
+		ID:         "",
+		Link:       req.TransactionID,
+	}
+	return json.Marshal(sum)
+}
+
+func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	var uname, key, uri, thisUrl, info string
+	var resp []byte
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key = myAuth.(*BasicAuth).GetInfo()
+	default:
+		uname, key = "", ""
+	}
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+
+	sig := Sign(uname, key, timestamp, uri)
+	switch req.Route {
+	case "whois":
+		thisUrl = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	default:
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+		thisUrl = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	}
+
+	request, err := http.NewRequest("GET", thisUrl, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp = ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
+	var response vendors.DomainProfileResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		var nextTry map[string]interface{}
+		err := json.Unmarshal(resp, &nextTry)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := nextTry["response"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		newResponse := val.(map[string]interface{})
+		results, ok := newResponse["results_count"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		switch results.(type) {
+		case float64:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-warning",
+				Info:       fmt.Sprintf("domaintools results count was %v", results),
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+				Matched:    true,
+				AttrCount:  int(results.(float64)),
+			})
+		default:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Matched:    false,
+				Info:       "domaintools returned a bad response",
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+			})
+		}
+
+	}
+	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
+}
+
+func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	var uname, key, uri, thisUrl, info string
+	var resp []byte
+	myAuth := ep.GetAuth()
+	switch myAuth.(type) {
+	case *BasicAuth:
+		uname, key = myAuth.(*BasicAuth).GetInfo()
+	default:
+		uname, key = "", ""
+	}
+	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	if req.Route != "" {
+		uri = fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
+	} else {
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+	}
+	sig := Sign(uname, key, timestamp, uri)
+	switch req.Route {
+	case "whois":
+		thisUrl = WhoIsURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-investigate":
+		thisUrl = IrisInvestigateURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-profile":
+		thisUrl = IrisProfileURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-detect":
+		thisUrl = IrisDetectURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-enrich":
+		thisUrl = IrisEnrichURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	case "iris-pivot":
+		thisUrl = IrisPivotURLBuilder(ep.GetURL(), uname, key, timestamp, req)
+	default:
+		uri = fmt.Sprintf("/v1/%s", req.Value)
+		thisUrl = fmt.Sprintf("%s%s?api_username=%s&signature=%s&timestamp=%s", ep.GetURL(), uri, uname, sig, timestamp)
+	}
+	request, err := http.NewRequest("GET", thisUrl, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp = ep.Do(request)
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("got a zero length response")
+	}
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
+	var response vendors.DomainToolsIrisEnrichResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		var nextTry map[string]interface{}
+		err := json.Unmarshal(resp, &nextTry)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := nextTry["response"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		newResponse := val.(map[string]interface{})
+		results, ok := newResponse["results_count"]
+		if !ok {
+			return nil, fmt.Errorf("bad response")
+		}
+		switch results.(type) {
+		case float64:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Info:       fmt.Sprintf("domaintools results count was %v", results),
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+				Matched:    true,
+				AttrCount:  int(results.(float64)),
+			})
+		default:
+			return json.Marshal(SummarizedEvent{
+				Timestamp:  time.Now(),
+				Background: "has-background-primary-dark",
+				Matched:    false,
+				Info:       "domaintools returned a bad response",
+				From:       req.To,
+				Value:      req.Value,
+				Link:       req.TransactionID,
+			})
+		}
+
+	}
+	if response.Response.LimitExceeded {
+		info = "domaintools rate limit exceeded"
+		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
+			Background: "has-background-info",
+			Info:       info,
+			From:       req.To,
+			Value:      req.Value,
+			Link:       req.TransactionID,
+		})
+	}
+	if response.Response.ResultsCount == 0 {
+		info = "domaintools returned no hits for that value"
+		return json.Marshal(SummarizedEvent{
+			Timestamp:  time.Now(),
+			Background: "has-background-primary-dark",
+			Info:       info,
+			From:       req.To,
+			Value:      req.Value,
+			Link:       req.TransactionID,
+		})
+	}
+	info = "domaintools returned some hits for that value"
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
+	// return resp, nil
+}
+
+func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "api/v1/search")
+	request, err := http.NewRequest("GET", thisUrl, nil)
+	if err != nil {
+		fmt.Println("URLScanHelper: request error", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	query := request.URL.Query()
+	query.Set("q", req.Value)
+	query.Set("size", "100")
+	query.Set("datasource", "scans")
+	request.URL.RawQuery = query.Encode()
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		fmt.Println("URLScanHelper: got a zero length response")
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, err := MergeJSONData(resItem.Data, resp)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
+	var response vendors.URLScanSearchResponse
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		fmt.Println("URLScanHelper: bad vendor response", err)
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+	if len(response.Results) == 0 {
+		fmt.Println("URLScanHelper: no hits found")
+		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
+	}
+	info := fmt.Sprintf("found %d results for value", len(response.Results))
+	if len(response.Results) > 0 && response.Results[0].Result != "" {
+		info += fmt.Sprintf(", first result: %s", response.Results[0].Result)
+	}
+
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: "has-background-warning",
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		ID:         "",
+		Link:       req.TransactionID,
+		Matched:    true,
+	}
+	return json.Marshal(sum)
 
 }

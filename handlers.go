@@ -2,15 +2,11 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,13 +45,12 @@ func (s *Server) LogHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing 'username' or 'message' field", http.StatusBadRequest)
 		return
 	}
-	s.Log.Printf("%s: %s\n", lr.Username, lr.Message)
 	info := fmt.Sprintf("%s: %s", lr.Username, lr.Message)
 	s.LogInfo(info)
 	w.Write([]byte("ok"))
 }
 
-func (s *Server) ParserHandler2(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	var wg sync.WaitGroup
 	allBytes := []byte{'['}
@@ -90,22 +85,23 @@ func (s *Server) ParserHandler2(w http.ResponseWriter, r *http.Request) {
 					// 	continue
 					// }
 					for _, value := range v {
-						var pr ProxyRequest
+						var proxyReq ProxyRequest
 						if len(svc.RouteMap) > 0 {
 							for _, rm := range svc.RouteMap {
 								if rm.Type == k {
-									pr.Route = rm.Route
+									proxyReq.Route = rm.Route
 								}
 							}
 						}
-						pr.To = svc.Kind
-						pr.Type = k
-						pr.Value = value.Value
-						pr.From = "parser"
+						proxyReq.To = svc.Kind
+						proxyReq.Type = k
+						proxyReq.Value = value.Value
+						proxyReq.Username = pr.Username
+						proxyReq.From = "api parser"
 						uid := uuid.New().String()
-						pr.TransactionID = uid
+						proxyReq.TransactionID = uid
 						wg.Add(1)
-						go func(name string, id string, first *bool) {
+						go func(name string, id string, first *bool, proxyReq ProxyRequest) {
 							defer wg.Done()
 							op, ok := s.ProxyOperators[name]
 							if !ok {
@@ -117,7 +113,7 @@ func (s *Server) ParserHandler2(w http.ResponseWriter, r *http.Request) {
 								fmt.Println("no endpoint for service", name)
 								return
 							}
-							out, err := op(s.RespCh, *ep, pr)
+							out, err := op(s.RespCh, *ep, proxyReq)
 							if err != nil {
 								fmt.Println("error", err)
 								// continue
@@ -138,8 +134,8 @@ func (s *Server) ParserHandler2(w http.ResponseWriter, r *http.Request) {
 								Data:   out,
 								Time:   time.Now(),
 							}
-							s.DB.StoreResponse(id, out, pr.To)
-						}(svc.Kind, uid, &first)
+							s.DB.StoreResponse(id, out, proxyReq.To)
+						}(svc.Kind, uid, &first, proxyReq)
 					}
 				}
 			}
@@ -148,87 +144,6 @@ func (s *Server) ParserHandler2(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	allBytes = append(allBytes, ']')
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(allBytes)
-}
-
-func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	var wg sync.WaitGroup
-	allBytes := []byte{'['}
-	first := true
-	var mu sync.Mutex
-	// defer s.addStat("parser_requests", 1)
-	cx := parser.NewContextualizer(&parser.PrivateChecks{Ipv4: true})
-	var pr ParserRequest
-	err := json.NewDecoder(r.Body).Decode(&pr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer func(start time.Time, req ParserRequest) {
-		reqOut, err := json.Marshal(req)
-		if err != nil {
-			s.Log.Println("ProxyHandler error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
-	}(start, pr)
-	out := make(map[string][]parser.Match)
-	for k, v := range cx.Expressions {
-		out[k] = cx.GetMatches(pr.Blob, k, v)
-	}
-
-	for k, v := range out {
-		for _, svc := range s.Details.SupportedServices {
-			for _, t := range svc.Type {
-				if t == k && len(v) > 0 {
-					if svc.RateLimited {
-						continue
-					}
-					for _, value := range v {
-						var pr ProxyRequest
-						if len(svc.RouteMap) > 0 {
-							for _, rm := range svc.RouteMap {
-								if rm.Type == k {
-									pr.Route = rm.Route
-								}
-							}
-						}
-						pr.To = svc.Kind
-						pr.Type = k
-						pr.Value = value.Value
-						pr.From = "parser"
-						uid := uuid.New().String()
-						pr.TransactionID = uid
-						wg.Add(1)
-						go func(id string, first *bool) {
-							defer wg.Done()
-							out, err := s.ProxyHelper(pr)
-							if err != nil {
-								fmt.Println("error", err)
-								// continue
-							}
-							mu.Lock()
-							if len(out) == 0 {
-								return
-							}
-							if !*first {
-								allBytes = append(allBytes, ',')
-							}
-							allBytes = append(allBytes, out...)
-							*first = false
-							mu.Unlock()
-							s.DB.StoreResponse(id, out, pr.To)
-						}(uid, &first)
-						// do thing
-					}
-				}
-			}
-		}
-	}
-	wg.Wait()
-	allBytes = append(allBytes, ']')
 	w.Write(allBytes)
 }
 
@@ -404,7 +319,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func (s *Server) ProxyHandler2(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// var written int
 	var req ProxyRequest
 	defer s.addStat("proxy_requests", 1)
@@ -415,6 +330,8 @@ func (s *Server) ProxyHandler2(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	uid := uuid.New().String()
+	req.TransactionID = uid
 	defer func(start time.Time, req ProxyRequest) {
 		reqOut, err := json.Marshal(req)
 		if err != nil {
@@ -422,13 +339,11 @@ func (s *Server) ProxyHandler2(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		s.Log.Println("__ProxyHandler2__ took:", time.Since(start), req.Username, string(reqOut))
+		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, req)
 	// s.Log.Println("ProxyHandler", req)
-	uid := uuid.New().String()
-	req.TransactionID = uid
-	s.Memory.Lock()
-	defer s.Memory.Unlock()
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
 	op, ok := s.ProxyOperators[req.To]
 	if !ok {
 		s.Log.Printf("no proxy operator for service %s, skipping", req.To)
@@ -454,188 +369,6 @@ func (s *Server) ProxyHandler2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(resp)
-}
-
-func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	// var written int
-	var req ProxyRequest
-	defer s.addStat("proxy_requests", 1)
-	start := time.Now()
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		s.Log.Println("ProxyHandler decoder error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer func(start time.Time, req ProxyRequest) {
-		reqOut, err := json.Marshal(req)
-		if err != nil {
-			s.Log.Println("ProxyHandler error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
-	}(start, req)
-	// s.Log.Println("ProxyHandler", req)
-	uid := uuid.New().String()
-	req.TransactionID = uid
-	switch req.To {
-	case "misp":
-		resp, err := s.MispHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			go s.DB.StoreResponse(uid, r, req.To)
-			w.Write(r)
-			return
-		}
-		go s.DB.StoreResponse(uid, resp, req.To)
-		w.Write(resp)
-		return
-	case "splunk":
-		resp, err := s.SplunkHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			go s.DB.StoreResponse(uid, r, req.To)
-			w.Write(r)
-			return
-		}
-		go s.DB.StoreResponse(uid, resp, req.To)
-		w.Write(resp)
-		return
-	case "virustotal":
-		// s.Log.Println("virustotal", req)
-		resp, err := s.VirusTotalHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			go s.DB.StoreResponse(uid, r, req.To)
-			w.Write(r)
-			return
-		}
-		go s.DB.StoreResponse(uid, resp, req.To)
-		w.Write(resp)
-		return
-	case "mandiant":
-		resp, err := s.MandiantHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			go s.DB.StoreResponse(uid, r, req.To)
-			w.Write(r)
-			return
-		}
-		go s.DB.StoreResponse(uid, resp, req.To)
-		w.Write(resp)
-		return
-	case "deepfry":
-		resp, err := s.DeepFryHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			go s.DB.StoreResponse(uid, r, req.To)
-			w.Write(r)
-			return
-		}
-		go s.DB.StoreResponse(uid, resp, req.To)
-		w.Write(resp)
-		return
-	case "crowdstrike":
-		resp, err := s.CrowdstrikeHelper(req)
-		if err != nil {
-			r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-			if err != nil {
-				s.Log.Println("bigtime error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			go s.DB.StoreResponse(uid, r, req.To)
-			w.Write(r)
-			return
-		}
-		go s.DB.StoreResponse(uid, resp, req.To)
-		w.Write(resp)
-		return
-	case "domaintools":
-		switch req.Route {
-		case "domain":
-			s.Log.Println("domaintools domain")
-			resp, err := s.DomainToolsClassicHelper(req)
-			if err != nil {
-				r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-				if err != nil {
-					s.Log.Println("bigtime error", err)
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				go s.DB.StoreResponse(uid, r, req.To)
-				w.Write(r)
-				return
-			}
-			go s.DB.StoreResponse(uid, resp, req.To)
-			w.Write(resp)
-			return
-		default:
-			s.Log.Println("domaintools iris")
-			resp, err := s.DomainToolsHelper(req)
-			if err != nil {
-				r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-				if err != nil {
-					s.Log.Println("bigtime error", err)
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				go s.DB.StoreResponse(uid, r, req.To)
-				w.Write(r)
-				return
-			}
-			go s.DB.StoreResponse(uid, resp, req.To)
-			w.Write(resp)
-			return
-		}
-	default:
-		sumOut := SummarizedEvent{
-			Timestamp:     time.Now(),
-			From:          req.To,
-			Error:         true,
-			Background:    "has-background-grey",
-			Info:          fmt.Sprintf("unknown target %s", req.To),
-			ThreatLevelID: "0",
-			Value:         req.Value,
-			ID:            "unknown target",
-			Link:          req.TransactionID,
-		}
-		out, err := json.Marshal(sumOut)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(out)
-	}
-	// s.Memory.Lock()
-	// s.Details.Stats["amount_proxied"] += float64(written)
-	// s.Memory.Unlock()
 }
 
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
@@ -667,11 +400,25 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Cache.Responses[id] = event
 	}
+	// pretty print logic
+	var generic any
+	err := json.Unmarshal(event.Data, &generic)
+	if err != nil {
+		w.Write(event.Data)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	pretty, err := json.MarshalIndent(generic, "", "  ")
+	if err != nil {
+		s.Log.Println("error pretty printing event", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	if event.Data == nil || len(event.Data) == 0 {
+	if len(pretty) == 0 {
 		w.Write([]byte("no data for this event, but a record exists"))
 	}
-	w.Write(event.Data)
+	w.Write(pretty)
 }
 
 func (s *Server) GetServicesHandler(w http.ResponseWriter, r *http.Request) {
@@ -772,6 +519,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "password does not match", http.StatusUnauthorized)
 		return
 	}
+	s.CleanUserServices(&u)
 	err = s.DB.AddUser(u)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -862,25 +610,6 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func sanitizeEmail(email string) string {
-	// Basic email validation using regular expression
-	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	if re.MatchString(email) {
-		return email
-	}
-	return ""
-}
-
-func isValidPassword(password string) bool {
-	// Implement your password complexity rules here
-	// Example: Minimum length of 8 characters
-	return len(password) >= 8
-}
-
-func sanitizeString(str string) string {
-	return html.EscapeString(str)
-}
-
 // var UploadResponse = []byte(`{"status": "ok"}`)
 type uploadResponse struct {
 	Status string `json:"status"`
@@ -956,107 +685,6 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		UploadResponse.Info = fmt.Sprintf("File %s uploaded successfully with ID %s", filename, uid)
 		info := fmt.Sprintf("%v: File %s uploaded with ID %s", uid, filename, uid)
 		s.LogInfo(info)
-	}
-	out, err := json.Marshal(UploadResponse)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(out)
-}
-
-func (s *Server) FileToIOCHandler(w http.ResponseWriter, r *http.Request) {
-	var fileData bytes.Buffer
-	var UploadResponse uploadResponse
-	// Copy the request body (file data) to the buffer
-	_, err := io.Copy(&fileData, r.Body)
-	if err != nil {
-		http.Error(w, "Error reading file data", http.StatusInternalServerError)
-		return
-	}
-	defer s.addStat("upload_file_requests", 1)
-	defer func(start time.Time) {
-		s.Log.Println("UploadFileHandler took", time.Since(start))
-	}(time.Now())
-	chunkSize := r.ContentLength
-	filename := r.Header.Get("X-filename")
-	safeFilename := filepath.Base(filename)
-
-	newFile, err := RemoveTimestamp("_", safeFilename)
-	if err != nil {
-		fmt.Println("error removing timestamp", err)
-		// http.Error(w, err.Error(), http.StatusInternalServerError)
-		// return
-	}
-	if newFile != "" {
-		filename = newFile
-	}
-
-	lastChunk := r.Header.Get("X-last-chunk")
-	// fmt.Println(chunkSize, filename, lastChunk)
-	uploadHanlder, ok := store.GetFile(filename)
-	if !ok {
-		uploadHanlder = UploadHandler{
-			ID:       uuid.New().String(),
-			Data:     fileData.Bytes(),
-			FileSize: chunkSize,
-		}
-		go store.AddFile(filename, uploadHanlder)
-	} else {
-		uploadHanlder.Data = append(uploadHanlder.Data, fileData.Bytes()...)
-		uploadHanlder.FileSize += chunkSize
-	}
-
-	if lastChunk == "true" {
-		// fmt.Println("last chunk", uploadHanlder.FileSize)
-		uploadHanlder.Complete = true
-	}
-
-	go store.AddFile(filename, uploadHanlder)
-
-	if uploadHanlder.Complete {
-		hasher := sha256.New()
-		_, err := hasher.Write(uploadHanlder.Data)
-		if err != nil {
-			http.Error(w, "Error hashing file data", http.StatusInternalServerError)
-			return
-		}
-		hash := hex.EncodeToString(hasher.Sum(nil))
-		uid := uuid.New().String()
-		info := fmt.Sprintf("%v: File %s uploaded with hash %s", uid, filename, hash)
-		s.LogInfo(info)
-		UploadResponse.ID = uid
-		UploadResponse.Status = info
-		// uploadHanlder.WriteToDisk(fmt.Sprintf("./static/%s", filename))
-		go func(id string) {
-			var req ProxyRequest
-			req.To = "misp"
-			req.Type = "sha256"
-			req.Value = hash
-			req.From = "file to ioc handler"
-			req.TransactionID = id
-			res, err := s.ProxyHelper(req)
-			if err != nil {
-				s.RespCh <- ResponseItem{
-					Vendor: "file to ioc handler",
-					ID:     id,
-					Time:   time.Now(),
-					Data:   []byte(fmt.Sprintf("error: %v", err)),
-				}
-				s.Log.Println("error", err)
-				return
-			}
-
-			// w.Write(res)
-			store.DeleteFile(filename)
-			newResponse := ResponseItem{
-				Vendor: "file upload handler",
-				ID:     id,
-				Time:   time.Now(),
-				Data:   res,
-			}
-			s.RespCh <- newResponse
-		}(uid)
 	}
 	out, err := json.Marshal(UploadResponse)
 	if err != nil {

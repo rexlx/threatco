@@ -1,0 +1,70 @@
+{
+  "errors": [
+    {
+      "code": 1000,
+      "message": "message",
+      "documentation_url": "documentation_url",
+      "source": {
+        "pointer": "pointer"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "code": 1000,
+      "message": "message",
+      "documentation_url": "documentation_url",
+      "source": {
+        "pointer": "pointer"
+      }
+    }
+  ],
+  "success": true,
+  "result": {
+    "additional_information": {
+      "suspected_malware_family": ""
+    },
+    "application": {
+      "id": 0,
+      "name": "CLOUDFLARE"
+    },
+    "content_categories": [
+      {
+        "id": 155,
+        "name": "Technology",
+        "super_category_id": 26
+      }
+    ],
+    "domain": "cloudflare.com",
+    "inherited_content_categories": [
+      {
+        "id": 0,
+        "name": "name",
+        "super_category_id": 0
+      }
+    ],
+    "inherited_from": "inherited_from",
+    "inherited_risk_types": [
+      {
+        "id": 0,
+        "name": "name",
+        "super_category_id": 0
+      }
+    ],
+    "popularity_rank": 0,
+    "resolves_to_refs": [
+      {
+        "id": "ipv4-addr--baa568ec-6efe-5902-be55-0663833db537",
+        "value": "192.0.2.0"
+      }
+    ],
+    "risk_score": 0,
+    "risk_types": [
+      {
+        "id": 0,
+        "name": "name",
+        "super_category_id": 0
+      }
+    ]
+  }
+}

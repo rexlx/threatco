@@ -230,10 +230,22 @@ func (s *Server) ProcessTransientResponses() {
 			// TODO: check if the response already exists in the cache, if so append to the existing entry?
 			r, ok := s.Cache.Responses[resp.ID]
 			if !ok {
+				initialData, err := MergeJSONData(nil, resp.Data)
+				if err != nil {
+					s.Log.Printf("ERROR: could not initialize JSON array for ID %s: %v", resp.ID, err)
+					s.Memory.Unlock()
+					continue
+				}
+				resp.Data = initialData
 				s.Cache.Responses[resp.ID] = resp
 			} else {
 				r.Time = resp.Time
-				r.Data = append(r.Data, resp.Data...)
+				mergedData, err := MergeJSONData(r.Data, resp.Data)
+				if err != nil {
+					s.Log.Printf("ERROR: could not merge JSON for ID %s: %v", r.ID, err)
+				} else {
+					r.Data = mergedData
+				}
 				s.Cache.Responses[resp.ID] = r
 			}
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
@@ -241,10 +253,10 @@ func (s *Server) ProcessTransientResponses() {
 			s.Memory.Unlock()
 			go s.DB.StoreResponse(resp.ID, resp.Data, resp.Vendor)
 		case <-ticker.C:
-			s.Log.Println("Processing transient responses: removing old entries")
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {
 				if time.Since(v.Time) > s.Cache.ResponseExpiry {
+					s.Log.Printf("Removing response %s from cache due to expiry", k)
 					delete(s.Cache.Responses, k)
 				}
 			}
@@ -370,6 +382,15 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
+		case "urlscan":
+			thisAuthType := &URLScanAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
 		default:
 			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
 
@@ -394,13 +415,11 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			continue
 		}
 		s.ProxyOperators[name] = op
-		s.Log.Printf("service %s initialized with operator %s", name, op)
-		// s.Log.Printf("service %s: +%v\n", serviceName, service)
 	}
 	s.Gateway.HandleFunc("/stats", s.GetStatHistoryHandler)
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
 	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
-	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler2)))
+	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
@@ -423,7 +442,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/view-logs", http.HandlerFunc(s.ValidateSessionToken(s.LogViewHandler)))
 	s.Gateway.HandleFunc("/getresponses", http.HandlerFunc(s.ValidateSessionToken(s.GetResponseCacheHandler)))
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
-	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler2)))
+	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))

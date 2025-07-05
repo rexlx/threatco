@@ -2,6 +2,7 @@ package vendors
 
 import (
 	"encoding/json"
+	"time"
 )
 
 type URLIOScanRequest struct {
@@ -491,4 +492,114 @@ func UnmarshalAPIResponse(data []byte) (URLIOScanResultResponse, error) {
 
 func (r *URLIOScanResultResponse) Marshal() ([]byte, error) {
 	return json.Marshal(r)
+}
+
+type URLScanSearchResponse struct {
+	Results []URLScanResult `json:"results,omitempty"`
+	Total   int             `json:"total,omitempty"`
+	Took    int             `json:"took,omitempty"`
+	HasMore bool            `json:"has_more,omitempty"`
+}
+
+type URLScanResult struct {
+	Verdicts   *URLScanSearchVerdicts  `json:"verdicts,omitempty"`
+	Submitter  *URLScanSearchSubmitter `json:"submitter,omitempty"`
+	DOM        *URLScanSearchDOM       `json:"dom,omitempty"`
+	Frames     *URLScanSearchFrames    `json:"frames,omitempty"`
+	Canonical  *URLScanSearchCanonical `json:"canonical,omitempty"`
+	Task       *URLScanSearchTask      `json:"task,omitempty"`
+	Stats      *URLScanSearchStats     `json:"stats,omitempty"`
+	Scanner    *URLScanSearchScanner   `json:"scanner,omitempty"`
+	Links      *URLScanSearchLinks     `json:"links,omitempty"`
+	Page       *URLScanSearchPage      `json:"page,omitempty"`
+	Text       *URLScanSearchText      `json:"text,omitempty"`
+	ID         string                  `json:"_id,omitempty"`
+	Score      interface{}             `json:"_score,omitempty"`
+	Sort       []interface{}           `json:"sort,omitempty"`
+	Result     string                  `json:"result,omitempty"`
+	Screenshot string                  `json:"screenshot,omitempty"`
+}
+
+type URLScanSearchVerdicts struct {
+	Score       int                          `json:"score,omitempty"`
+	Malicious   bool                         `json:"malicious,omitempty"`
+	URLScan     *URLScanSearchURLScanVerdict `json:"urlscan,omitempty"`
+	HasVerdicts bool                         `json:"hasVerdicts,omitempty"`
+}
+
+type URLScanSearchURLScanVerdict struct {
+	Malicious bool `json:"malicious,omitempty"`
+}
+
+type URLScanSearchSubmitter struct {
+	Country string `json:"country,omitempty"`
+}
+
+type URLScanSearchDOM struct {
+	Size int    `json:"size,omitempty"`
+	Hash string `json:"hash,omitempty"`
+}
+
+type URLScanSearchFrames struct {
+	Length int `json:"length,omitempty"`
+}
+
+type URLScanSearchCanonical struct {
+	Task *URLScanSearchCanonicalURL `json:"task,omitempty"`
+	Page *URLScanSearchCanonicalURL `json:"page,omitempty"`
+}
+
+type URLScanSearchCanonicalURL struct {
+	URL string `json:"url,omitempty"`
+}
+
+type URLScanSearchTask struct {
+	Visibility string    `json:"visibility,omitempty"`
+	Method     string    `json:"method,omitempty"`
+	Domain     string    `json:"domain,omitempty"`
+	ApexDomain string    `json:"apexDomain,omitempty"`
+	Time       time.Time `json:"time,omitempty"`
+	UUID       string    `json:"uuid,omitempty"`
+	URL        string    `json:"url,omitempty"`
+}
+
+type URLScanSearchStats struct {
+	UniqIPs           int `json:"uniqIPs,omitempty"`
+	UniqCountries     int `json:"uniqCountries,omitempty"`
+	DataLength        int `json:"dataLength,omitempty"`
+	EncodedDataLength int `json:"encodedDataLength,omitempty"`
+	Requests          int `json:"requests,omitempty"`
+}
+
+type URLScanSearchScanner struct {
+	Country string `json:"country,omitempty"`
+}
+
+type URLScanSearchLinks struct {
+	Length int `json:"length,omitempty"`
+}
+
+type URLScanSearchPage struct {
+	Country      string    `json:"country,omitempty"`
+	Server       string    `json:"server,omitempty"`
+	IP           string    `json:"ip,omitempty"`
+	MimeType     string    `json:"mimeType,omitempty"`
+	Title        string    `json:"title,omitempty"`
+	URL          string    `json:"url,omitempty"`
+	TLSValidDays int       `json:"tlsValidDays,omitempty"`
+	TLSAgeDays   int       `json:"tlsAgeDays,omitempty"`
+	PTR          string    `json:"ptr,omitempty"`
+	TLSValidFrom time.Time `json:"tlsValidFrom,omitempty"`
+	Domain       string    `json:"domain,omitempty"`
+	UmbrellaRank int       `json:"umbrellaRank,omitempty"`
+	ApexDomain   string    `json:"apexDomain,omitempty"`
+	ASNName      string    `json:"asnname,omitempty"`
+	ASN          string    `json:"asn,omitempty"`
+	TLSIssuer    string    `json:"tlsIssuer,omitempty"`
+	Status       string    `json:"status,omitempty"`
+}
+
+type URLScanSearchText struct {
+	Size int    `json:"size,omitempty"`
+	Hash string `json:"hash,omitempty"`
 }
