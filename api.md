@@ -20,7 +20,7 @@ curl http://localhost:8081/logs -H "Authorization: admin@admin.com:UmLPBz7zDXx1U
 # [{"time":"2025-01-30T07:15:11.800719266-06:00","data":"Server started at :8081","error":false}]
 
 # GET RESPONSE. use the event id of a response (referred to as 'link' by field name)
-curl http://fairlady:8081/events/caf24585-b21a-4616-9958-30b9d90fd45a -H "Authorization: admin@admin.com:UmLPBz7zDXx1UreAJa+TupuBabP8T9wxr0yLTWiCnfQ="
+curl http://localhost:8081/events/caf24585-b21a-4616-9958-30b9d90fd45a -H "Authorization: admin@admin.com:UmLPBz7zDXx1UreAJa+TupuBabP8T9wxr0yLTWiCnfQ="
 
 # response is the literal response from the vendor byte for byte and is impossible to represent here.
 
@@ -30,10 +30,14 @@ curl http://fairlady:8081/events/caf24585-b21a-4616-9958-30b9d90fd45a -H "Author
 # to     : which vendor to proxy to: "misp" "mandiant" "virustotal" (vmray is fileupload only at the moment)
 # type   : type of indicator -> "md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"
 # route  : associated route if not the base URL
-curl -X POST http://fairlady:8081/pipe -H "Authorization: admin@admin.com:UmLPBz7zDXx1UreAJa+TupuBabP8T9wxr0yLTWiCnfQ=" -d '{"value": "8.8.8.8", "to": "deepfry", "type": "ipv4"}'
+curl -X POST http://localhost:8081/pipe -H "Authorization: admin@admin.com:UmLPBz7zDXx1UreAJa+TupuBabP8T9wxr0yLTWiCnfQ=" -d '{"value": "8.8.8.8", "to": "deepfry", "type": "ipv4", "username": "any@string.here"}'
 
-# response. the 'id' field refers to a db id, the link field refers to the reponse id
+# response:
 # {"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}
+
+curl -X POST http://localhost:8081/parse -H "Authorization: test@aol.com:UmLPBz7zDXx1UreAJa+TupuBabP8T9wxr0yLTWiCnfQ=" -d '{"username": "test@aol.com", "blob": "159.203.188.91"}'
+
+# the response is a list of summarized responses exactly like the one above.
 ```
 
 ### file upload
@@ -65,5 +69,4 @@ curl -X POST "$url" \
 
 # response informs user of the status of the upload to the PROXY server, not vmray. view events/id to see me information
 # {"status":"complete","id":"af7bd5af-e4fc-4a6c-8cdb-cc341870ec3e"}
-# vmray is finicky about files and will never give you a meaningful message if doesnt like the file you sent :)
 ```

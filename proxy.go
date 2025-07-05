@@ -17,8 +17,6 @@ import (
 
 type ProxyOperator func(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error)
 
-// TODO rethink this tomorrow. it does no good to name these here, they have to built
-// based of the config.
 var ProxyOperators = map[string]ProxyOperator{
 	"misp":                MispProxyHelper,
 	"deepfry":             DeepFryProxyHelper,
@@ -108,7 +106,6 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 
 func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
 	thisUrl := fmt.Sprintf("%s/search", ep.GetURL())
-	// fmt.Println("deep fry url", url, req)
 	data := struct {
 		Kind  string `json:"kind"`
 		Value string `json:"value"`
@@ -121,13 +118,11 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	if err != nil {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
-	// fmt.Println(req, data)
 	request, err := http.NewRequest("POST", thisUrl, bytes.NewBuffer(out))
 	if err != nil {
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	// request.Header.Set("Content-Type", "application/json")
 	resp := ep.Do(request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
@@ -180,8 +175,6 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 			Values: []string{req.Value},
 		},
 	}
-	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Route)
-	// fmt.Println("mandiant url", url, req)
 	out, err := json.Marshal(postReq)
 	if err != nil {
 		fmt.Println("MandiantHelper: server error", err)

@@ -3,8 +3,10 @@ companion application for the [insights](https://github.com/rexlx/insights) [ext
 
 ### key features
 - enrich users query by fanning out to all available plugins (third-party APIs)
+- file analysis
 - parse blobs of text sent over API to extract IOC and enrich
 - frontend with user management, knowledge base, runtime stats, response list
+- view statistics and application performance
 - remote logging if desired
 
 ## base install dependencies
@@ -24,6 +26,15 @@ companion application for the [insights](https://github.com/rexlx/insights) [ext
 you can enhance the security of your deployment by omitting **keys and secrets** from your config. after the app loads the configuration, it will check if any service keys are empty, if any are found it will search in the environment for SERVICE_KEY and SERVICE_SECRET (using the Service.Kind field as the SERVICE name).
 
 in the example below the app would look for MISP_KEY and MISP_SECRET (even though misp only uses the key value by convention).
+
+```bash
+VIRUSTOTAL_KEY="foobarxyz"
+VIRUSTOTAL_SECRET="only include a secret if you have one (sometimes a secret is a username)"
+URLSCAN_KEY="thisisntmykey"
+URLSCAN_SECRET="" # you can leave the value blank if youre unsure, but it can also be omitted .
+MISP_KEY="yougettheidea"
+THREATCO_DB_LOCATION="user=neo password=morpheus host=127.0.0.1 dbname=threatco"
+```
 
 ```json
 {       
@@ -49,15 +60,16 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 ```
 
 ## supported plugins
-- [misp](https://github.com/MISP/MISP)
 - crowdstrike
+- [deepfry](https://github.com/rexlx/deepfry)
+- domaintools
+- [livery](https://github.com/rexlx/livery)
 - mandiant
+- [misp](https://github.com/MISP/MISP)
+- splunk (*limited access*)
+- urlscan
 - vmray (*limited to file upload*)
 - virustotal
-- domaintools
-- splunk (*limited access*)
-- [deepfry](https://github.com/rexlx/deepfry)
-- [livery](https://github.com/rexlx/livery)
 
 
 
