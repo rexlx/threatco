@@ -253,10 +253,10 @@ func (s *Server) ProcessTransientResponses() {
 			s.Memory.Unlock()
 			go s.DB.StoreResponse(resp.ID, resp.Data, resp.Vendor)
 		case <-ticker.C:
-			s.Log.Println("Processing transient responses: removing old entries")
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {
 				if time.Since(v.Time) > s.Cache.ResponseExpiry {
+					s.Log.Printf("Removing response %s from cache due to expiry", k)
 					delete(s.Cache.Responses, k)
 				}
 			}
@@ -415,8 +415,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			continue
 		}
 		s.ProxyOperators[name] = op
-		s.Log.Printf("service %s initialized with operator %s", name, op)
-		// s.Log.Printf("service %s: +%v\n", serviceName, service)
 	}
 	s.Gateway.HandleFunc("/stats", s.GetStatHistoryHandler)
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)

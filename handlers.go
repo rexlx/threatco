@@ -45,7 +45,6 @@ func (s *Server) LogHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing 'username' or 'message' field", http.StatusBadRequest)
 		return
 	}
-	s.Log.Printf("%s: %s\n", lr.Username, lr.Message)
 	info := fmt.Sprintf("%s: %s", lr.Username, lr.Message)
 	s.LogInfo(info)
 	w.Write([]byte("ok"))
