@@ -812,6 +812,111 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 	fmt.Fprint(w, out)
 }
 
+type previousResponseQuery struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+	Value string `json:"value"`
+}
+
+func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Request) {
+	var matches []SummarizedEvent
+	defer func(start time.Time) {
+		s.Log.Println("GetPreviousResponsesHandler took", time.Since(start))
+	}(time.Now())
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	var prq previousResponseQuery
+	err := json.NewDecoder(r.Body).Decode(&prq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if prq.Value == "" {
+		http.Error(w, "missing 'value' field", http.StatusBadRequest)
+		return
+	}
+
+	// Get all responses from the last 144 hours (6 days)
+	responses, err := s.DB.GetResponses(time.Now().Add(-144 * time.Hour))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(responses) == 0 {
+		s.Log.Println("GetPreviousResponsesHandler no responses in cache")
+		fmt.Fprint(w, "No responses in cache")
+		return
+	}
+
+	// --- MODIFIED LOGIC ---
+	// Iterate through the responses from the database.
+	for _, v := range responses {
+		// The error "cannot unmarshal array into Go value of type main.ProxyRequest"
+		// indicates the data is a nested array, e.g., [[...], ...].
+		// We need to unmarshal the outer array first.
+		var outerSlice []json.RawMessage
+		err := json.Unmarshal(v.Data, &outerSlice)
+		if err != nil {
+			s.Log.Printf("error unmarshaling outer slice for ID %s: %v", v.ID, err)
+			continue
+		}
+
+		if len(outerSlice) == 0 {
+			s.Log.Printf("outer response data slice is empty for ID %s", v.ID)
+			continue
+		}
+
+		// Now unmarshal the first element of the outer slice, which we expect
+		// to be the inner array containing the ProxyRequest.
+		var innerSlice []json.RawMessage
+		err = json.Unmarshal(outerSlice[0], &innerSlice)
+		if err != nil {
+			// This will catch the error if the first element is not an array.
+			s.Log.Printf("error unmarshaling inner slice for ID %s: %v", v.ID, err)
+			continue
+		}
+
+		if len(innerSlice) == 0 {
+			s.Log.Printf("inner response data slice is empty for ID %s", v.ID)
+			continue
+		}
+
+		// Finally, unmarshal the first element of the inner slice into the ProxyRequest struct.
+		var originalProxyRequest ProxyRequest
+		err = json.Unmarshal(innerSlice[0], &originalProxyRequest)
+		if err != nil {
+			s.Log.Printf("error unmarshaling ProxyRequest from inner slice for ID %s: %v", v.ID, err)
+			continue
+		}
+
+		s.Log.Println("GetPreviousResponsesHandler checking", originalProxyRequest.Value, "against", prq.Value)
+		if originalProxyRequest.Value == prq.Value {
+			matches = append(matches, SummarizedEvent{
+				Timestamp:  v.Time,
+				Matched:    true,
+				Error:      false,
+				Background: "has-background-warning",
+				From:       originalProxyRequest.Username,
+				ID:         v.ID,
+				AttrCount:  len(innerSlice),
+				Link:       v.ID,
+				Value:      originalProxyRequest.Value,
+				Info:       fmt.Sprintf("%v: Matched value %s in response ID %s", originalProxyRequest.Username, originalProxyRequest.Value, v.ID),
+			})
+		}
+	}
+	// --- END MODIFIED LOGIC ---
+
+	out, err := json.Marshal(matches)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.Log.Println("GetPreviousResponsesHandler matches", len(matches), "for value", prq.Value)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(out)
+}
+
 // func (s *Server) GetResponsesHandler(w http.ResponseWriter, r *http.Request) {
 
 // 	fmt.Fprint(w, out)

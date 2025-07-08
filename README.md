@@ -68,8 +68,8 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 - [misp](https://github.com/MISP/MISP)
 - splunk (*limited access*)
 - urlscan
-- vmray (*limited to file upload*)
 - virustotal
+- vmray (*limited to file upload*)
 
 
 
