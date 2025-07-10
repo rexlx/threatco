@@ -769,6 +769,12 @@ func (s *Server) GetResponseCacheListHandler(w http.ResponseWriter, r *http.Requ
 	w.Write(out)
 }
 
+type ResponseCacheRequest struct {
+	TotalResponses int `json:"total_responses"`
+	Start          int `json:"start"`
+	End            int `json:"end"`
+}
+
 func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request) {
 	var out string
 	table := `<table class="table is-fullwidth is-striped">
@@ -812,6 +818,156 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 	fmt.Fprint(w, out)
 }
 
+// ResponseFilterOptions defines the available query parameters for filtering and pagination.
+type ResponseFilterOptions struct {
+	Vendor string
+	Start  int
+	Limit  int
+}
+
+// NewResponseFilterOptions creates a new options object from the request's query parameters.
+// It sets sensible defaults for pagination.
+func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
+	opts := &ResponseFilterOptions{
+		Vendor: r.URL.Query().Get("vendor"),
+		Start:  0,
+		Limit:  100, // Default limit
+	}
+
+	// Parse 'start' query parameter
+	startStr := r.URL.Query().Get("start")
+	if startStr != "" {
+		start, err := strconv.Atoi(startStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid 'start' parameter: must be an integer")
+		}
+		if start < 0 {
+			return nil, fmt.Errorf("invalid 'start' parameter: must be non-negative")
+		}
+		opts.Start = start
+	}
+
+	// Parse 'limit' query parameter
+	limitStr := r.URL.Query().Get("limit")
+	if limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid 'limit' parameter: must be an integer")
+		}
+		if limit < 0 {
+			return nil, fmt.Errorf("invalid 'limit' parameter: must be non-negative")
+		}
+		opts.Limit = limit
+	}
+
+	return opts, nil
+}
+
+// GetResponseCacheHandler handles requests for viewing cached responses.
+// It now supports filtering by vendor and pagination using 'start' and 'limit' query parameters.
+// Example URL: /responses?vendor=some_vendor&start=0&limit=50
+func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request) {
+	// Add headers to prevent caching by clients.
+	// This ensures that the user's browser will always fetch the latest data.
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
+	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
+	w.Header().Set("Expires", "0")                                         // Proxies.
+
+	// Parse filter and pagination options from query parameters
+	options, err := NewResponseFilterOptions(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+
+	// 1. Fetch all responses from the last 24 hours
+	responses, err := s.DB.GetResponses(time.Now().Add(-24 * time.Hour))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(responses) == 0 {
+		fmt.Fprint(w, "No responses in cache for the last 24 hours.")
+		return
+	}
+
+	// 2. Sort all responses by time (most recent first)
+	sort.Slice(responses, func(i, j int) bool {
+		return responses[i].Time.After(responses[j].Time)
+	})
+
+	// 3. Apply Vendor Filter
+	var filteredResponses []ResponseItem
+	if options.Vendor != "" {
+		for _, v := range responses {
+			if v.Vendor == options.Vendor {
+				filteredResponses = append(filteredResponses, v)
+			}
+		}
+	} else {
+		// If no vendor is specified, use the whole list
+		filteredResponses = responses
+	}
+
+	if len(filteredResponses) == 0 {
+		fmt.Fprintf(w, "No responses found for vendor: %s", options.Vendor)
+		return
+	}
+
+	// 4. Apply Slicing/Pagination
+	var paginatedResponses []ResponseItem
+	start := options.Start
+	end := options.Start + options.Limit
+
+	if start >= len(filteredResponses) {
+		fmt.Println("Start index is out of bounds, returning empty set.")
+		// If the start index is out of bounds, return an empty set
+		paginatedResponses = []ResponseItem{}
+	} else {
+		// Ensure the end index does not go out of bounds
+		if end > len(filteredResponses) {
+			end = len(filteredResponses)
+		}
+		paginatedResponses = filteredResponses[start:end]
+	}
+
+	// 5. Render the final list as an HTML table
+	var out string
+	table := `<table class="table is-fullwidth is-striped">
+            <thead>
+                <tr>
+                    <th>time</th>
+                    <th>vendor</th>
+                    <th>link</th>
+                </tr>
+            </thead>
+            <tbody>
+                %v
+            </tbody>
+        </table>`
+	tmpl := `<tr>
+        <td>%v</td>
+        <td>%v</td>
+        <td><a href="/events/%v">%v</a></td>
+    </tr>`
+
+	for _, v := range paginatedResponses {
+		out += fmt.Sprintf(tmpl, v.Time.Format(time.RFC3339), v.Vendor, v.ID, v.ID)
+	}
+
+	if out == "" {
+		fmt.Fprint(w, "No results for the specified page/filter.")
+		return
+	}
+
+	out = fmt.Sprintf(table, out)
+	fmt.Fprint(w, out)
+}
+
 type previousResponseQuery struct {
 	Start string `json:"start"`
 	End   string `json:"end"`
@@ -826,6 +982,7 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 	var prq previousResponseQuery
+	fmt.Println("GetPreviousResponsesHandler called")
 	err := json.NewDecoder(r.Body).Decode(&prq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -835,7 +992,7 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "missing 'value' field", http.StatusBadRequest)
 		return
 	}
-
+	fmt.Println("GetPreviousResponsesHandler value", prq.Value)
 	// Get all responses from the last 144 hours (6 days)
 	responses, err := s.DB.GetResponses(time.Now().Add(-144 * time.Hour))
 	if err != nil {
