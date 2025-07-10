@@ -623,6 +623,10 @@ func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[s
 		fmt.Println("File not found in UploadStore:", id)
 		return
 	}
+	if file.FileName == "" {
+		fmt.Println("File name is empty in UploadStore for ID:", id)
+		file.FileName = id
+	}
 	for name, target := range endpoints {
 		// fmt.Println("FanOut: working on", name, target.GetURL())
 		kind, ok := u.Targets[name]
