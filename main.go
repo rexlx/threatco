@@ -41,12 +41,17 @@ func main() {
 	s.InitializeFromConfig(&c, true)
 	PassStore(NewUploadStore(&c))
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
+	healthTicker := time.NewTicker(time.Duration(*healthCheck) * time.Second)
 	go func() {
+		go s.SimpleServiceCheck()
 		for {
 			select {
 			case <-ticker.C:
 				s.UpdateCharts()
 				go s.updateCache()
+			case <-healthTicker.C:
+				s.LogInfo("Performing health check")
+				go s.SimpleServiceCheck()
 			case <-sigs:
 				s.Log.Println("Shutting down")
 				ticker.Stop()

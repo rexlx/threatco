@@ -214,6 +214,56 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 	})
 }
 
+type CheckResponse struct {
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
+}
+
+func (s *Server) SimpleServiceCheck() error {
+	start := time.Now()
+	s.Memory.Lock()
+	servicesToCheck := make([]ServiceType, len(s.Details.SupportedServices))
+	copy(servicesToCheck, s.Details.SupportedServices)
+	s.Memory.Unlock()
+
+	resch := make(chan CheckResponse, len(servicesToCheck))
+	wg := sync.WaitGroup{}
+
+	for _, service := range servicesToCheck {
+		if service.URL == "" {
+			s.Log.Printf("SimpleServiceCheck: skipping service %s due to empty URL", service.Kind)
+			continue
+		}
+		wg.Add(1)
+		go func(name string, url string) {
+			defer wg.Done()
+			err := TestConnectivity(url)
+			if err != nil {
+				s.Log.Printf("SimpleServiceCheck: %s is not reachable: %v", name, err)
+				resch <- CheckResponse{Name: name, Value: 0.0}
+			} else {
+				s.Log.Printf("SimpleServiceCheck: %s is reachable", name)
+				resch <- CheckResponse{Name: name, Value: 1.0}
+			}
+		}(service.Kind, service.URL)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resch)
+	}()
+
+	s.Log.Printf("SimpleServiceCheck: waiting for results...")
+	for res := range resch {
+		s.Memory.Lock()
+		s.Details.Stats[res.Name] = res.Value
+		s.Memory.Unlock()
+	}
+
+	s.Log.Printf("SimpleServiceCheck: completed in %s", time.Since(start))
+	return nil
+}
+
 func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
@@ -829,6 +879,28 @@ func CheckConnectivity(url string) error {
 	}
 	fmt.Println("Resolved IPs for", cleanUrl, ":", ips)
 	conn, err := net.DialTimeout("tcp", url, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %w", url, err)
+	}
+	defer conn.Close()
+	fmt.Println("Successfully connected to", url)
+	return nil
+}
+
+func TestConnectivity(url string) error {
+	url = strings.ReplaceAll(url, "https://", "")
+	url = strings.ReplaceAll(url, "http://", "")
+	parts := strings.Split(url, ":")
+	var port string
+	if len(parts) < 2 {
+		fmt.Println("TestConnectivity: URL does not contain a port, defaulting to 443")
+		port = "443"
+	} else {
+		port = parts[1]
+	}
+	cleanUrl := parts[0]
+	fmt.Println(parts, "Testing connectivity to", cleanUrl, port)
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(cleanUrl, port), 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect to %s: %w", url, err)
 	}

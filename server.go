@@ -35,6 +35,7 @@ var (
 	useSyslog     = flag.Bool("syslog", false, "Enable syslog")
 	syslogHost    = flag.String("syslog-host", "localhost", "Syslog host")
 	syslogIndex   = flag.String("syslog-index", "threatco", "Syslog index")
+	healthCheck   = flag.Int("health-check", 60, "Health check interval in seconds")
 	syslogPort    = flag.String("syslog-port", "514", "Syslog port")
 )
 
@@ -443,6 +444,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/getresponses", http.HandlerFunc(s.ValidateSessionToken(s.GetResponseCacheHandler2)))
 	s.Gateway.HandleFunc("/previous-responses", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
+	s.Gateway.HandleFunc("/rectify", http.HandlerFunc(s.ValidateSessionToken(s.RectifyServicesHandler)))
 	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))

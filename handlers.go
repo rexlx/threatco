@@ -560,6 +560,24 @@ func (s *Server) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (s *Server) RectifyServicesHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.Header.Get("Authorization"), ":")
+	email := parts[0]
+	u, err := s.DB.GetUserByEmail(email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.CleanUserServices(&u)
+	err = s.DB.AddUser(u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := `{"status": "ok", "message": "services rectified for user ` + email + `"}`
+	w.Write([]byte(out))
+}
+
 func (s *Server) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	s.Log.Println("DeleteUserHandler")
 	email := r.FormValue("email")
