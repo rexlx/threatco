@@ -256,7 +256,7 @@ func (s *Server) SimpleServiceCheck() error {
 	s.Log.Printf("SimpleServiceCheck: waiting for results...")
 	for res := range resch {
 		s.Memory.Lock()
-		s.Details.Stats[res.Name] = res.Value
+		s.Details.Stats[fmt.Sprintf("health-check-%s", res.Name)] = res.Value
 		s.Memory.Unlock()
 	}
 
