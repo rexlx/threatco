@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -887,24 +888,38 @@ func CheckConnectivity(url string) error {
 	return nil
 }
 
-func TestConnectivity(url string) error {
-	url = strings.ReplaceAll(url, "https://", "")
-	url = strings.ReplaceAll(url, "http://", "")
-	parts := strings.Split(url, ":")
-	var port string
-	if len(parts) < 2 {
-		fmt.Println("TestConnectivity: URL does not contain a port, defaulting to 443")
-		port = "443"
-	} else {
-		port = parts[1]
+func TestConnectivity(rawURL string) error {
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		rawURL = "https://" + rawURL
 	}
-	cleanUrl := parts[0]
-	fmt.Println(parts, "Testing connectivity to", cleanUrl, port)
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(cleanUrl, port), 5*time.Second)
+
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to %s: %w", url, err)
+		return fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	host, port, err := net.SplitHostPort(parsedURL.Host)
+	if err != nil {
+		host = parsedURL.Host
+		switch parsedURL.Scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		default:
+			port = "443"
+		}
+	}
+
+	address := net.JoinHostPort(host, port)
+	fmt.Printf("Testing connectivity to %s\n", address)
+
+	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %w", address, err)
 	}
 	defer conn.Close()
-	fmt.Println("Successfully connected to", url)
+
+	fmt.Printf("Successfully connected to %s\n", address)
 	return nil
 }

@@ -251,6 +251,21 @@ func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+func (s *Server) GetStatsHandler(w http.ResponseWriter, r *http.Request) {
+	// defer s.addStat("get_stat_history_requests", 1)
+	defer func(start time.Time) {
+		s.Log.Println("GetStatsHandler took", time.Since(start))
+	}(time.Now())
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	out, err := json.Marshal(s.Details.Stats)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("get_stat_history_requests", 1)
 	defer func(start time.Time) {
