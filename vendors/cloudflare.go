@@ -1,10 +1,19 @@
 package vendors
 
+import "strings"
+
 type CloudFlareDomainResponse struct {
 	Errors   []CloudFlareError   `json:"errors,omitempty"`
 	Messages []CloudFlareMessage `json:"messages,omitempty"`
 	Success  bool                `json:"success"`
 	Result   *CloudFlareResult   `json:"result,omitempty"`
+}
+
+type CloudFlareIPResponse struct {
+	Errors   []CloudFlareError   `json:"errors,omitempty"`
+	Messages []CloudFlareMessage `json:"messages,omitempty"`
+	Success  bool                `json:"success"`
+	Result   *CloudFlareIPResult `json:"result,omitempty"`
 }
 
 type CloudFlareError struct {
@@ -39,6 +48,12 @@ type CloudFlareResult struct {
 	RiskTypes                  []RiskType             `json:"risk_types,omitempty"`
 }
 
+type CloudFlareIPResult struct {
+	IP        string     `json:"ip"`
+	RiskScore int        `json:"risk_score"`
+	RiskTypes []RiskType `json:"risk_types"`
+}
+
 type AdditionalInformation struct {
 	SuspectedMalwareFamily string `json:"suspected_malware_family,omitempty"`
 }
@@ -63,4 +78,15 @@ type RiskType struct {
 type ResolvesToRef struct {
 	ID    string `json:"id,omitempty"`
 	Value string `json:"value,omitempty"`
+}
+
+func CloudflareGetCategoryNames(categories []ContentCategory) string {
+	names := []string{}
+	for _, cat := range categories {
+		names = append(names, cat.Name)
+	}
+	if len(names) == 0 {
+		return "N/A"
+	}
+	return strings.Join(names, ", ")
 }

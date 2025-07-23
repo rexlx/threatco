@@ -27,6 +27,7 @@ var ProxyOperators = map[string]ProxyOperator{
 	"domaintools":         DomainToolsProxyHelper,
 	"domaintools-classic": DomainToolsClassicProxyHelper,
 	"urlscan":             URLScanProxyHelper,
+	"cloudflare":          CloudflareProxyHelper,
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
@@ -794,4 +795,117 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	}
 	return json.Marshal(sum)
 
+}
+
+func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	var thisURL string
+	var info string
+	var background string = "has-background-warning" // Default to warning for any hit
+	var matched bool = false
+	var attrCount int = 0
+
+	switch req.Type {
+	case "domain", "url":
+		thisURL = fmt.Sprintf("%s/intel/domain/%s", ep.GetURL(), req.Value)
+	case "ipv4", "ipv6":
+		thisURL = fmt.Sprintf("%s/intel/ip/%s", ep.GetURL(), req.Value)
+	default:
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unsupported IOC type for Cloudflare: %s", req.Type))
+	}
+
+	// Create the HTTP request
+	request, err := http.NewRequest("GET", thisURL, nil)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to create request: %v", err))
+	}
+
+	// Execute the request using the endpoint's client
+	respBytes := ep.Do(request)
+	if len(respBytes) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response from Cloudflare")
+	}
+
+	// Send the full raw response to the response channel for storage/caching
+	out, err := json.Marshal(req)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error marshalling request: %v", err))
+	}
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, err := MergeJSONData(resItem.Data, respBytes)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error merging data: %v", err))
+	}
+	resItem.Data = mergedData
+	resch <- resItem
+
+	fmt.Println("CloudflareProxyHelper: processing response for", req.Value, "of type", req.Type)
+	switch req.Type {
+	case "domain", "url":
+		var response vendors.CloudFlareDomainResponse
+		if err := json.Unmarshal(respBytes, &response); err != nil {
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response: %v", err))
+		}
+
+		if !response.Success || response.Result == nil {
+			if len(response.Errors) > 0 {
+				return CreateAndWriteSummarizedEvent(req, false, fmt.Sprintf("no hits: %s", response.Errors[0].Message))
+			}
+			return CreateAndWriteSummarizedEvent(req, false, "no hits found")
+		}
+
+		matched = true
+		result := response.Result
+		riskTypes := []string{}
+		for _, rt := range result.RiskTypes {
+			riskTypes = append(riskTypes, rt.Name)
+		}
+		attrCount = len(riskTypes)
+		info = fmt.Sprintf("Risk Score: %d. Categories: %s. Risk Types: %s.", result.RiskScore, vendors.CloudflareGetCategoryNames(result.ContentCategories), strings.Join(riskTypes, ", "))
+
+	case "ipv4", "ipv6":
+		var response vendors.CloudFlareIPResponse
+		if err := json.Unmarshal(respBytes, &response); err != nil {
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response: %v", err))
+		}
+
+		if !response.Success || response.Result == nil {
+			if len(response.Errors) > 0 {
+				return CreateAndWriteSummarizedEvent(req, false, fmt.Sprintf("no hits: %s", response.Errors[0].Message))
+			}
+			return CreateAndWriteSummarizedEvent(req, false, "no hits found")
+		}
+
+		matched = true
+		result := response.Result
+		riskTypes := []string{}
+		for _, rt := range result.RiskTypes {
+			riskTypes = append(riskTypes, rt.Name)
+		}
+		attrCount = len(riskTypes)
+		info = fmt.Sprintf("Risk Score: %d. Risk Types: %s.", result.RiskScore, strings.Join(riskTypes, ", "))
+	}
+
+	if !matched {
+		background = "has-background-primary-dark"
+		info = "no hits found"
+	}
+
+	// Create the summarized event for the UI
+	sum := SummarizedEvent{
+		Timestamp:  time.Now(),
+		Background: background,
+		Info:       info,
+		From:       req.To,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Matched:    matched,
+		AttrCount:  attrCount,
+	}
+
+	return json.Marshal(sum)
 }
