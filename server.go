@@ -393,7 +393,16 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		default:
-			s.Log.Fatalf("unsupported auth type: %s", svc.AuthType)
+			s.Log.Printf("unsupported auth type: %s, defaulting to bearer\n", svc.AuthType)
+			thisAuthType := &BearerAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+			s.Log.Printf("added service %s with bearer auth", svc.Kind)
 
 		}
 	}

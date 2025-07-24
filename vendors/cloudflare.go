@@ -10,10 +10,10 @@ type CloudFlareDomainResponse struct {
 }
 
 type CloudFlareIPResponse struct {
-	Errors   []CloudFlareError   `json:"errors,omitempty"`
-	Messages []CloudFlareMessage `json:"messages,omitempty"`
-	Success  bool                `json:"success"`
-	Result   *CloudFlareIPResult `json:"result,omitempty"`
+	Errors   []CloudFlareError    `json:"errors,omitempty"`
+	Messages []CloudFlareMessage  `json:"messages,omitempty"`
+	Success  bool                 `json:"success"`
+	Result   []CloudFlareIPResult `json:"result,omitempty"`
 }
 
 type CloudFlareError struct {

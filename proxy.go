@@ -800,23 +800,33 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
 	var thisURL string
 	var info string
+	var request *http.Request
 	var background string = "has-background-warning" // Default to warning for any hit
 	var matched bool = false
 	var attrCount int = 0
+	var err error
 
 	switch req.Type {
 	case "domain", "url":
 		thisURL = fmt.Sprintf("%s/intel/domain/%s", ep.GetURL(), req.Value)
-	case "ipv4", "ipv6":
+		request, err = http.NewRequest("GET", thisURL, nil)
+		if err != nil {
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to create request: %v", err))
+		}
+		q := request.URL.Query()
+		q.Add("domain", req.Value)
+		request.URL.RawQuery = q.Encode()
+	case "ipv4, ipv6":
 		thisURL = fmt.Sprintf("%s/intel/ip/%s", ep.GetURL(), req.Value)
+		request, err = http.NewRequest("GET", thisURL, nil)
+		if err != nil {
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to create request: %v", err))
+		}
+		q := request.URL.Query()
+		q.Add(req.Type, req.Value)
+		request.URL.RawQuery = q.Encode()
 	default:
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unsupported IOC type for Cloudflare: %s", req.Type))
-	}
-
-	// Create the HTTP request
-	request, err := http.NewRequest("GET", thisURL, nil)
-	if err != nil {
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to create request: %v", err))
 	}
 
 	// Execute the request using the endpoint's client
@@ -881,13 +891,14 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 		}
 
 		matched = true
-		result := response.Result
+		result := response.Result[0]
 		riskTypes := []string{}
 		for _, rt := range result.RiskTypes {
 			riskTypes = append(riskTypes, rt.Name)
 		}
 		attrCount = len(riskTypes)
-		info = fmt.Sprintf("Risk Score: %d. Risk Types: %s.", result.RiskScore, strings.Join(riskTypes, ", "))
+		info = fmt.Sprintf("Risk Stypes: %s, results length: %d", strings.Join(riskTypes, ", "), len(response.Result))
+
 	}
 
 	if !matched {
