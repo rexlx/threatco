@@ -49,9 +49,18 @@ type CloudFlareResult struct {
 }
 
 type CloudFlareIPResult struct {
-	IP        string     `json:"ip"`
-	RiskScore int        `json:"risk_score"`
-	RiskTypes []RiskType `json:"risk_types"`
+	BelongsToRef BelongsToRef `json:"belongs_to_ref,omitempty"`
+	IP           string       `json:"ip"`
+	RiskScore    int          `json:"risk_score"`
+	RiskTypes    []RiskType   `json:"risk_types"`
+}
+
+type BelongsToRef struct {
+	ID          string `json:"id,omitempty"`
+	Value       int    `json:"value,omitempty"`
+	Country     string `json:"country,omitempty"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type,omitempty"`
 }
 
 type AdditionalInformation struct {
