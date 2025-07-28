@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <!-- The Go backend should handle the Content-Security-Policy header now -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Local stylesheets as requested -->
+    <link rel="stylesheet" href="/static/bulma.min.css">
+    <link rel="stylesheet" href="/static/material-icons.css">
+    <link rel="stylesheet" href="/static/s.css">
+    <title>ThreatPunch</title>
+</head>
+
+<body>
+
+<section class="section py-3 has-background-black" id="errata">
+    <div class="container" id="errors" style="max-height: 100px; overflow-y: auto;"><p class="has-text-success">System nominal</p></div>
+</section>
+
+<section class="section has-background-black" id="mainSection">
+    <div class="columns" id="mainColumns">
+        <div class="column is-one-quarter">
+            <aside class="menu">
+                <p class="menu-label has-text-grey-light">Actions</p>
+                <ul class="menu-list">
+                    <li><a id="sidebarSearch" class="is-active"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></a></li>
+                    <li><a id="sidebarRecentActivity"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>Responses</span></span></a></li>
+                    <li><a id="sidebarHealth"><span class="icon-text"><span class="icon"><i class="material-icons">health_and_safety</i></span><span>Health</span></span></a></li>
+                </ul>
+                <p class="menu-label has-text-grey-light">Settings</p>
+                <ul class="menu-list">
+                    <li><a id="sidebarServices"><span class="icon-text"><span class="icon"><i class="material-icons">dns</i></span><span>Services</span></span></a></li>
+                    <li><a id="sidebarProfile"><span class="icon-text"><span class="icon"><i class="material-icons">person</i></span><span>Profile</span></span></a></li>
+                    <!-- A logout button might be useful here to redirect to a logged-out page -->
+                </ul>
+            </aside>
+        </div>
+        <div class="column">
+            <div id="notificationContainer" class="mb-4"></div>
+            <div id="healthStatusContainer" class="box has-background-custom" style="display: none;"></div>
+            <div class="box has-background-custom" id="matchBox"></div>
+        </div>
+    </div>
+</section>
+
+<section class="section has-background-custom" id="servicesView" style="display: none;">
+    <div class="container">
+        <div class="block"><h1 class="title has-text-info">Services</h1></div>
+        <div class="block">
+            <div class="buttons">
+                <button class="button is-info is-outlined" id="backButtonServices" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back</span></span></button>
+                <button class="button is-success is-outlined" id="rectifyServicesButton" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">sync</i></span><span>Rectify</span></span></button>
+            </div>
+        </div>
+        <div id="cardList" class="columns is-multiline is-variable is-2-tablet is-3-desktop is-4-widescreen"></div>
+    </div>
+</section>
+
+<section class="section has-background-custom" id="profileView" style="display: none;">
+    <div class="columns is-centered">
+        <div class="column is-two-thirds">
+            <h1 class="title has-text-info" style="margin:0px">Profile & Settings</h1>
+            <div class="box has-background-custom" id="profileBox">
+                <form>
+                    <div class="field">
+                        <label class="label">Email</label>
+                        <div class="control">
+                            <input class="input" type="text" id="editUserEmail" readonly>
+                        </div>
+                    </div>
+                    <!-- Removed API Key and URL fields as they are no longer needed on the client -->
+                    <div class="field mt-5">
+                        <div class="control profileButtons">
+                            <button class="button is-info is-outlined" id="backButtonProfile" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back</span></span></button>
+                            <button class="button is-info is-outlined" id="updateUserButton" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">save</i></span><span>Update</span></span></button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Details Modal to replace Electron's native window -->
+<div class="modal" id="detailsModal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title" id="detailsModalTitle">Details</p>
+            <button class="delete" aria-label="close"></button>
+        </header>
+        <section class="modal-card-body">
+            <pre id="detailsModalContent"></pre>
+        </section>
+    </div>
+</div>
+
+<!-- The script path assumes it's served from /app/ -->
+<script type="module" src="/app/renderer.js"></script>
+</body>
+</html>
