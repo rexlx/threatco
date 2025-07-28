@@ -884,7 +884,7 @@ func CheckConnectivity(url string) error {
 		return fmt.Errorf("failed to connect to %s: %w", url, err)
 	}
 	defer conn.Close()
-	fmt.Println("Successfully connected to", url)
+	// fmt.Println("Successfully connected to", url)
 	return nil
 }
 
@@ -912,7 +912,7 @@ func TestConnectivity(rawURL string) error {
 	}
 
 	address := net.JoinHostPort(host, port)
-	fmt.Printf("Testing connectivity to %s\n", address)
+	// fmt.Printf("Testing connectivity to %s\n", address)
 
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
@@ -920,6 +920,6 @@ func TestConnectivity(rawURL string) error {
 	}
 	defer conn.Close()
 
-	fmt.Printf("Successfully connected to %s\n", address)
+	// fmt.Printf("Successfully connected to %s\n", address)
 	return nil
 }

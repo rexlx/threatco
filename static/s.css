@@ -19,6 +19,21 @@
     font-style: normal;
 }
 
+pre {
+     background-color: #111;
+     color: #f5f5f5;
+     padding: 1em;
+     border-radius: 5px;
+     white-space: pre-wrap;
+     word-wrap: break-word;
+}
+
+.is-sticky-top {
+    position: sticky;
+    top: 10px;
+    z-index: 10;
+}
+
 body {
     font-family: 'IBMPlexSans', sans-serif;
     font-size: 16px;

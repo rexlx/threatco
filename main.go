@@ -64,9 +64,11 @@ func main() {
 		}
 	}()
 
+	sessionHandler := s.Session.LoadAndSave(s.Gateway)
+	finalHandler := CORSMiddleware(sessionHandler)
 	svr := &http.Server{
 		Addr:    s.Details.Address,
-		Handler: s.Session.LoadAndSave(s.Gateway),
+		Handler: finalHandler,
 	}
 	go s.ProcessTransientResponses()
 	s.LogInfo(fmt.Sprintf("Server started at %s", s.Details.Address))

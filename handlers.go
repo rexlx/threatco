@@ -468,18 +468,30 @@ type RawResponseRequest struct {
 }
 
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
-	// defer s.addStat("get_user_requests", 1)
-	// defer func(start time.Time) {
-	// 	s.Log.Println("GetUserHandler took", time.Since(start))
-	// }(time.Now())
-	// s.Memory.RLock()
-	// defer s.Memory.RUnlock()
+	var u User
+	var err error
 	parts := strings.Split(r.Header.Get("Authorization"), ":")
 	email := parts[0]
-	u, err := s.DB.GetUserByEmail(email)
+	u, err = s.DB.GetUserByEmail(email)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		tkn, err := s.GetTokenFromSession(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if tkn != "" {
+			tk, e := s.DB.GetTokenByValue(tkn)
+			if e != nil {
+				http.Error(w, e.Error(), http.StatusInternalServerError)
+				return
+			}
+			u, err = s.DB.GetUserByEmail(tk.Email)
+			if err != nil {
+				fmt.Println("Error getting user by email:", err, u, tkn)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	u.Hash = nil
 	// u.Key = ""

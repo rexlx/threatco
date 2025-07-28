@@ -29,6 +29,7 @@ var (
 	dbLocation    = flag.String("db", "", "Database location")
 	dbMode        = flag.String("dbmode", "postgres", "Database mode")
 	knowledgeBase = flag.String("kb", "/kb", "Knowledge base path")
+	webApp        = flag.String("app", "/webapp", "path to web application")
 	configPath    = flag.String("config", "/config.json", "Configuration file")
 	staticPath    = flag.String("static", "/static", "Static file path")
 	firstUserMode = flag.Bool("firstuse", false, "First user mode")
@@ -429,8 +430,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/history", s.GetStatHistoryHandler)
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
 	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
-	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateToken(s.ProxyHandler)))
-	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateToken(s.GetUserHandler)))
+	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateSessionToken(s.ProxyHandler)))
+	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateSessionToken(s.GetUserHandler)))
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
@@ -460,6 +461,9 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*knowledgeBase))))
+	// s.Gateway.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(*webApp))))
+	appDir := http.Dir(*webApp)
+	s.Gateway.Handle("/app/", http.StripPrefix("/app/", s.ProtectedFileServer(appDir)))
 	if s.Details.FirstUserMode {
 		s.Gateway.HandleFunc("/adduser", s.AddUserHandler)
 	} else {
