@@ -6,7 +6,7 @@ let application = new Application();
 let contextualizer = new Contextualizer();
 
 // --- DOM Element Selectors ---
-const allViews = document.querySelectorAll('body > .section');
+const allViews = document.querySelectorAll('section, #healthStatusContainer');
 const matchBox = document.getElementById("matchBox");
 const mainSection = document.getElementById("mainSection");
 const profileView = document.getElementById("profileView");
@@ -38,6 +38,8 @@ const detailsModalContent = document.getElementById('detailsModalContent');
 async function main() {
     await application.init();
     if (application.initialized) {
+        // Set the default view to the main section
+        showView(mainSection);
         renderSearchForm();
         attachEventListeners();
         requestAnimationFrame(updateUI);
@@ -49,11 +51,14 @@ async function main() {
 // --- View Management ---
 
 function showView(viewToShow) {
+    // Hide all views first
     allViews.forEach(view => {
-        if (view.id !== 'errata') view.style.display = 'none';
+        view.classList.add('is-hidden');
     });
+
+    // Then show the requested view
     if (viewToShow) {
-        viewToShow.style.display = 'block';
+        viewToShow.classList.remove('is-hidden');
     }
 }
 
@@ -64,11 +69,22 @@ function setActiveSidebar(activeLink) {
     }
 }
 
-function showDetailsModal(title, details) {
-    detailsModalTitle.textContent = title;
+/**
+ * Shows a modal and truncates the ID in the title for readability.
+ * @param {string} fullId - The full, untruncated ID for the details view.
+ * @param {object} details - The object to display as a formatted JSON string.
+ */
+function showDetailsModal(fullId, details) {
+    let displayId = fullId;
+    if (typeof fullId === 'string' && fullId.length > 24) {
+        displayId = `${fullId.substring(0, 10)}...${fullId.substring(fullId.length - 10)}`;
+    }
+    detailsModalTitle.textContent = `Details for ${displayId}`;
+    detailsModalTitle.title = `Full ID: ${fullId}`;
     detailsModalContent.textContent = JSON.stringify(details, null, 2);
     detailsModal.classList.add('is-active');
 }
+
 
 // --- Event Listeners ---
 
@@ -79,8 +95,6 @@ function attachEventListeners() {
 
     // Profile view
     updateUserButton.addEventListener("click", async () => {
-        // This function can be expanded if you allow users to update their profile.
-        // For now, it just re-fetches the user data.
         await application.fetchUser();
         alert('User profile re-synced!');
     });
@@ -117,7 +131,7 @@ function attachEventListeners() {
         } else if (targetId === 'goButton') {
             const id = document.getElementById("goToValue").value;
             await application.fetchDetails(id);
-            showDetailsModal(`Details for ${id}`, application.focus);
+            showDetailsModal(id, application.focus);
         } else if (targetId === 'uploadButton') {
             const fileInput = document.createElement("input");
             fileInput.type = "file";
@@ -150,27 +164,30 @@ function attachEventListeners() {
     });
 
     // Sidebar navigation
-    sidebarSearch.addEventListener('click', (e) => { setActiveSidebar(e.target); showView(mainSection); renderSearchForm(); });
+    sidebarSearch.addEventListener('click', (e) => {
+        setActiveSidebar(e.target);
+        showView(mainSection);
+        renderSearchForm();
+    });
     sidebarRecentActivity.addEventListener('click', (e) => {
         setActiveSidebar(e.target);
         showView(mainSection);
-        if (healthStatusContainer) healthStatusContainer.style.display = 'none';
-        if (notificationContainer) notificationContainer.innerHTML = '';
-        if (matchBox) {
-            matchBox.style.display = 'block';
-            matchBox.innerHTML = renderResponseFilters();
-        }
+        healthStatusContainer.classList.add('is-hidden');
+        notificationContainer.innerHTML = '';
+        matchBox.classList.remove('is-hidden');
+        matchBox.innerHTML = renderResponseFilters();
         handleResponseFetch();
     });
     sidebarServices.addEventListener('click', (e) => { setActiveSidebar(e.target); navigateToServices(); });
     sidebarProfile.addEventListener('click', (e) => { setActiveSidebar(e.target); navigateToProfile(); });
     sidebarHealth.addEventListener('click', async (e) => {
         setActiveSidebar(e.target);
+        // Show the main section container, but hide the matchBox inside it
         showView(mainSection);
-        if (matchBox) matchBox.style.display = 'none';
+        matchBox.classList.add('is-hidden');
         notificationContainer.innerHTML = '';
         healthStatusContainer.innerHTML = '<p class="has-text-info">Checking health...</p><progress class="progress is-small is-primary" max="100"></progress>';
-        healthStatusContainer.style.display = 'block';
+        healthStatusContainer.classList.remove('is-hidden');
         const stats = await application.getServerStats();
         if (stats) renderHealthStatus(stats);
         else healthStatusContainer.innerHTML = '<p class="has-text-danger">Could not retrieve health stats.</p>';
@@ -196,25 +213,21 @@ const navigateToProfile = () => {
 };
 
 function renderSearchForm() {
-    healthStatusContainer.style.display = 'none';
-    if (notificationContainer) {
-        notificationContainer.innerHTML = '';
-        notificationContainer.classList.remove('is-sticky-top');
-    }
-    if (matchBox) {
-        matchBox.style.display = 'block';
-        matchBox.innerHTML = `
-            <h1 class="title has-text-info">Search</h1>
-            <form>
-                <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
-                <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
-                <div class="field"><div class="control"><div class="buttons are-small">
-                    <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
-                    <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
-                    <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
-                </div></div></div>
-            </form>`;
-    }
+    healthStatusContainer.classList.add('is-hidden');
+    notificationContainer.innerHTML = '';
+    notificationContainer.classList.remove('is-sticky-top');
+    matchBox.classList.remove('is-hidden');
+    matchBox.innerHTML = `
+        <h1 class="title has-text-info">Search</h1>
+        <form>
+            <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
+            <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
+            <div class="field"><div class="control"><div class="buttons are-small">
+                <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
+                <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
+                <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
+            </div></div></div>
+        </form>`;
 }
 
 async function handleResponseFetch(options = {}) {
@@ -230,18 +243,17 @@ async function handleResponseFetch(options = {}) {
             const id = new URL(link.href).pathname.split('/').pop();
             if (id) {
                 await application.fetchDetails(id);
-                showDetailsModal(`Details for ${id}`, application.focus);
+                showDetailsModal(id, application.focus);
             }
         });
     });
 }
 
 // --- UI Component Rendering ---
-// (These functions are copied from your original renderer and adapted for the web)
 
 function renderResultCards(resultsArray, isHistoryView = false) {
-    if (healthStatusContainer) healthStatusContainer.style.display = 'none';
-    matchBox.style.display = 'block';
+    healthStatusContainer.classList.add('is-hidden');
+    matchBox.classList.remove('is-hidden');
     matchBox.innerHTML = "";
     if (resultsArray.length === 0) {
         matchBox.innerHTML = `<p class="has-text-info">${isHistoryView ? 'History is empty.' : 'No results found.'}</p>`;
@@ -289,7 +301,7 @@ function renderResultCards(resultsArray, isHistoryView = false) {
             e.preventDefault();
             if (!result.link || result.link === "none") return;
             await application.fetchDetails(result.link);
-            showDetailsModal(`Details for ${result.link}`, application.focus);
+            showDetailsModal(result.link, application.focus);
         });
 
         footer.appendChild(historyButton);
@@ -472,7 +484,7 @@ function renderHealthStatus(stats) {
     } else {
         healthStatusContainer.innerHTML += '<p class="has-text-info">No health check information available.</p>';
     }
-    healthStatusContainer.style.display = 'block';
+    healthStatusContainer.classList.remove('is-hidden');
 }
 
 function renderResponseFilters() {

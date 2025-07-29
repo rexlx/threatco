@@ -14,9 +14,10 @@
 
 <body>
 
-<section class="section py-3 has-background-black" id="errata">
-    <div class="container" id="errors" style="max-height: 100px; overflow-y: auto;"><p class="has-text-success">System nominal</p></div>
-</section>
+<!-- UPDATED: Changed from a <section> to a <div> and removed the inline style -->
+<div class="py-3 has-background-black" id="errata">
+    <div class="container" id="errors"><p class="has-text-success">System nominal</p></div>
+</div>
 
 <section class="section has-background-black" id="mainSection">
     <div class="columns" id="mainColumns">
@@ -38,13 +39,15 @@
         </div>
         <div class="column">
             <div id="notificationContainer" class="mb-4"></div>
-            <div id="healthStatusContainer" class="box has-background-custom" style="display: none;"></div>
+            <!-- UPDATED: Added .is-hidden class for initial state -->
+            <div id="healthStatusContainer" class="box has-background-custom is-hidden"></div>
             <div class="box has-background-custom" id="matchBox"></div>
         </div>
     </div>
 </section>
 
-<section class="section has-background-custom" id="servicesView" style="display: none;">
+<!-- UPDATED: Added .is-hidden class for initial state -->
+<section class="section has-background-custom is-hidden" id="servicesView">
     <div class="container">
         <div class="block"><h1 class="title has-text-info">Services</h1></div>
         <div class="block">
@@ -57,7 +60,8 @@
     </div>
 </section>
 
-<section class="section has-background-custom" id="profileView" style="display: none;">
+<!-- UPDATED: Added .is-hidden class for initial state -->
+<section class="section has-background-custom is-hidden" id="profileView">
     <div class="columns is-centered">
         <div class="column is-two-thirds">
             <h1 class="title has-text-info" style="margin:0px">Profile & Settings</h1>
