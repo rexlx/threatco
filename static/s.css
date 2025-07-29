@@ -30,18 +30,26 @@
     --text-header: #222;    /* User's color */
 }
 
+/* --- FIX --- */
+/* Apply the background color to the entire page to prevent white background on scroll. */
+html, body {
+    background-color: var(--background-dark);
+}
+
 body {
     font-family: 'IBMPlexSans', sans-serif;
     font-size: 16px;
     line-height: 1.5;
     color: var(--text-base);
-    background-color: var(--background-dark);
     margin: 0;
     padding: 0;
+    /* Ensure body can grow beyond the viewport height */
+    min-height: 100vh;
 }
 
+/* UPDATED: Removed fixed height to allow the section to grow with its content. */
 .section {
-    height: 100vh;
+    /* height: 100vh; */ /* This was causing the issue */
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -74,7 +82,7 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-info);
 }
 
-.modal-card-head, .modal-card-body {
+.modal-card-head {
     background-color: var(--background-light);
 }
 
@@ -83,6 +91,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .modal-card-body {
+    background-color: var(--background-light);
     color: var(--text-light);
 }
 
@@ -95,6 +104,13 @@ pre {
      white-space: pre-wrap;
      word-wrap: break-word;
 }
+
+/* This rule is more specific and ensures the text inside the modal is visible. */
+.modal-card-body pre {
+    color: #f5f5f5; /* Light text color */
+    background-color: #111; /* Dark background */
+}
+
 
 /* Merged sticky top style */
 .is-sticky-top {

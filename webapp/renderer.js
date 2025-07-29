@@ -6,7 +6,8 @@ let application = new Application();
 let contextualizer = new Contextualizer();
 
 // --- DOM Element Selectors ---
-const allViews = document.querySelectorAll('section, #healthStatusContainer');
+// UPDATED: Made the selector more specific to only target top-level views.
+const allViews = document.querySelectorAll('body > section, #healthStatusContainer');
 const matchBox = document.getElementById("matchBox");
 const mainSection = document.getElementById("mainSection");
 const profileView = document.getElementById("profileView");
@@ -51,7 +52,7 @@ async function main() {
 // --- View Management ---
 
 function showView(viewToShow) {
-    // Hide all views first
+    // Hide all main views first
     allViews.forEach(view => {
         view.classList.add('is-hidden');
     });
@@ -70,18 +71,27 @@ function setActiveSidebar(activeLink) {
 }
 
 /**
- * Shows a modal and truncates the ID in the title for readability.
+ * Shows a modal, truncates the ID, and displays the raw data received.
  * @param {string} fullId - The full, untruncated ID for the details view.
- * @param {object} details - The object to display as a formatted JSON string.
+ * @param {object | Array} details - The object or array to display as a formatted JSON string.
  */
 function showDetailsModal(fullId, details) {
+    console.log("showDetailsModal called with details:", details);
+
     let displayId = fullId;
     if (typeof fullId === 'string' && fullId.length > 24) {
         displayId = `${fullId.substring(0, 10)}...${fullId.substring(fullId.length - 10)}`;
     }
     detailsModalTitle.textContent = `Details for ${displayId}`;
     detailsModalTitle.title = `Full ID: ${fullId}`;
-    detailsModalContent.textContent = JSON.stringify(details, null, 2);
+
+    try {
+        detailsModalContent.textContent = JSON.stringify(details, null, 2);
+    } catch (e) {
+        console.error("Could not stringify details object:", e);
+        detailsModalContent.textContent = "Error: Could not display details. The data might be circular or invalid. See console for more information.";
+    }
+
     detailsModal.classList.add('is-active');
 }
 
