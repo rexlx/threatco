@@ -171,3 +171,44 @@ pre {
     max-height: 100px;
     overflow-y: auto;
 }
+
+/* --- NEW NAVBAR CAROUSEL STYLES --- */
+.carousel-container {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+    /* You can adjust this width if needed */
+    max-width: 100%;
+}
+
+.navbar-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+.navbar-carousel::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, and Opera */
+}
+
+/* We target navbar-item within the carousel to not affect other potential navbar-items */
+.navbar-carousel .navbar-item {
+    white-space: nowrap;
+}
+
+.scroll-button {
+    background-color: rgba(34, 34, 34, 0.5); /* A bit darker for better visibility on your bg */
+    border: none;
+    color: var(--text-light); /* Use your text light color */
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 10;
+    padding: 0 10px;
+}
+
+.scroll-button:hover {
+    background-color: rgba(34, 34, 34, 0.8);
+}

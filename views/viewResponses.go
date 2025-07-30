@@ -4,7 +4,7 @@ import "fmt"
 
 var ResponsesListView = fmt.Sprintf(BaseView, ResponsesListSection)
 
-var ResponsesListSection = `<section class="section has-background-custom">
+var ResponsesListSection = `<section class="section has-background-black">
 	<h1 class="title has-text-primary">Responses</h1>
 	<div class="container is-fluid" hx-get="/getresponses" hx-trigger="load" hx-target="#responsesarea">
 		<div class="responsesarea" id="responsesarea">

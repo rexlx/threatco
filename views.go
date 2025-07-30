@@ -60,7 +60,7 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
-	serviceDiv := `<div class="box has-background-black-ter">
+	serviceDiv := `<div class="box has-background-black">
 <div class="columns is-multiline">`
 
 	for _, service := range s.Details.SupportedServices {
@@ -69,7 +69,7 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 
 		serviceDiv += fmt.Sprintf(`
 <div class="column is-3"> 
-	<div class="card has-background-black-ter service-card">
+	<div class="card has-background-custom service-card">
 		<div class="card-content">
 			<p class="title has-text-primary is-4">%s</p>
 			<div class="content">
@@ -84,11 +84,11 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	<div class="modal" id="%s">
 		<div class="modal-background"></div>
 		<div class="modal-card">
-			<header class="modal-card-head has-background-black">
+			<header class="modal-card-head has-background-custom">
 				<p class="modal-card-title has-text-primary">%s types</p>
 				<button class="delete close-modal" aria-label="close"></button>
 			</header>
-			<section class="modal-card-body has-background-black">
+			<section class="modal-card-body has-background-custom">
 				<ul>
 `, service.Kind, service.Description, modalID, modalID, service.Kind)
 

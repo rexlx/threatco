@@ -4,7 +4,7 @@ import "fmt"
 
 var LogView = fmt.Sprintf(BaseView, LoggingSection)
 
-var LoggingSection = `<section class="section has-background-custom">
+var LoggingSection = `<section class="section has-background-black">
 	<div class="container is-fluid" hx-get="/getlogs" hx-trigger="load" hx-target="#logarea">
 		<h1 class="title has-text-primary">Logs</h1>
 		<div class="logarea" id="logarea">

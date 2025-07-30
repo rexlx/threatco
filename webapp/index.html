@@ -3,9 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <!-- The Go backend should handle the Content-Security-Policy header now -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Local stylesheets as requested -->
     <link rel="stylesheet" href="/static/bulma.min.css">
     <link rel="stylesheet" href="/static/material-icons.css">
     <link rel="stylesheet" href="/static/s.css">
@@ -14,7 +12,37 @@
 
 <body>
 
-<!-- UPDATED: Changed from a <section> to a <div> and removed the inline style -->
+<nav class="navbar has-background-custom" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item has-text-primary" href="#">
+            <strong>threatco</strong>
+        </a>
+    </div>
+    <div class="navbar-menu is-active">
+        <div class="navbar-start">
+            <div class="carousel-container">
+                <button class="scroll-button left" id="scroll-left">‹</button>
+                <div class="navbar-carousel" id="navbar-carousel">
+                    <a class="navbar-item has-background-custom has-text-primary" href="/app">app</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/kb">documentation</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/services">services</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/create-user">add user</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/users">users</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/view-logs">logs</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/charts">stats</a>
+                    <a class="navbar-item has-background-custom has-text-primary" href="/responses">responses</a>
+                </div>
+                <button class="scroll-button right" id="scroll-right">›</button>
+            </div>
+        </div>
+        <div class="navbar-end">
+            <div class="navbar-item">
+                <button class="button is-warning is-outlined" id="logoutButton">logout</button>
+            </div>
+        </div>
+    </div>
+</nav>
+
 <div class="py-3 has-background-black" id="errata">
     <div class="container" id="errors"><p class="has-text-success">System nominal</p></div>
 </div>
@@ -33,20 +61,17 @@
                 <ul class="menu-list">
                     <li><a id="sidebarServices"><span class="icon-text"><span class="icon"><i class="material-icons">dns</i></span><span>Services</span></span></a></li>
                     <li><a id="sidebarProfile"><span class="icon-text"><span class="icon"><i class="material-icons">person</i></span><span>Profile</span></span></a></li>
-                    <!-- A logout button might be useful here to redirect to a logged-out page -->
-                </ul>
+                    </ul>
             </aside>
         </div>
         <div class="column">
             <div id="notificationContainer" class="mb-4"></div>
-            <!-- UPDATED: Added .is-hidden class for initial state -->
             <div id="healthStatusContainer" class="box has-background-custom is-hidden"></div>
             <div class="box has-background-custom" id="matchBox"></div>
         </div>
     </div>
 </section>
 
-<!-- UPDATED: Added .is-hidden class for initial state -->
 <section class="section has-background-custom is-hidden" id="servicesView">
     <div class="container">
         <div class="block"><h1 class="title has-text-info">Services</h1></div>
@@ -58,9 +83,8 @@
         </div>
         <div id="cardList" class="columns is-multiline is-variable is-2-tablet is-3-desktop is-4-widescreen"></div>
     </div>
-</section>
+section>
 
-<!-- UPDATED: Added .is-hidden class for initial state -->
 <section class="section has-background-custom is-hidden" id="profileView">
     <div class="columns is-centered">
         <div class="column is-two-thirds">
@@ -73,7 +97,6 @@
                             <input class="input" type="text" id="editUserEmail" readonly>
                         </div>
                     </div>
-                    <!-- Removed API Key and URL fields as they are no longer needed on the client -->
                     <div class="field mt-5">
                         <div class="control profileButtons">
                             <button class="button is-info is-outlined" id="backButtonProfile" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back</span></span></button>
@@ -86,7 +109,6 @@
     </div>
 </section>
 
-<!-- Details Modal to replace Electron's native window -->
 <div class="modal" id="detailsModal">
     <div class="modal-background"></div>
     <div class="modal-card">
@@ -100,7 +122,6 @@
     </div>
 </div>
 
-<!-- The script path assumes it's served from /app/ -->
 <script type="module" src="/app/renderer.js"></script>
 </body>
 </html>
