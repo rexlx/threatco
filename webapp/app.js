@@ -49,7 +49,7 @@ export class Application {
                 ...options.headers,
             },
         };
-        console.log(finalOptions)
+        // console.log(finalOptions)
         // Determine if this is a file upload, which shouldn't have a Content-Type set by us.
         const isFileUpload = finalOptions.body instanceof FormData || finalOptions.body instanceof Blob || finalOptions.body instanceof File;
     
@@ -93,7 +93,7 @@ export class Application {
     }
 
     async fetchPastSearches(value) {
-        const thisURL = `/previous-responses`;
+        const thisURL = `/previous-results`;
         try {
             const response = await this._fetch(thisURL, {
                 method: 'POST',

@@ -76,7 +76,7 @@ function setActiveSidebar(activeLink) {
  * @param {object | Array} details - The object or array to display as a formatted JSON string.
  */
 function showDetailsModal(fullId, details) {
-    console.log("showDetailsModal called with details:", details);
+    // console.log("showDetailsModal called with details:", details);
 
     let displayId = fullId;
     if (typeof fullId === 'string' && fullId.length > 24) {

@@ -232,7 +232,7 @@ window.onload = () => {
                     throw new Error('Network response was not ok.');
                 })
                 .then(data => {
-                    console.log('User added: ', data);
+                    // console.log('User added: ', data);
                     if (data.key) {
                         if (!isValid32ByteBase64Key(data.key)) {
                             userResults.innerHTML = '<div class="notification is-danger">User added successfully but key is invalid</div>';
