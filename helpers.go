@@ -50,7 +50,23 @@ func (s *Server) CleanUserServices(u *User) {
 		return
 	}
 	u.Services = newServices
+}
 
+func (s *Server) GetCurrentUserEmail(r *http.Request) string {
+	// Example adaptation of your logic:
+	tkn, err := s.GetTokenFromSession(r)
+	if err != nil {
+		return "" // No user logged in
+	}
+	if tkn != "" {
+		tk, e := s.DB.GetTokenByValue(tkn)
+		if e != nil {
+			return ""
+		}
+		// We found the user's email!
+		return tk.Email
+	}
+	return "" // Default to empty if no user
 }
 
 func MergeJSONData(existingData, newData []byte) ([]byte, error) {
