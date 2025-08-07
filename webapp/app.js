@@ -195,11 +195,12 @@ export class Application {
             this.errors = [`<progress class="progress" value="${Math.ceil((end / file.size) * 100)}" max="100"></progress>`];
             
             try {
-                const uploadHeaders = new Headers();
-                uploadHeaders.append('Content-Range', `bytes ${start}-${end - 1}/${file.size}`);
-                uploadHeaders.append('X-filename', encodeURIComponent(file.name));
-                uploadHeaders.append('X-last-chunk', currentChunk === Math.ceil(file.size / chunkSize) - 1);
-
+                const uploadHeaders = {
+                        // 'Content-Type': 'application/json', // Remove if sending binary data
+                        'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
+                        'X-filename': file.name,
+                        'X-last-chunk': currentChunk === Math.ceil(file.size / chunkSize) - 1,
+                    }
                 const response = await this._fetch(thisURL, {
                     method: 'POST',
                     headers: uploadHeaders,

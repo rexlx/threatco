@@ -432,7 +432,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
 	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateSessionToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateSessionToken(s.GetUserHandler)))
-	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
+	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateSessionToken(s.UploadFileHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.Handle("/stats", http.HandlerFunc(s.ValidateSessionToken(s.GetStatsHandler)))

@@ -16,14 +16,14 @@ var LoginSection string = `
             <div class="field">
               <label class="label has-text-white">username</label>
               <div class="control">
-                <input class="input is-outlined" type="text" name="username" placeholder="Enter your usernamess">
+                <input class="input is-outlined" type="text" name="username" placeholder="enter your username">
               </div>
             </div>
           
             <div class="field">
               <label class="label has-text-white">password</label>
               <div class="control">
-                <input class="input is-outlined" type="password" name="password" placeholder="Enter your passwords">
+                <input class="input is-outlined" type="password" name="password" placeholder="enter your password">
               </div>
             </div>
             <div>
