@@ -5,10 +5,10 @@ import "fmt"
 var AddServiceView string = fmt.Sprintf(BaseView, AddServiceSection)
 
 var AddServiceSection string = `
-    <section class="section has-background-custom">
+    <section class="section has-background-black">
         <div class="columns is-centered">
             <div class="column is-half">
-                <div class="box has-background-black">
+                <div class="box has-background-custom">
                     <h2 class="title is-2 has-text-primary">Add New Service</h2>
                     <form id="addServiceForm" action="/addservice" method="post" class="has-background-black">
                         <div class="field">

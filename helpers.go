@@ -50,7 +50,23 @@ func (s *Server) CleanUserServices(u *User) {
 		return
 	}
 	u.Services = newServices
+}
 
+func (s *Server) GetCurrentUserEmail(r *http.Request) string {
+	// Example adaptation of your logic:
+	tkn, err := s.GetTokenFromSession(r)
+	if err != nil {
+		return "" // No user logged in
+	}
+	if tkn != "" {
+		tk, e := s.DB.GetTokenByValue(tkn)
+		if e != nil {
+			return ""
+		}
+		// We found the user's email!
+		return tk.Email
+	}
+	return "" // Default to empty if no user
 }
 
 func MergeJSONData(existingData, newData []byte) ([]byte, error) {
@@ -884,7 +900,7 @@ func CheckConnectivity(url string) error {
 		return fmt.Errorf("failed to connect to %s: %w", url, err)
 	}
 	defer conn.Close()
-	fmt.Println("Successfully connected to", url)
+	// fmt.Println("Successfully connected to", url)
 	return nil
 }
 
@@ -912,7 +928,7 @@ func TestConnectivity(rawURL string) error {
 	}
 
 	address := net.JoinHostPort(host, port)
-	fmt.Printf("Testing connectivity to %s\n", address)
+	// fmt.Printf("Testing connectivity to %s\n", address)
 
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
@@ -920,6 +936,6 @@ func TestConnectivity(rawURL string) error {
 	}
 	defer conn.Close()
 
-	fmt.Printf("Successfully connected to %s\n", address)
+	// fmt.Printf("Successfully connected to %s\n", address)
 	return nil
 }

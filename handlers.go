@@ -468,18 +468,30 @@ type RawResponseRequest struct {
 }
 
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
-	// defer s.addStat("get_user_requests", 1)
-	// defer func(start time.Time) {
-	// 	s.Log.Println("GetUserHandler took", time.Since(start))
-	// }(time.Now())
-	// s.Memory.RLock()
-	// defer s.Memory.RUnlock()
+	var u User
+	var err error
 	parts := strings.Split(r.Header.Get("Authorization"), ":")
 	email := parts[0]
-	u, err := s.DB.GetUserByEmail(email)
+	u, err = s.DB.GetUserByEmail(email)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		tkn, err := s.GetTokenFromSession(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if tkn != "" {
+			tk, e := s.DB.GetTokenByValue(tkn)
+			if e != nil {
+				http.Error(w, e.Error(), http.StatusInternalServerError)
+				return
+			}
+			u, err = s.DB.GetUserByEmail(tk.Email)
+			if err != nil {
+				fmt.Println("Error getting user by email:", err, u, tkn)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	u.Hash = nil
 	// u.Key = ""
@@ -1105,6 +1117,36 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 	s.Log.Println("GetPreviousResponsesHandler matches", len(matches), "for value", prq.Value)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)
+}
+
+type NottyRequest struct {
+	To      string    `json:"to"`
+	From    string    `json:"from"`
+	Info    string    `json:"info"`
+	Error   bool      `json:"error"`
+	Created time.Time `json:"created"`
+}
+
+func (s *Server) SendTestNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	var req NottyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Simulate sending a notification
+	s.Log.Printf("Sending test notification to %s from %s: %s", req.To, req.From, req.Info)
+	if req.To == "" || req.From == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+	info := fmt.Sprintf("Test notification from %s to %s: %s", req.From, req.To, req.Info)
+	notification := Notification{
+		Info:    info,
+		Error:   req.Error,
+		Created: time.Now(),
+	}
+	s.Hub.SendToUser(req.To, notification)
+	json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
 }
 
 // func (s *Server) GetResponsesHandler(w http.ResponseWriter, r *http.Request) {

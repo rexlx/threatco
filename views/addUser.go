@@ -5,10 +5,10 @@ import "fmt"
 var AddUserView string = fmt.Sprintf(BaseView, AddUserSection)
 
 var AddUserSection string = `
-<section class="section has-background-custom" style="height: 100vh;">
+<section class="section has-background-black" style="height: 100vh;">
     <div class="container mb-3">
         <h1 class="title has-text-primary">Add User</h1>
-        <form class="box has-background-black-ter" id="addUserForm">
+        <form class="box has-background-custom" id="addUserForm">
             <div class="field">
                 <label class="label  has-text-primary" for="email">email:</label>
                 <div class="control">

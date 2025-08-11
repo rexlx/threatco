@@ -6,7 +6,8 @@ let application = new Application();
 let contextualizer = new Contextualizer();
 
 // --- DOM Element Selectors ---
-const allViews = document.querySelectorAll('body > .section');
+// UPDATED: Made the selector more specific to only target top-level views.
+const allViews = document.querySelectorAll('body > section, #healthStatusContainer');
 const matchBox = document.getElementById("matchBox");
 const mainSection = document.getElementById("mainSection");
 const profileView = document.getElementById("profileView");
@@ -38,6 +39,8 @@ const detailsModalContent = document.getElementById('detailsModalContent');
 async function main() {
     await application.init();
     if (application.initialized) {
+        // Set the default view to the main section
+        showView(mainSection);
         renderSearchForm();
         attachEventListeners();
         requestAnimationFrame(updateUI);
@@ -49,11 +52,14 @@ async function main() {
 // --- View Management ---
 
 function showView(viewToShow) {
+    // Hide all main views first
     allViews.forEach(view => {
-        if (view.id !== 'errata') view.style.display = 'none';
+        view.classList.add('is-hidden');
     });
+
+    // Then show the requested view
     if (viewToShow) {
-        viewToShow.style.display = 'block';
+        viewToShow.classList.remove('is-hidden');
     }
 }
 
@@ -64,11 +70,29 @@ function setActiveSidebar(activeLink) {
     }
 }
 
-function showDetailsModal(title, details) {
-    detailsModalTitle.textContent = title;
-    detailsModalContent.textContent = JSON.stringify(details, null, 2);
+/**
+ * Shows a modal, truncates the ID, and displays the raw data received.
+ * @param {string} fullId - The full, untruncated ID for the details view.
+ * @param {object | Array} details - The object or array to display as a formatted JSON string.
+ */
+function showDetailsModal(fullId, details) {
+    let displayId = fullId;
+    if (typeof fullId === 'string' && fullId.length > 24) {
+        displayId = `${fullId.substring(0, 10)}...${fullId.substring(fullId.length - 10)}`;
+    }
+    detailsModalTitle.textContent = `Details for ${displayId}`;
+    detailsModalTitle.title = `Full ID: ${fullId}`;
+
+    try {
+        detailsModalContent.textContent = JSON.stringify(details, null, 2);
+    } catch (e) {
+        console.error("Could not stringify details object:", e);
+        detailsModalContent.textContent = "Error: Could not display details. The data might be circular or invalid. See console for more information.";
+    }
+
     detailsModal.classList.add('is-active');
 }
+
 
 // --- Event Listeners ---
 
@@ -79,8 +103,6 @@ function attachEventListeners() {
 
     // Profile view
     updateUserButton.addEventListener("click", async () => {
-        // This function can be expanded if you allow users to update their profile.
-        // For now, it just re-fetches the user data.
         await application.fetchUser();
         alert('User profile re-synced!');
     });
@@ -98,7 +120,9 @@ function attachEventListeners() {
             const userSearch = document.getElementById('userSearch');
             if (!userSearch) return;
             const searchText = userSearch.value;
-            notificationContainer.innerHTML = '';
+            // Clear old search-related notifications, but keep others
+            application.notifications = application.notifications.filter(n => n.type !== 'search');
+            renderNotifications();
             matchBox.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-primary'></progress>";
 
             const allMatches = Object.keys(contextualizer.expressions).map(key => ({ type: key, matches: [...new Set(contextualizer.getMatches(searchText, contextualizer.expressions[key]))] }));
@@ -117,7 +141,7 @@ function attachEventListeners() {
         } else if (targetId === 'goButton') {
             const id = document.getElementById("goToValue").value;
             await application.fetchDetails(id);
-            showDetailsModal(`Details for ${id}`, application.focus);
+            showDetailsModal(id, application.focus);
         } else if (targetId === 'uploadButton') {
             const fileInput = document.createElement("input");
             fileInput.type = "file";
@@ -150,16 +174,17 @@ function attachEventListeners() {
     });
 
     // Sidebar navigation
-    sidebarSearch.addEventListener('click', (e) => { setActiveSidebar(e.target); showView(mainSection); renderSearchForm(); });
+    sidebarSearch.addEventListener('click', (e) => {
+        setActiveSidebar(e.target);
+        showView(mainSection);
+        renderSearchForm();
+    });
     sidebarRecentActivity.addEventListener('click', (e) => {
         setActiveSidebar(e.target);
         showView(mainSection);
-        if (healthStatusContainer) healthStatusContainer.style.display = 'none';
-        if (notificationContainer) notificationContainer.innerHTML = '';
-        if (matchBox) {
-            matchBox.style.display = 'block';
-            matchBox.innerHTML = renderResponseFilters();
-        }
+        healthStatusContainer.classList.add('is-hidden');
+        matchBox.classList.remove('is-hidden');
+        matchBox.innerHTML = renderResponseFilters();
         handleResponseFetch();
     });
     sidebarServices.addEventListener('click', (e) => { setActiveSidebar(e.target); navigateToServices(); });
@@ -167,10 +192,9 @@ function attachEventListeners() {
     sidebarHealth.addEventListener('click', async (e) => {
         setActiveSidebar(e.target);
         showView(mainSection);
-        if (matchBox) matchBox.style.display = 'none';
-        notificationContainer.innerHTML = '';
+        matchBox.classList.add('is-hidden');
         healthStatusContainer.innerHTML = '<p class="has-text-info">Checking health...</p><progress class="progress is-small is-primary" max="100"></progress>';
-        healthStatusContainer.style.display = 'block';
+        healthStatusContainer.classList.remove('is-hidden');
         const stats = await application.getServerStats();
         if (stats) renderHealthStatus(stats);
         else healthStatusContainer.innerHTML = '<p class="has-text-danger">Could not retrieve health stats.</p>';
@@ -196,25 +220,19 @@ const navigateToProfile = () => {
 };
 
 function renderSearchForm() {
-    healthStatusContainer.style.display = 'none';
-    if (notificationContainer) {
-        notificationContainer.innerHTML = '';
-        notificationContainer.classList.remove('is-sticky-top');
-    }
-    if (matchBox) {
-        matchBox.style.display = 'block';
-        matchBox.innerHTML = `
-            <h1 class="title has-text-info">Search</h1>
-            <form>
-                <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
-                <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
-                <div class="field"><div class="control"><div class="buttons are-small">
-                    <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
-                    <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
-                    <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
-                </div></div></div>
-            </form>`;
-    }
+    healthStatusContainer.classList.add('is-hidden');
+    matchBox.classList.remove('is-hidden');
+    matchBox.innerHTML = `
+        <h1 class="title has-text-info">Search</h1>
+        <form>
+            <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
+            <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
+            <div class="field"><div class="control"><div class="buttons are-small">
+                <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
+                <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
+                <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
+            </div></div></div>
+        </form>`;
 }
 
 async function handleResponseFetch(options = {}) {
@@ -230,18 +248,51 @@ async function handleResponseFetch(options = {}) {
             const id = new URL(link.href).pathname.split('/').pop();
             if (id) {
                 await application.fetchDetails(id);
-                showDetailsModal(`Details for ${id}`, application.focus);
+                showDetailsModal(id, application.focus);
             }
         });
     });
 }
 
 // --- UI Component Rendering ---
-// (These functions are copied from your original renderer and adapted for the web)
+
+/**
+ * NEW: Renders notifications from the application state into the container.
+ */
+function renderNotifications() {
+    if (!notificationContainer) return;
+    notificationContainer.innerHTML = ''; // Clear existing notifications
+    
+    application.notifications.forEach(notif => {
+        console.log("Rendering notification:", notif);
+        const notifDiv = document.createElement('div');
+        const colorClass = notif.Error ? 'is-danger' : 'is-success';
+        notifDiv.className = `notification ${colorClass} is-light`;
+        notifDiv.dataset.id = notif.id;
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'delete';
+        deleteButton.onclick = () => {
+            // Remove from state and re-render
+            application.notifications = application.notifications.filter(n => n.id !== notif.id);
+            renderNotifications();
+        };
+
+        const message = document.createElement('p');
+        // Format the timestamp for readability
+        const timestamp = new Date(notif.created).toLocaleTimeString();
+        message.innerHTML = `<strong>[${timestamp}]</strong> ${escapeHtml(notif.info)}`;
+
+        notifDiv.appendChild(deleteButton);
+        notifDiv.appendChild(message);
+        notificationContainer.appendChild(notifDiv);
+    });
+}
+
 
 function renderResultCards(resultsArray, isHistoryView = false) {
-    if (healthStatusContainer) healthStatusContainer.style.display = 'none';
-    matchBox.style.display = 'block';
+    healthStatusContainer.classList.add('is-hidden');
+    matchBox.classList.remove('is-hidden');
     matchBox.innerHTML = "";
     if (resultsArray.length === 0) {
         matchBox.innerHTML = `<p class="has-text-info">${isHistoryView ? 'History is empty.' : 'No results found.'}</p>`;
@@ -289,7 +340,7 @@ function renderResultCards(resultsArray, isHistoryView = false) {
             e.preventDefault();
             if (!result.link || result.link === "none") return;
             await application.fetchDetails(result.link);
-            showDetailsModal(`Details for ${result.link}`, application.focus);
+            showDetailsModal(result.link, application.focus);
         });
 
         footer.appendChild(historyButton);
@@ -328,6 +379,7 @@ function renderResultCards(resultsArray, isHistoryView = false) {
 }
 
 let previousResults = [];
+let previousNotifications = []; // <-- Add state tracking for notifications
 function updateUI() {
     errorBox.innerHTML = '';
     if (application.errors.length > 0) {
@@ -346,12 +398,19 @@ function updateUI() {
         previousResults = [...application.results];
         renderResultCards(application.results, false);
     }
+
+    // <-- Add check for notifications
+    if (JSON.stringify(application.notifications) !== JSON.stringify(previousNotifications)) {
+        previousNotifications = [...application.notifications];
+        renderNotifications();
+    }
+
     requestAnimationFrame(updateUI);
 }
 
 // --- Helper Functions ---
 function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return '';
+    if (typeof unsafe !== 'string') return unsafe; // Return non-strings as-is
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
@@ -472,7 +531,7 @@ function renderHealthStatus(stats) {
     } else {
         healthStatusContainer.innerHTML += '<p class="has-text-info">No health check information available.</p>';
     }
-    healthStatusContainer.style.display = 'block';
+    healthStatusContainer.classList.remove('is-hidden');
 }
 
 function renderResponseFilters() {
@@ -487,13 +546,12 @@ function renderResponseFilters() {
 
 function displayPastSearchesNotification(pastSearches, value) {
     if(!notificationContainer) return;
-    notificationContainer.innerHTML = '';
-    notificationContainer.classList.add('is-sticky-top');
+    // Don't clobber job notifications
     const sixtySecondsAgo = new Date(Date.now() - 60000);
     const relevantPastSearches = pastSearches.filter(s => new Date(s.timestamp) < sixtySecondsAgo);
     const notification = document.createElement('div');
     notification.innerHTML = `<button class="delete"></button>`;
-    notification.querySelector('.delete').onclick = () => { notificationContainer.innerHTML = ''; notificationContainer.classList.remove('is-sticky-top'); };
+    notification.querySelector('.delete').onclick = () => { notification.remove() };
     const message = document.createElement('p');
     if (relevantPastSearches.length === 0) {
         notification.className = 'notification is-success is-light';

@@ -232,7 +232,7 @@ window.onload = () => {
                     throw new Error('Network response was not ok.');
                 })
                 .then(data => {
-                    console.log('User added: ', data);
+                    // console.log('User added: ', data);
                     if (data.key) {
                         if (!isValid32ByteBase64Key(data.key)) {
                             userResults.innerHTML = '<div class="notification is-danger">User added successfully but key is invalid</div>';
@@ -267,6 +267,26 @@ window.onload = () => {
             }
         });
     }
+    const carousel = document.getElementById('navbar-carousel');
+    const scrollLeftButton = document.getElementById('scroll-left');
+    const scrollRightButton = document.getElementById('scroll-right');
+
+    if (carousel) {
+        scrollLeftButton.addEventListener('click', () => {
+            carousel.scrollBy({
+                left: -200, // Adjust scroll amount as needed
+                behavior: 'smooth'
+            });
+        });
+
+        scrollRightButton.addEventListener('click', () => {
+            carousel.scrollBy({
+                left: 200, // Adjust scroll amount as needed
+                behavior: 'smooth'
+            });
+        });
+    }
+
 };
 const dropDownMenu = document.getElementById('dropDownMenu');
 const dropDownMenuLink = document.getElementById('dropDownMenuLink');
@@ -280,16 +300,16 @@ dropDownMenuLink.addEventListener('click', () => {
 function isValid32ByteBase64Key(key) {
     // Accept 43 (no padding) or 44 (with '=') characters
     if (key.length !== 43 && key.length !== 44) return false;
-  
+
     // Check valid Base64 characters (standard or URL-safe) and optional padding
     const regex = /^[A-Za-z0-9+/=-]{43,44}$/;
     if (!regex.test(key)) return false;
-  
+
     // Decode and verify it’s exactly 32 bytes
     try {
-      const decoded = atob(key.replace(/-/g, '+').replace(/_/g, '/')); // Handle URL-safe Base64
-      return decoded.length === 32;
+        const decoded = atob(key.replace(/-/g, '+').replace(/_/g, '/')); // Handle URL-safe Base64
+        return decoded.length === 32;
     } catch (e) {
-      return false; // Invalid Base64 string
+        return false; // Invalid Base64 string
     }
-  }
+}

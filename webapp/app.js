@@ -9,6 +9,8 @@ export class Application {
         this.resultWorkers = [];
         this.results = [];
         this.errors = [];
+        this.notifications = []; // <-- Add notifications array
+        this.socket = null; // <-- Add WebSocket instance property
         // API URL is relative because the app is served from the same domain as the API.
         this.apiUrl = "";
         this.servers = [];
@@ -29,8 +31,51 @@ export class Application {
         if (this.user && this.user.email) {
             await this.fetchHistory();
             await this.getServices();
+            this.initWebSocket(); // <-- Initialize WebSocket connection
             this.initialized = true;
         }
+    }
+
+    /**
+     * NEW: Initializes the WebSocket connection.
+     */
+    initWebSocket() {
+        // Determine the WebSocket protocol based on the window's protocol.
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // Construct the WebSocket URL. Assumes the WebSocket endpoint is at '/ws'.
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        console.log(`Connecting to WebSocket at ${wsUrl}`);
+        this.socket = new WebSocket(wsUrl);
+
+        this.socket.onopen = () => {
+            console.log('WebSocket connection established.');
+            this.errors.push('Real-time connection active.');
+        };
+
+        this.socket.onmessage = (event) => {
+            try {
+                const notification = JSON.parse(event.data);
+                console.log('Received notification:', notification);
+                // Add a unique ID for the frontend to manage it
+                notification.id = `notif-${Date.now()}`;
+                this.notifications.push(notification);
+            } catch (e) {
+                console.error('Error parsing notification message:', e);
+            }
+        };
+
+        this.socket.onclose = () => {
+            console.log('WebSocket connection closed. Attempting to reconnect...');
+            this.errors.push('Real-time connection lost. Reconnecting...');
+            // Simple reconnect logic
+            setTimeout(() => this.initWebSocket(), 5000);
+        };
+
+        this.socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            this.errors.push('A real-time connection error occurred.');
+        };
     }
 
     /**
@@ -49,7 +94,7 @@ export class Application {
                 ...options.headers,
             },
         };
-        console.log(finalOptions)
+        // console.log(finalOptions)
         // Determine if this is a file upload, which shouldn't have a Content-Type set by us.
         const isFileUpload = finalOptions.body instanceof FormData || finalOptions.body instanceof Blob || finalOptions.body instanceof File;
     
@@ -93,7 +138,7 @@ export class Application {
     }
 
     async fetchPastSearches(value) {
-        const thisURL = `/previous-responses`;
+        const thisURL = `/previous-results`;
         try {
             const response = await this._fetch(thisURL, {
                 method: 'POST',
@@ -195,11 +240,11 @@ export class Application {
             this.errors = [`<progress class="progress" value="${Math.ceil((end / file.size) * 100)}" max="100"></progress>`];
             
             try {
-                const uploadHeaders = new Headers();
-                uploadHeaders.append('Content-Range', `bytes ${start}-${end - 1}/${file.size}`);
-                uploadHeaders.append('X-filename', encodeURIComponent(file.name));
-                uploadHeaders.append('X-last-chunk', currentChunk === Math.ceil(file.size / chunkSize) - 1);
-
+                const uploadHeaders = {
+                        'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
+                        'X-filename': file.name,
+                        'X-last-chunk': currentChunk === Math.ceil(file.size / chunkSize) - 1,
+                    }
                 const response = await this._fetch(thisURL, {
                     method: 'POST',
                     headers: uploadHeaders,

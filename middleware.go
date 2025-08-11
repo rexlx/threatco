@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+func (s *Server) ProtectedFileServer(root http.FileSystem) http.Handler {
+	fileServer := http.FileServer(root)
+	return s.ValidateSessionToken(toHandlerFunc(fileServer))
+}
+
 func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
@@ -32,7 +37,7 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, err := s.GetTokenFromSession(r)
 		if err != nil {
-			// fmt.Println("Error getting token from session")
+			fmt.Println("Error getting token from session", err)
 			token := r.Header.Get("Authorization")
 			// fmt.Println("Token from header:", token)
 			parts := strings.Split(token, ":")
@@ -60,6 +65,7 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 		}
 		tk, err := s.DB.GetTokenByValue(token)
 		if err != nil || tk.ExpiresAt.Before(time.Now()) {
+			fmt.Println("Invalid session token:", token, err, tk)
 			http.Error(w, "Invalid session token", http.StatusUnauthorized)
 			return
 		}
@@ -67,5 +73,33 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Content-Security-Policy", cspValue)
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		next(w, r)
+	}
+}
+
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://192.168.86.120:8081")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Range, Authorization, x-filename, x-last-chunk, X-filename, X-last-chunk")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+
+		// --- Handle Preflight Request ---
+		// If the request method is OPTIONS, it's a preflight request.
+		// We handle it by writing the headers and a 204 No Content status.
+		if r.Method == "OPTIONS" {
+			fmt.Println("Handled preflight OPTIONS request")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// --- Forward Request ---
+		// For all other requests, pass them to the next handler in the chain.
+		next.ServeHTTP(w, r)
+	})
+}
+
+func toHandlerFunc(handler http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, r)
 	}
 }
