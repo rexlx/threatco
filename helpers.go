@@ -620,6 +620,7 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 }
 
 type UploadHandler struct {
+	For      string        `json:"for"`
 	FileName string        `json:"file_name"`
 	SendCh   chan struct{} `json:"-"`
 	Complete bool          `json:"complete"`

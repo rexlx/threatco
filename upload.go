@@ -182,6 +182,8 @@ func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep E
 	}
 
 	resch <- ResponseItem{
+		Notify: true,
+		Email:  file.For,
 		ID:     id,
 		Vendor: "vmray",
 		Data:   finalData,

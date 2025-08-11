@@ -79,6 +79,8 @@ type StatItem struct {
 }
 
 type ResponseItem struct {
+	Email  string    `json:"email"`
+	Notify bool      `json:"notify"`
 	ID     string    `json:"id"`
 	Vendor string    `json:"vendor"`
 	Time   time.Time `json:"time"`
@@ -255,6 +257,13 @@ func (s *Server) ProcessTransientResponses() {
 			s.Details.Stats["vendor_responses"]++
 			s.Memory.Unlock()
 			go s.DB.StoreResponse(resp.ID, resp.Data, resp.Vendor)
+			if resp.Notify {
+				s.Hub.SendToUser(resp.Email, Notification{
+					Created: resp.Time,
+					Info:    fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
+					Error:   false,
+				})
+			}
 		case <-ticker.C:
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {

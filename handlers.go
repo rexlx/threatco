@@ -707,8 +707,24 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if lastChunk == "true" {
-		// fmt.Println("last chunk", uploadHanlder.FileSize)
+		tkn, err := s.GetTokenFromSession(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tk, err := s.DB.GetTokenByValue(tkn)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		u, err := s.DB.GetUserByEmail(tk.Email)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		uploadHanlder.Complete = true
+		uploadHanlder.For = u.Email
+
 	}
 
 	store.AddFile(filename, uploadHanlder)
@@ -723,8 +739,10 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Memory.RUnlock()
 
-		store.FanOut(s.RespCh, filename, copiedTargets, uid)
-		store.DeleteFile(filename)
+		go func() {
+			store.FanOut(s.RespCh, filename, copiedTargets, uid)
+			store.DeleteFile(filename)
+		}()
 		UploadResponse.ID = uid
 		UploadResponse.Link = uid
 		UploadResponse.Info = fmt.Sprintf("File %s uploaded successfully with ID %s", filename, uid)
