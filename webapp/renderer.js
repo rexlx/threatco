@@ -76,8 +76,6 @@ function setActiveSidebar(activeLink) {
  * @param {object | Array} details - The object or array to display as a formatted JSON string.
  */
 function showDetailsModal(fullId, details) {
-    // console.log("showDetailsModal called with details:", details);
-
     let displayId = fullId;
     if (typeof fullId === 'string' && fullId.length > 24) {
         displayId = `${fullId.substring(0, 10)}...${fullId.substring(fullId.length - 10)}`;
@@ -122,7 +120,9 @@ function attachEventListeners() {
             const userSearch = document.getElementById('userSearch');
             if (!userSearch) return;
             const searchText = userSearch.value;
-            notificationContainer.innerHTML = '';
+            // Clear old search-related notifications, but keep others
+            application.notifications = application.notifications.filter(n => n.type !== 'search');
+            renderNotifications();
             matchBox.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-primary'></progress>";
 
             const allMatches = Object.keys(contextualizer.expressions).map(key => ({ type: key, matches: [...new Set(contextualizer.getMatches(searchText, contextualizer.expressions[key]))] }));
@@ -183,7 +183,6 @@ function attachEventListeners() {
         setActiveSidebar(e.target);
         showView(mainSection);
         healthStatusContainer.classList.add('is-hidden');
-        notificationContainer.innerHTML = '';
         matchBox.classList.remove('is-hidden');
         matchBox.innerHTML = renderResponseFilters();
         handleResponseFetch();
@@ -192,10 +191,8 @@ function attachEventListeners() {
     sidebarProfile.addEventListener('click', (e) => { setActiveSidebar(e.target); navigateToProfile(); });
     sidebarHealth.addEventListener('click', async (e) => {
         setActiveSidebar(e.target);
-        // Show the main section container, but hide the matchBox inside it
         showView(mainSection);
         matchBox.classList.add('is-hidden');
-        notificationContainer.innerHTML = '';
         healthStatusContainer.innerHTML = '<p class="has-text-info">Checking health...</p><progress class="progress is-small is-primary" max="100"></progress>';
         healthStatusContainer.classList.remove('is-hidden');
         const stats = await application.getServerStats();
@@ -224,8 +221,6 @@ const navigateToProfile = () => {
 
 function renderSearchForm() {
     healthStatusContainer.classList.add('is-hidden');
-    notificationContainer.innerHTML = '';
-    notificationContainer.classList.remove('is-sticky-top');
     matchBox.classList.remove('is-hidden');
     matchBox.innerHTML = `
         <h1 class="title has-text-info">Search</h1>
@@ -260,6 +255,40 @@ async function handleResponseFetch(options = {}) {
 }
 
 // --- UI Component Rendering ---
+
+/**
+ * NEW: Renders notifications from the application state into the container.
+ */
+function renderNotifications() {
+    if (!notificationContainer) return;
+    notificationContainer.innerHTML = ''; // Clear existing notifications
+    
+    application.notifications.forEach(notif => {
+        console.log("Rendering notification:", notif);
+        const notifDiv = document.createElement('div');
+        const colorClass = notif.Error ? 'is-danger' : 'is-success';
+        notifDiv.className = `notification ${colorClass} is-light`;
+        notifDiv.dataset.id = notif.id;
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'delete';
+        deleteButton.onclick = () => {
+            // Remove from state and re-render
+            application.notifications = application.notifications.filter(n => n.id !== notif.id);
+            renderNotifications();
+        };
+
+        const message = document.createElement('p');
+        // Format the timestamp for readability
+        const timestamp = new Date(notif.created).toLocaleTimeString();
+        message.innerHTML = `<strong>[${timestamp}]</strong> ${escapeHtml(notif.info)}`;
+
+        notifDiv.appendChild(deleteButton);
+        notifDiv.appendChild(message);
+        notificationContainer.appendChild(notifDiv);
+    });
+}
+
 
 function renderResultCards(resultsArray, isHistoryView = false) {
     healthStatusContainer.classList.add('is-hidden');
@@ -350,6 +379,7 @@ function renderResultCards(resultsArray, isHistoryView = false) {
 }
 
 let previousResults = [];
+let previousNotifications = []; // <-- Add state tracking for notifications
 function updateUI() {
     errorBox.innerHTML = '';
     if (application.errors.length > 0) {
@@ -368,12 +398,19 @@ function updateUI() {
         previousResults = [...application.results];
         renderResultCards(application.results, false);
     }
+
+    // <-- Add check for notifications
+    if (JSON.stringify(application.notifications) !== JSON.stringify(previousNotifications)) {
+        previousNotifications = [...application.notifications];
+        renderNotifications();
+    }
+
     requestAnimationFrame(updateUI);
 }
 
 // --- Helper Functions ---
 function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return '';
+    if (typeof unsafe !== 'string') return unsafe; // Return non-strings as-is
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
@@ -509,13 +546,12 @@ function renderResponseFilters() {
 
 function displayPastSearchesNotification(pastSearches, value) {
     if(!notificationContainer) return;
-    notificationContainer.innerHTML = '';
-    notificationContainer.classList.add('is-sticky-top');
+    // Don't clobber job notifications
     const sixtySecondsAgo = new Date(Date.now() - 60000);
     const relevantPastSearches = pastSearches.filter(s => new Date(s.timestamp) < sixtySecondsAgo);
     const notification = document.createElement('div');
     notification.innerHTML = `<button class="delete"></button>`;
-    notification.querySelector('.delete').onclick = () => { notificationContainer.innerHTML = ''; notificationContainer.classList.remove('is-sticky-top'); };
+    notification.querySelector('.delete').onclick = () => { notification.remove() };
     const message = document.createElement('p');
     if (relevantPastSearches.length === 0) {
         notification.className = 'notification is-success is-light';

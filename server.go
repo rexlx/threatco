@@ -37,7 +37,6 @@ var (
 	syslogHost    = flag.String("syslog-host", "localhost", "Syslog host")
 	syslogIndex   = flag.String("syslog-index", "threatco", "Syslog index")
 	healthCheck   = flag.Int("health-check", 60, "Health check interval in seconds")
-	syslogPort    = flag.String("syslog-port", "514", "Syslog port")
 )
 
 type Server struct {
@@ -46,6 +45,7 @@ type Server struct {
 	StopCh         chan bool                `json:"-"`
 	Cache          *Cache                   `json:"-"`
 	DB             Database                 `json:"-"`
+	Hub            *Hub                     `json:"-"`
 	Gateway        *http.ServeMux           `json:"-"`
 	Log            *log.Logger              `json:"-"`
 	Memory         *sync.RWMutex            `json:"-"`
@@ -135,6 +135,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		log.Fatalf("unsupported database type: %s", dbType)
 	}
 	svr := &Server{
+		Hub:            NewHub(),
 		ProxyOperators: operators,
 		StopCh:         stopCh,
 		Session:        sessionMgr,
@@ -433,12 +434,14 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateSessionToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateSessionToken(s.GetUserHandler)))
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateSessionToken(s.UploadFileHandler)))
+	s.Gateway.Handle("/ring", http.HandlerFunc(s.ValidateSessionToken(s.SendTestNotificationHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.Handle("/stats", http.HandlerFunc(s.ValidateSessionToken(s.GetStatsHandler)))
 	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
 	s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
+	s.Gateway.HandleFunc("/ws", http.HandlerFunc(s.ValidateSessionToken(s.ServeWs)))
 	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
 	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))
 	s.Gateway.HandleFunc("/create-user", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
@@ -453,7 +456,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/getlogs", http.HandlerFunc(s.ValidateSessionToken(s.LogsSSRHandler)))
 	s.Gateway.HandleFunc("/view-logs", http.HandlerFunc(s.ValidateSessionToken(s.LogViewHandler)))
 	s.Gateway.HandleFunc("/getresponses", http.HandlerFunc(s.ValidateSessionToken(s.GetResponseCacheHandler2)))
-	s.Gateway.HandleFunc("/previous-responses", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
+	s.Gateway.HandleFunc("/previous-results", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
 	s.Gateway.HandleFunc("/rectify", http.HandlerFunc(s.ValidateSessionToken(s.RectifyServicesHandler)))
 	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
@@ -471,7 +474,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
-
+	go s.Hub.Run()
 	// s.AddResponse("fake", CreateFakeResponse())
 }
 

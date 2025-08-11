@@ -9,6 +9,8 @@ export class Application {
         this.resultWorkers = [];
         this.results = [];
         this.errors = [];
+        this.notifications = []; // <-- Add notifications array
+        this.socket = null; // <-- Add WebSocket instance property
         // API URL is relative because the app is served from the same domain as the API.
         this.apiUrl = "";
         this.servers = [];
@@ -29,8 +31,51 @@ export class Application {
         if (this.user && this.user.email) {
             await this.fetchHistory();
             await this.getServices();
+            this.initWebSocket(); // <-- Initialize WebSocket connection
             this.initialized = true;
         }
+    }
+
+    /**
+     * NEW: Initializes the WebSocket connection.
+     */
+    initWebSocket() {
+        // Determine the WebSocket protocol based on the window's protocol.
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // Construct the WebSocket URL. Assumes the WebSocket endpoint is at '/ws'.
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        console.log(`Connecting to WebSocket at ${wsUrl}`);
+        this.socket = new WebSocket(wsUrl);
+
+        this.socket.onopen = () => {
+            console.log('WebSocket connection established.');
+            this.errors.push('Real-time connection active.');
+        };
+
+        this.socket.onmessage = (event) => {
+            try {
+                const notification = JSON.parse(event.data);
+                console.log('Received notification:', notification);
+                // Add a unique ID for the frontend to manage it
+                notification.id = `notif-${Date.now()}`;
+                this.notifications.push(notification);
+            } catch (e) {
+                console.error('Error parsing notification message:', e);
+            }
+        };
+
+        this.socket.onclose = () => {
+            console.log('WebSocket connection closed. Attempting to reconnect...');
+            this.errors.push('Real-time connection lost. Reconnecting...');
+            // Simple reconnect logic
+            setTimeout(() => this.initWebSocket(), 5000);
+        };
+
+        this.socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            this.errors.push('A real-time connection error occurred.');
+        };
     }
 
     /**
@@ -196,7 +241,6 @@ export class Application {
             
             try {
                 const uploadHeaders = {
-                        // 'Content-Type': 'application/json', // Remove if sending binary data
                         'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
                         'X-filename': file.name,
                         'X-last-chunk': currentChunk === Math.ceil(file.size / chunkSize) - 1,

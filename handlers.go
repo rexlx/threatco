@@ -1119,6 +1119,36 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 	w.Write(out)
 }
 
+type NottyRequest struct {
+	To      string    `json:"to"`
+	From    string    `json:"from"`
+	Info    string    `json:"info"`
+	Error   bool      `json:"error"`
+	Created time.Time `json:"created"`
+}
+
+func (s *Server) SendTestNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	var req NottyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Simulate sending a notification
+	s.Log.Printf("Sending test notification to %s from %s: %s", req.To, req.From, req.Info)
+	if req.To == "" || req.From == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+	info := fmt.Sprintf("Test notification from %s to %s: %s", req.From, req.To, req.Info)
+	notification := Notification{
+		Info:    info,
+		Error:   req.Error,
+		Created: time.Now(),
+	}
+	s.Hub.SendToUser(req.To, notification)
+	json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
+}
+
 // func (s *Server) GetResponsesHandler(w http.ResponseWriter, r *http.Request) {
 
 // 	fmt.Fprint(w, out)
