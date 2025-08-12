@@ -265,6 +265,8 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 
 		if len(resultsRespBodyBytes) > 0 && responseStr != "No results found for the provided FileID" {
 			resch <- ResponseItem{
+				Notify: true,
+				Email:  file.For,
 				ID:     id,
 				Vendor: "livery",
 				Data:   resultsRespBodyBytes,
@@ -322,6 +324,8 @@ func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id
 		return fmt.Errorf("received an empty response for file %s", file.FileName)
 	}
 	resch <- ResponseItem{
+		Notify: true,
+		Email:  file.For,
 		ID:     id,
 		Vendor: "misp",
 		Data:   res,
