@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,12 +92,16 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 	resp, err = ParseCorrectMispResponse(req, response)
 	if err != nil {
 		badNews := SummarizedEvent{
-			Timestamp:  time.Now(),
-			Background: "has-background-primary-dark",
-			From:       req.To,
-			ID:         "no hits",
-			Value:      req.Value,
-			Link:       req.TransactionID,
+			Timestamp:     time.Now(),
+			Background:    "has-background-primary-dark",
+			From:          req.To,
+			ID:            "no hits",
+			Value:         req.Value,
+			Link:          req.TransactionID,
+			RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+			AttrCount:     0,
+			ThreatLevelID: 0,
+			Type:          req.Type,
 		}
 		return json.Marshal(badNews)
 	}
@@ -162,6 +165,8 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 		Value:      response.Value,
 		Link:       req.TransactionID,
 		Matched:    true,
+		Type:       req.Type,
+		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 
 	return json.Marshal(sum)
@@ -235,7 +240,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 	sum := SummarizedEvent{
 		ID:            ind.ID,
 		AttrCount:     attrCount,
-		ThreatLevelID: strconv.Itoa(ind.ThreatRating.ThreatScore),
+		ThreatLevelID: ind.ThreatRating.ThreatScore,
 		Timestamp:     time.Now(),
 		Background:    "has-background-warning",
 		Info:          info,
@@ -243,7 +248,9 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched: true,
+		Matched: len(ind.AttributedAssociations) > 0,
+		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		Type:    req.Type,
 	}
 	return json.Marshal(sum)
 }
@@ -565,8 +572,10 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req Pro
 				From:       req.To,
 				Value:      req.Value,
 				Link:       req.TransactionID,
-				Matched:    true,
+				Matched:    int(results.(float64)) > 0,
 				AttrCount:  int(results.(float64)),
+				Type:       req.Type,
+				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 			})
 		default:
 			return json.Marshal(SummarizedEvent{
@@ -577,6 +586,8 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req Pro
 				From:       req.To,
 				Value:      req.Value,
 				Link:       req.TransactionID,
+				Type:       req.Type,
+				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 			})
 		}
 
@@ -682,8 +693,10 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 				From:       req.To,
 				Value:      req.Value,
 				Link:       req.TransactionID,
-				Matched:    true,
 				AttrCount:  int(results.(float64)),
+				Matched:    int(results.(float64)) > 0,
+				Type:       req.Type,
+				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 			})
 		default:
 			return json.Marshal(SummarizedEvent{
@@ -694,12 +707,17 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 				From:       req.To,
 				Value:      req.Value,
 				Link:       req.TransactionID,
+				Type:       req.Type,
+				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 			})
 		}
 
 	}
 	if response.Response.LimitExceeded {
 		info = "domaintools rate limit exceeded"
+		if response.Response.ResultsCount > 0 {
+			info = fmt.Sprintf("%s, but got %d results", info, response.Response.ResultsCount)
+		}
 		return json.Marshal(SummarizedEvent{
 			Timestamp:  time.Now(),
 			Background: "has-background-info",
@@ -707,6 +725,10 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 			From:       req.To,
 			Value:      req.Value,
 			Link:       req.TransactionID,
+			AttrCount:  response.Response.ResultsCount,
+			Matched:    response.Response.ResultsCount > 0,
+			Type:       req.Type,
+			RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		})
 	}
 	if response.Response.ResultsCount == 0 {
@@ -718,17 +740,23 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 			From:       req.To,
 			Value:      req.Value,
 			Link:       req.TransactionID,
+			Type:       req.Type,
+			RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		})
 	}
 	info = "domaintools returned some hits for that value"
 	sum := SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: "has-background-warning",
-		Info:       info,
-		From:       req.To,
-		Value:      req.Value,
-		Link:       req.TransactionID,
-		Matched:    true,
+		Timestamp:     time.Now(),
+		Background:    "has-background-warning",
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		AttrCount:     response.Response.ResultsCount,
+		ThreatLevelID: response.Response.ResultsCount,
+		Matched:       true,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
 	// return resp, nil
@@ -792,6 +820,8 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 		ID:         "",
 		Link:       req.TransactionID,
 		Matched:    true,
+		Type:       req.Type,
+		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
 
@@ -868,8 +898,8 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 			return CreateAndWriteSummarizedEvent(req, false, "no hits found")
 		}
 
-		matched = true
 		result := response.Result
+		matched = result.RiskScore > 0
 		riskTypes := []string{}
 		for _, rt := range result.RiskTypes {
 			riskTypes = append(riskTypes, rt.Name)
@@ -890,8 +920,8 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 			return CreateAndWriteSummarizedEvent(req, false, "no hits found")
 		}
 
-		matched = true
 		result := response.Result[0]
+		matched = result.RiskScore > 0
 		riskTypes := []string{}
 		for _, rt := range result.RiskTypes {
 			riskTypes = append(riskTypes, rt.Name)
@@ -916,6 +946,8 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 		Link:       req.TransactionID,
 		Matched:    matched,
 		AttrCount:  attrCount,
+		Type:       req.Type,
+		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 
 	return json.Marshal(sum)

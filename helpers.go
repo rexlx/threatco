@@ -192,9 +192,11 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				From:          req.To,
 				ID:            "multiple hits",
 				AttrCount:     attrs,
-				ThreatLevelID: "0",
+				ThreatLevelID: 5,
 				Value:         req.Value,
 				Link:          req.TransactionID,
+				Type:          req.Type,
+				RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
@@ -203,6 +205,10 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				fmt.Println("got bad attr data from misp...")
 				attrs = 0
 			}
+			tlid, err := strconv.Atoi(response[0].ThreatLevelID)
+			if err != nil {
+				tlid = 0
+			}
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
@@ -210,24 +216,27 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				From:          req.To,
 				ID:            response[0].ID,
 				AttrCount:     attrs,
-				ThreatLevelID: response[0].ThreatLevelID,
+				ThreatLevelID: tlid,
 				Value:         req.Value,
 				Info:          response[0].Info,
 				Link:          req.TransactionID,
+				Type:          req.Type,
+				RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
 	}
 	return json.Marshal(SummarizedEvent{
-		Timestamp:     time.Now(),
-		Background:    "has-background-primary-dark",
-		Info:          "no hits for the given value",
-		From:          req.To,
-		ID:            "no hits",
-		AttrCount:     0,
-		ThreatLevelID: "0",
-		Value:         req.Value,
-		Link:          req.TransactionID,
+		Timestamp:  time.Now(),
+		Background: "has-background-primary-dark",
+		Info:       "no hits for the given value",
+		From:       req.To,
+		ID:         "no hits",
+		AttrCount:  0,
+		Value:      req.Value,
+		Link:       req.TransactionID,
+		Type:       req.Type,
+		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	})
 }
 
@@ -293,11 +302,17 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRespon
 				ID:            "multiple",
 				Value:         req.Value,
 				AttrCount:     0,
-				ThreatLevelID: "1",
+				ThreatLevelID: 5,
 				Link:          req.TransactionID,
+				Type:          req.Type,
+				RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		} else {
+			tlid, err := strconv.Atoi(response.Response[0].Event.ThreatLevelID)
+			if err != nil {
+				tlid = 0
+			}
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
@@ -307,8 +322,10 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRespon
 				ID:            response.Response[0].Event.ID,
 				Value:         req.Value,
 				AttrCount:     len(response.Response[0].Event.Attribute),
-				ThreatLevelID: response.Response[0].Event.ThreatLevelID,
+				ThreatLevelID: tlid,
 				Link:          req.TransactionID,
+				Type:          req.Type,
+				RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 				// Link:          fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 			})
 		}
@@ -321,6 +338,8 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRespon
 		ID:         "no hits",
 		Value:      req.Value,
 		Link:       req.TransactionID,
+		Type:       req.Type,
+		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	})
 }
 
@@ -581,7 +600,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 	sum := SummarizedEvent{
 		ID:            ind.ID,
 		AttrCount:     attrCount,
-		ThreatLevelID: strconv.Itoa(ind.ThreatRating.ThreatScore),
+		ThreatLevelID: ind.ThreatRating.ThreatScore,
 		Timestamp:     time.Now(),
 		Background:    "has-background-warning",
 		Info:          info,
@@ -590,6 +609,8 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		Link:          req.TransactionID,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 		Matched: true,
+		Type:    req.Type,
+		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
 }
@@ -605,6 +626,8 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 			Value:      req.Value,
 			Link:       req.TransactionID,
 			Error:      true,
+			Type:       req.Type,
+			RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		})
 	}
 	return json.Marshal(SummarizedEvent{
@@ -615,6 +638,8 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 		Value:      req.Value,
 		Link:       req.TransactionID,
 		Timestamp:  time.Now(),
+		Type:       req.Type,
+		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	})
 
 }

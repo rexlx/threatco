@@ -97,6 +97,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 						proxyReq.Type = k
 						proxyReq.Value = value.Value
 						proxyReq.Username = pr.Username
+						proxyReq.FQDN = s.Details.FQDN
 						proxyReq.From = "api parser"
 						uid := uuid.New().String()
 						proxyReq.TransactionID = uid
@@ -347,6 +348,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := uuid.New().String()
 	req.TransactionID = uid
+	req.FQDN = s.Details.FQDN
 	defer func(start time.Time, req ProxyRequest) {
 		reqOut, err := json.Marshal(req)
 		if err != nil {
@@ -1163,7 +1165,7 @@ func (s *Server) SendTestNotificationHandler(w http.ResponseWriter, r *http.Requ
 		Error:   req.Error,
 		Created: time.Now(),
 	}
-	s.Hub.SendToUser(req.To, notification)
+	s.Hub.SendToUser(s.RespCh, req.To, notification)
 	json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
 }
 
@@ -1179,6 +1181,7 @@ type NewUserRequest struct {
 }
 
 type ProxyRequest struct {
+	FQDN          string `json:"fqdn"`
 	To            string `json:"to"`
 	Route         string `json:"route"`
 	Type          string `json:"type"`
@@ -1202,9 +1205,11 @@ type SummarizedEvent struct {
 	ID            string    `json:"id"`
 	AttrCount     int       `json:"attr_count"`
 	Link          string    `json:"link"`
-	ThreatLevelID string    `json:"threat_level_id"`
+	ThreatLevelID int       `json:"threat_level_id"`
 	Value         string    `json:"value"`
 	Info          string    `json:"info"`
+	RawLink       string    `json:"raw_link"`
+	Type          string    `json:"type"`
 }
 
 type AttributeRequest struct {
