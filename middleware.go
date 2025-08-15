@@ -37,7 +37,6 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, err := s.GetTokenFromSession(r)
 		if err != nil {
-			fmt.Println("Error getting token from session", err)
 			token := r.Header.Get("Authorization")
 			// fmt.Println("Token from header:", token)
 			parts := strings.Split(token, ":")
