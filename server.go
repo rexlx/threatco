@@ -257,7 +257,7 @@ func (s *Server) ProcessTransientResponses() {
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
 			s.Details.Stats["vendor_responses"]++
 			s.Memory.Unlock()
-			go s.DB.StoreResponse(resp.ID, resp.Data, resp.Vendor)
+			go s.DB.StoreResponse(false, resp.ID, resp.Data, resp.Vendor)
 			if resp.Notify {
 				s.Hub.SendToUser(s.RespCh, resp.Email, Notification{
 					Created: resp.Time,
@@ -451,6 +451,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/ring", http.HandlerFunc(s.ValidateSessionToken(s.SendTestNotificationHandler)))
 	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
+	s.Gateway.Handle("/archive", http.HandlerFunc(s.ValidateSessionToken(s.ArchiveResponseHandler)))
 	s.Gateway.Handle("/stats", http.HandlerFunc(s.ValidateSessionToken(s.GetStatsHandler)))
 	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))

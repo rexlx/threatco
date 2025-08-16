@@ -19,7 +19,7 @@ type Database interface {
 	AddService(st ServiceType) error
 	GetTokenByValue(tk string) (Token, error)
 	SaveToken(t Token) error
-	StoreResponse(id string, data []byte, vendor string) error
+	StoreResponse(archive bool, id string, data []byte, vendor string) error
 	GetResponse(id string) ([]byte, error)
 	GetResponses(expiration time.Time) ([]ResponseItem, error)
 	DeleteResponse(id string) error
@@ -80,7 +80,7 @@ func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 	return user, err
 }
 
-func (db *BboltDB) StoreResponse(id string, data []byte, vendor string) error {
+func (db *BboltDB) StoreResponse(archive bool, id string, data []byte, vendor string) error {
 	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
 		if err != nil {
@@ -285,8 +285,14 @@ func (db *PostgresDB) createTables() error {
     	id TEXT PRIMARY KEY,
     	data BYTEA NOT NULL,
     	created TIMESTAMP,
-    	vendor TEXT NOT NULL -- Added the vendor field
+    	vendor TEXT NOT NULL
 );
+	CREATE TABLE IF NOT EXISTS archived_responses (
+			id TEXT PRIMARY KEY,
+			data BYTEA NOT NULL,
+			created TIMESTAMP,
+			vendor TEXT NOT NULL
+	);
 		CREATE TABLE IF NOT EXISTS users (
 				email TEXT PRIMARY KEY,
 				admin BOOLEAN,
@@ -312,9 +318,14 @@ func (db *PostgresDB) CleanResponses() error {
 	return err
 }
 
-func (db *PostgresDB) StoreResponse(id string, data []byte, vendor string) error {
+func (db *PostgresDB) StoreResponse(archive bool, id string, data []byte, vendor string) error {
+	tableName := "responses"
+	if archive {
+		tableName = "archived_responses"
+	}
 	_, err := db.Pool.Exec(context.Background(),
-		"INSERT INTO responses (id, data, created, vendor) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, created = EXCLUDED.created, vendor = EXCLUDED.vendor",
+		fmt.Sprintf("INSERT INTO %s (id, data, created, vendor) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, created = EXCLUDED.created, vendor = EXCLUDED.vendor",
+			tableName),
 		id, data, time.Now(), vendor)
 	return err
 }

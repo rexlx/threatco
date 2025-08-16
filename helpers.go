@@ -744,7 +744,7 @@ func (u *UploadStore) FanOut(resch chan ResponseItem, id string, endpoints map[s
 
 // 48646fb84908c16c4b13b0fb4d720549fd0e4fdde8b9bd1276127719659ce798
 
-func (s *Server) addMispAttribute(eventID, attrType, attrValue, category, distribution, comment string, toIDS *bool) ([]byte, error) {
+func (s *Server) AddMispAttribute(eventID, attrType, attrValue, category, distribution, comment string, toIDS *bool) ([]byte, error) {
 	defer s.addStat("add_attribute_internal_calls", 1)
 	start := time.Now()
 	defer func() {
@@ -811,7 +811,7 @@ func (s *Server) addMispAttribute(eventID, attrType, attrValue, category, distri
 	return respBody, nil
 }
 
-func (s *Server) createMispEvent(eventDetails vendors.MispEvent) (string, []byte, error) {
+func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte, error) {
 	defer s.addStat("create_event_internal_calls", 1)
 	start := time.Now()
 	defer func() {

@@ -135,7 +135,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								Data:   out,
 								Time:   time.Now(),
 							}
-							s.DB.StoreResponse(id, out, proxyReq.To)
+							s.DB.StoreResponse(false, id, out, proxyReq.To)
 						}(svc.Kind, uid, &first, proxyReq)
 					}
 				}
@@ -381,7 +381,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// go s.DB.StoreResponse(uid, r, req.To)
+		// cant remember why we dont call storeresponse here
 		w.Write(r)
 		return
 	}
@@ -657,10 +657,29 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-// var UploadResponse = []byte(`{"status": "ok"}`)
-type uploadResponse struct {
-	Status string `json:"status"`
-	ID     string `json:"id"`
+func (s *Server) ArchiveResponseHandler(w http.ResponseWriter, r *http.Request) {
+	var req RawResponseRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res, err := s.DB.GetResponses(time.Now().Add(-(24 * 30) * time.Hour))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, r := range res {
+		if r.ID == req.ID {
+			s.Log.Println("Archiving response", r.ID, r.Vendor)
+			err = s.DB.StoreResponse(true, r.ID, r.Data, r.Vendor)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	w.Write([]byte(`{"status": "ok"}`))
 }
 
 // TODO should use summarized event here i think. will have to handle mutliple ids perhaps idk
