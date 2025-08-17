@@ -340,6 +340,34 @@ export class Application {
             return null;
         }
     }
+    
+    /**
+     * Archives a result by its ID.
+     * @param {string} id - The ID of the result to archive.
+     */
+    async archiveResult(id) {
+        const thisURL = `/archive`;
+        try {
+            const response = await this._fetch(thisURL, {
+                method: 'POST',
+                body: JSON.stringify({ id: id })
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! Status: ${response.status} - ${errorText}`);
+            }
+            const data = await response.json();
+            this.notifications.push({
+                id: `notif-${Date.now()}`,
+                info: data.message || `Successfully archived item ${id}.`,
+                created: new Date().toISOString()
+            });
+            return data;
+        } catch (error) {
+            this.errors.push(`Error archiving result: ${error.message}`);
+            return null;
+        }
+    }
 }
 
 // This function remains the same as it's for data sanitization.

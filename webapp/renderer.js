@@ -32,6 +32,8 @@ const sidebarLinks = [sidebarSearch, sidebarRecentActivity, sidebarServices, sid
 const detailsModal = document.getElementById('detailsModal');
 const detailsModalTitle = document.getElementById('detailsModalTitle');
 const detailsModalContent = document.getElementById('detailsModalContent');
+const archiveButton = document.getElementById('archiveButton');
+
 
 /**
  * Main function to start the application.
@@ -83,6 +85,9 @@ function showDetailsModal(fullId, details) {
     detailsModalTitle.textContent = `Details for ${displayId}`;
     detailsModalTitle.title = `Full ID: ${fullId}`;
 
+    // Store the full ID on the archive button's dataset
+    archiveButton.dataset.id = fullId;
+
     try {
         detailsModalContent.textContent = JSON.stringify(details, null, 2);
     } catch (e) {
@@ -100,6 +105,15 @@ function attachEventListeners() {
     // Modal close listeners
     detailsModal.querySelector('.modal-background').addEventListener('click', () => detailsModal.classList.remove('is-active'));
     detailsModal.querySelector('.delete').addEventListener('click', () => detailsModal.classList.remove('is-active'));
+
+    // Archive button listener
+    archiveButton.addEventListener('click', async (event) => {
+        const id = event.currentTarget.dataset.id;
+        if (id) {
+            await application.archiveResult(id);
+            detailsModal.classList.remove('is-active');
+        }
+    });
 
     // Profile view
     updateUserButton.addEventListener("click", async () => {

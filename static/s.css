@@ -47,6 +47,11 @@ body {
     min-height: 100vh;
 }
 
+/* Remove underline from all links */
+a {
+    text-decoration: none !important;
+}
+
 /* UPDATED: Removed fixed height to allow the section to grow with its content. */
 .section {
     /* height: 100vh; */ /* This was causing the issue */
