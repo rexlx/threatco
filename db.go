@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.etcd.io/bbolt"
 )
@@ -332,8 +334,23 @@ func (db *PostgresDB) StoreResponse(archive bool, id string, data []byte, vendor
 
 func (db *PostgresDB) GetResponse(id string) ([]byte, error) {
 	var data []byte
+
 	err := db.Pool.QueryRow(context.Background(), "SELECT data FROM responses WHERE id = $1", id).Scan(&data)
-	return data, err
+	if err == nil {
+		return data, nil
+	}
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = db.Pool.QueryRow(context.Background(), "SELECT data FROM archived_responses WHERE id = $1", id).Scan(&data)
+		if err != nil {
+			return nil, fmt.Errorf("response not found in primary or archive table for id %s: %w", id, err)
+		}
+		fmt.Println("Response found in archive for id:", id)
+		return data, nil
+	}
+
+	// any other type of error (connection issue, etc.)
+	return nil, fmt.Errorf("database error checking primary table for id %s: %w", id, err)
 }
 
 func (db *PostgresDB) DeleteResponse(id string) error {
