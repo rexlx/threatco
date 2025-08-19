@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rexlx/threatco/vendors"
 )
 
 // Constants for polling configuration.
@@ -58,7 +59,7 @@ var UploadOperators = map[string]UploadOperator{
 }
 
 // getVmRaySubmission fetches the current status of a VMRay submission.
-func getVmRaySubmission(ep Endpoint, submissionID int) (*VmRaySubmission, error) {
+func getVmRaySubmission(ep Endpoint, submissionID int) (*vendors.VMRaySubmissionResponse, error) {
 	// The endpoint to get submission status.
 	statusURL := fmt.Sprintf("%s/rest/submission/%d", ep.GetURL(), submissionID)
 	req, err := http.NewRequest("GET", statusURL, nil)
@@ -71,19 +72,16 @@ func getVmRaySubmission(ep Endpoint, submissionID int) (*VmRaySubmission, error)
 	if len(respBytes) == 0 {
 		return nil, fmt.Errorf("received empty response when fetching status for submission %d", submissionID)
 	}
-
-	var submissionResponse struct {
-		Data VmRaySubmission `json:"data"`
-	}
+	var submissionResponse vendors.VMRaySubmissionResponse
 	if err := json.Unmarshal(respBytes, &submissionResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode submission status response: %w", err)
 	}
 
-	return &submissionResponse.Data, nil
+	return &submissionResponse, nil
 }
 
 // pollVmRayForCompletion blocks until the analysis is complete.
-func pollVmRayForCompletion(ep Endpoint, submissionID int) (*VmRaySubmission, error) {
+func pollVmRayForCompletion(ep Endpoint, submissionID int) (*vendors.VMRaySubmissionResponse, error) {
 	timeoutChan := time.After(DefaultPollingTimeout)
 	ticker := time.NewTicker(DefaultPollingInterval)
 	defer ticker.Stop()
@@ -101,29 +99,12 @@ func pollVmRayForCompletion(ep Endpoint, submissionID int) (*VmRaySubmission, er
 				continue
 			}
 
-			if submission == nil || len(submission.Samples) == 0 || len(submission.Samples[0].Analyses) == 0 {
+			if submission == nil || !submission.Data.SubmissionFinished {
 				fmt.Printf("Analysis for submission %d not yet started. Retrying...\n", submissionID)
 				continue
 			}
 
-			allAnalysesComplete := true
-			for _, sample := range submission.Samples {
-				for _, analysis := range sample.Analyses {
-					fmt.Printf(" > Status for analysis %d: %s\n", analysis.AnalysisID, analysis.Status)
-					if analysis.Status == "in_work" || analysis.Status == "in_queue" {
-						allAnalysesComplete = false
-						break
-					}
-				}
-				if !allAnalysesComplete {
-					break
-				}
-			}
-
-			if allAnalysesComplete {
-				fmt.Printf("All analyses for submission %d are complete.\n", submissionID)
-				return submission, nil
-			}
+			return submission, nil
 		}
 	}
 }

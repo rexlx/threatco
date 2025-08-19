@@ -84,3 +84,12 @@ type VmRayAnalysis struct {
 	// URL to view the analysis report in the VMRay Analyzer UI.
 	WebifURL string `json:"analysis_webif_url"`
 }
+
+type VMRaySubmissionResponse struct {
+	Data struct {
+		SubmissionID            int    `json:"submission_id"`
+		SubmissionFinished      bool   `json:"submission_finished"`
+		SubmissionHasError      bool   `json:"submission_has_error"`
+		SubmissionSampleVerdict string `json:"submission_sample_verdict"`
+	} `json:"data"`
+}

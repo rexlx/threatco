@@ -652,6 +652,7 @@ type UploadHandler struct {
 	ID       string        `json:"id"`
 	Data     []byte        `json:"data"`
 	FileSize int64         `json:"file_size"`
+	WebHook  string        `json:"webhook"`
 }
 
 func (u *UploadHandler) WriteToDisk(filename string) error {
