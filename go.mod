@@ -1,6 +1,6 @@
 module github.com/rexlx/threatco
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/alexedwards/scs/v2 v2.8.0

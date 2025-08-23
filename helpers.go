@@ -644,6 +644,55 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 
 }
 
+type Webhook struct {
+	Url      string `json:"url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (w *Webhook) Get() ([]byte, error) {
+	if w.Url == "" {
+		return nil, fmt.Errorf("webhook URL is empty")
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", w.Url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.SetBasicAuth(w.Username, w.Password)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("webhook returned non-200 status: %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func (w *Webhook) Post(data []byte) error {
+	if w.Url == "" {
+		return fmt.Errorf("webhook URL is empty")
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", w.Url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.SetBasicAuth(w.Username, w.Password)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("webhook returned non-200 status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 type UploadHandler struct {
 	For      string        `json:"for"`
 	FileName string        `json:"file_name"`
@@ -652,7 +701,7 @@ type UploadHandler struct {
 	ID       string        `json:"id"`
 	Data     []byte        `json:"data"`
 	FileSize int64         `json:"file_size"`
-	WebHook  string        `json:"webhook"`
+	WebHook  Webhook       `json:"webhook"`
 }
 
 func (u *UploadHandler) WriteToDisk(filename string) error {
