@@ -36,6 +36,8 @@ MISP_KEY="yougettheidea"
 THREATCO_DB_LOCATION="user=neo password=morpheus host=127.0.0.1 dbname=threatco"
 ```
 
+### example from the config.json
+
 ```json
 {       
 "name": "special-misp-dont-use-this-name",
