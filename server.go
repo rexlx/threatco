@@ -116,7 +116,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.Persist = true
 	sessionMgr.Cookie.Name = "token"
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
-	// sessionMgr.Cookie.Secure = true
+	sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
 	if dbLocation == "" {
 		dbLocation = os.Getenv("THREATCO_DB_LOCATION")

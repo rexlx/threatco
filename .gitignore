@@ -4,3 +4,4 @@ threatco
 config.json
 threatco.exe
 .venv/
+.DS_Store
