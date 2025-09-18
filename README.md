@@ -1,11 +1,11 @@
 # threatco
-companion application for the [insights](https://github.com/rexlx/insights) [extension](https://chromewebstore.google.com/detail/insights/ahjeboeknahakdlhjilhhjlddijbcooi). proxy requests to third party APIs for IOC enrichment.
+a service for enriching indicators of compromise.
 
 ### key features
 - enrich users query by fanning out to all available plugins (third-party APIs)
-- file analysis
+- file analysis (if plugin is configured)
 - parse blobs of text sent over API to extract IOC and enrich
-- frontend with user management, knowledge base, runtime stats, response list
+- frontend with webapp, server management, and a knowledge base
 - view statistics and application performance
 - remote logging if desired
 
@@ -70,6 +70,8 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 - urlscan
 - virustotal
 - vmray (*limited to file upload*)
+
+companion application: [insights](https://github.com/rexlx/insights) [extension](https://chromewebstore.google.com/detail/insights/ahjeboeknahakdlhjilhhjlddijbcooi).
 
 
 
