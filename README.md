@@ -23,7 +23,7 @@ a service for enriching indicators of compromise.
 - entrypoint.sh creates a user admin@aol.com with password admin for the frontend
 
 ## env
-you can enhance the security of your deployment by omitting **keys and secrets** from your config. after the app loads the configuration, it will check if any service keys are empty, if any are found it will search in the environment for SERVICE_KEY and SERVICE_SECRET (using the Service.Kind field as the SERVICE name).
+you can enhance the security of your deployment by omitting **keys and secrets** from your config. after the app loads the configuration, it will check if any service keys are empty, if none are found it will search in the environment for SERVICE_KEY and SERVICE_SECRET (using the Service.Kind field as the SERVICE name).
 
 in the example below the app would look for MISP_KEY and MISP_SECRET (even though misp only uses the key value by convention).
 
