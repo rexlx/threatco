@@ -301,6 +301,20 @@ export class Application {
         return data;
     }
 
+    async fetchMatchDontParse(blob) {
+        let thisURL = `/parse`;
+        const proxyRequest = { "username": this.user.email, "blob": blob };
+        console.log("fetchMatchDontParse", blob)
+        let response = await this._fetch(thisURL, {
+            method: 'POST',
+            body: JSON.stringify(proxyRequest)
+        });
+        let data = await response.json();
+        if (this.resultHistory.length > 100) this.resultHistory.splice(0, this.resultHistory.length - 100);
+        this.resultHistory.push(data);
+        return data;
+    }
+
     async rectifyServices() {
         const thisURL = `/rectify`;
         try {

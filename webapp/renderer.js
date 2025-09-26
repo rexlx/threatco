@@ -134,17 +134,24 @@ function attachEventListeners() {
             const userSearch = document.getElementById('userSearch');
             if (!userSearch) return;
             const searchText = userSearch.value;
+            const dontParseCheckbox = document.getElementById('dontParseCheckbox');
+            const dontParse = dontParseCheckbox ? dontParseCheckbox.checked : false;
+
             // Clear old search-related notifications, but keep others
             application.notifications = application.notifications.filter(n => n.type !== 'search');
             renderNotifications();
             matchBox.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-primary'></progress>";
 
-            const allMatches = Object.keys(contextualizer.expressions).map(key => ({ type: key, matches: [...new Set(contextualizer.getMatches(searchText, contextualizer.expressions[key]))] }));
-            for (let svr of application.user.services) {
-                for (let matchPair of allMatches) {
-                    if (svr.type.includes(matchPair.type)) {
-                        const route = getRouteByType(svr.route_map, matchPair.type);
-                        handleMatches(svr.kind, matchPair, route);
+            if (dontParse) {
+                handleMatches(null, { value: searchText }, null, true);
+            } else {
+                const allMatches = Object.keys(contextualizer.expressions).map(key => ({ type: key, matches: [...new Set(contextualizer.getMatches(searchText, contextualizer.expressions[key]))] }));
+                for (let svr of application.user.services) {
+                    for (let matchPair of allMatches) {
+                        if (svr.type.includes(matchPair.type)) {
+                            const route = getRouteByType(svr.route_map, matchPair.type);
+                            handleMatches(svr.kind, matchPair, route, false);
+                        }
                     }
                 }
             }
@@ -240,6 +247,14 @@ function renderSearchForm() {
         <h1 class="title has-text-info">Search</h1>
         <form>
             <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
+            <div class="field">
+                <div class="control">
+                    <label class="checkbox has-text-grey-light">
+                        <input type="checkbox" id="dontParseCheckbox">
+                        parse on server
+                    </label>
+                </div>
+            </div>
             <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
             <div class="field"><div class="control"><div class="buttons are-small">
                 <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
@@ -442,15 +457,31 @@ function getRouteByType(routeMap, type) {
     return route ? route.route : "";
 }
 
-async function handleMatches(kind, matchPair, route) {
+async function handleMatches(kind, matchData, route, dontParse = false) {
     application.resultWorkers.push(1);
-    for (let match of matchPair.matches) {
-        if (isPrivateIP(match)) continue;
+    if (dontParse) {
         try {
-            let result = await application.fetchMatch(kind, match, matchPair.type, route);
-            application.results.push(result);
+            // In this case, matchData is an object like { value: "raw text" }
+            let result = await application.fetchMatchDontParse(matchData.value);
+            // The result could be a single object or an array of results.
+            if (Array.isArray(result)) {
+                application.results.push(...result);
+            } else if (result) {
+                application.results.push(result);
+            }
         } catch (error) {
             application.errors.push(error.toString());
+        }
+    } else {
+        // Existing logic: matchData is a matchPair object with a .matches property
+        for (let match of matchData.matches) {
+            if (isPrivateIP(match)) continue;
+            try {
+                let result = await application.fetchMatch(kind, match, matchData.type, route);
+                application.results.push(result);
+            } catch (error) {
+                application.errors.push(error.toString());
+            }
         }
     }
     await application.setHistory();
