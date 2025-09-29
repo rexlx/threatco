@@ -77,6 +77,10 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	for k, v := range cx.Expressions {
 		out[k] = cx.GetMatches(pr.Blob, k, v)
 	}
+	promptRequest := PromptRequest{
+		MatchList: make([]interface{}, 0),
+		Mu:        &sync.RWMutex{},
+	}
 	for k, v := range out {
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
@@ -135,7 +139,27 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								Data:   out,
 								Time:   time.Now(),
 							}
-							s.DB.StoreResponse(false, id, out, proxyReq.To)
+							go s.DB.StoreResponse(false, id, out, proxyReq.To)
+							var se SummarizedEvent
+							err = json.Unmarshal(out, &se)
+							if err != nil {
+								fmt.Println("error unmarshaling response", err)
+								return
+							}
+							if se.Matched {
+								var tmp struct {
+									Info  string `json:"info"`
+									Value string `json:"value"`
+									Score int    `json:"score"`
+								}
+								tmp.Info = se.Info
+								tmp.Value = se.Value
+								tmp.Score = se.ThreatLevelID
+								// promptRequest.Mu.Lock()
+								promptRequest.Mu.Lock()
+								promptRequest.MatchList = append(promptRequest.MatchList, tmp)
+								promptRequest.Mu.Unlock()
+							}
 						}(svc.Kind, uid, &first, proxyReq)
 					}
 				}
@@ -146,6 +170,14 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	allBytes = append(allBytes, ']')
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(allBytes)
+	fullPrompt, _ := promptRequest.BuildPrompt()
+	s.RespCh <- ResponseItem{
+		ID:     promptRequest.TransactinID,
+		Notify: true,
+		Data:   []byte(fullPrompt),
+		Time:   time.Now(),
+		Vendor: "llm_tools",
+	}
 }
 
 func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
