@@ -33,6 +33,7 @@ const detailsModal = document.getElementById('detailsModal');
 const detailsModalTitle = document.getElementById('detailsModalTitle');
 const detailsModalContent = document.getElementById('detailsModalContent');
 const archiveButton = document.getElementById('archiveButton');
+const copyButton = document.getElementById('copyButton'); // <-- Added selector for the new button
 
 
 /**
@@ -113,6 +114,25 @@ function attachEventListeners() {
             await application.archiveResult(id);
             detailsModal.classList.remove('is-active');
         }
+    });
+
+    // Copy button listener <-- Added event listener
+    copyButton.addEventListener('click', () => {
+        const contentToCopy = detailsModalContent.textContent;
+        navigator.clipboard.writeText(contentToCopy).then(() => {
+            const originalHTML = copyButton.innerHTML;
+            copyButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">check</i></span><span>Copied!</span></span>`;
+            setTimeout(() => {
+                copyButton.innerHTML = originalHTML;
+            }, 2000); // Revert back after 2 seconds
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            const originalHTML = copyButton.innerHTML;
+            copyButton.innerHTML = `<span>Failed!</span>`;
+             setTimeout(() => {
+                copyButton.innerHTML = originalHTML;
+            }, 2000);
+        });
     });
 
     // Profile view

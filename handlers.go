@@ -78,8 +78,9 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		out[k] = cx.GetMatches(pr.Blob, k, v)
 	}
 	promptRequest := PromptRequest{
-		MatchList: make([]interface{}, 0),
-		Mu:        &sync.RWMutex{},
+		TransactinID: uuid.New().String(),
+		MatchList:    make([]interface{}, 0),
+		Mu:           &sync.RWMutex{},
 	}
 	for k, v := range out {
 		for _, svc := range s.Details.SupportedServices {
@@ -170,11 +171,18 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	allBytes = append(allBytes, ']')
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(allBytes)
-	fullPrompt, _ := promptRequest.BuildPrompt()
+	var logIt bool
+	fullPrompt, _ := promptRequest.BuildJSONPrompt()
+	email, ok := r.Context().Value("email").(string)
+	if !ok {
+		logIt = true
+	}
 	s.RespCh <- ResponseItem{
+		Log:    logIt,
+		Email:  email,
 		ID:     promptRequest.TransactinID,
 		Notify: true,
-		Data:   []byte(fullPrompt),
+		Data:   fullPrompt,
 		Time:   time.Now(),
 		Vendor: "llm_tools",
 	}

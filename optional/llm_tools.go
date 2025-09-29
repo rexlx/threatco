@@ -35,6 +35,18 @@ func (p *LlmToolsPromptRequest) BuildPrompt() (string, error) {
 	return fmt.Sprintf(LlmToolsBasicPrompt, string(out)), nil
 }
 
+func (p *LlmToolsPromptRequest) BuildJSONPrompt() ([]byte, error) {
+	var out struct {
+		Prompt string `json:"prompt"`
+	}
+	prompt, err := p.BuildPrompt()
+	if err != nil {
+		return nil, err
+	}
+	out.Prompt = prompt
+	return json.Marshal(out)
+}
+
 // --- JSON structure for the Gemini API request ---
 type geminiRequest struct {
 	Contents []geminiContent `json:"contents"`
