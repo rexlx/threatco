@@ -99,20 +99,27 @@ function showDetailsModal(fullId, details) {
     detailsModal.classList.add('is-active');
 }
 
+function closeDetailsModal() {
+    detailsModal.classList.remove('is-active');
+    detailsModalContent.textContent = '';
+    detailsModalTitle.textContent = 'Details';
+    archiveButton.dataset.id = '';
+}
+
 
 // --- Event Listeners ---
 
 function attachEventListeners() {
     // Modal close listeners
-    detailsModal.querySelector('.modal-background').addEventListener('click', () => detailsModal.classList.remove('is-active'));
-    detailsModal.querySelector('.delete').addEventListener('click', () => detailsModal.classList.remove('is-active'));
+    detailsModal.querySelector('.modal-background').addEventListener('click', closeDetailsModal);
+    detailsModal.querySelector('.delete').addEventListener('click', closeDetailsModal);
 
     // Archive button listener
     archiveButton.addEventListener('click', async (event) => {
         const id = event.currentTarget.dataset.id;
         if (id) {
             await application.archiveResult(id);
-            detailsModal.classList.remove('is-active');
+            closeDetailsModal();
         }
     });
 
