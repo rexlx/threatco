@@ -185,15 +185,26 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				fmt.Println("got bad attr data from misp...")
 				attrs = 0
 			}
+			info := "received multiple hits: "
+			var tLevel int
+			for _, r := range response {
+				t, err := strconv.Atoi(r.ThreatLevelID)
+				if err != nil {
+					tLevel += 0
+				} else {
+					tLevel += t
+				}
+				info += fmt.Sprintf("ID %s: %s; ", r.ID, r.Info)
+			}
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
-				Info:          "received multiple hits for the given value",
+				Info:          info,
 				Background:    "has-background-warning",
 				From:          req.To,
 				ID:            "multiple hits",
 				AttrCount:     attrs,
-				ThreatLevelID: 5,
+				ThreatLevelID: tLevel,
 				Value:         req.Value,
 				Link:          req.TransactionID,
 				Type:          req.Type,
@@ -294,16 +305,34 @@ func (s *Server) SimpleServiceCheck() error {
 func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
+			info := "received multiple hits: "
+			var tLevel int
+			var attrs int
+			for _, r := range response.Response {
+				info += fmt.Sprintf("ID %s: %s; ", r.Event.ID, r.Event.Info)
+				t, err := strconv.Atoi(r.Event.ThreatLevelID)
+				if err != nil {
+					tLevel += 0
+				} else {
+					tLevel += t
+				}
+				a, err := strconv.Atoi(r.Event.AttributeCount)
+				if err != nil {
+					attrs += 0
+				} else {
+					attrs += a
+				}
+			}
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
-				Info:          "received multiple hits for the given value",
+				Info:          info,
 				Background:    "has-background-warning",
 				From:          req.To,
 				ID:            "multiple",
 				Value:         req.Value,
-				AttrCount:     0,
-				ThreatLevelID: 5,
+				AttrCount:     attrs,
+				ThreatLevelID: tLevel,
 				Link:          req.TransactionID,
 				Type:          req.Type,
 				RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
