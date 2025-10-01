@@ -310,8 +310,15 @@ export class Application {
             body: JSON.stringify(proxyRequest)
         });
         let data = await response.json();
-        if (this.resultHistory.length > 100) this.resultHistory.splice(0, this.resultHistory.length - 100);
-        this.resultHistory.push(data);
+        if (Array.isArray(data)) {
+            data.forEach(d => {
+                if (this.resultHistory.length > 100) this.resultHistory.splice(0, this.resultHistory.length - 100);
+                this.resultHistory.push(d);
+            });
+        } else {
+            if (this.resultHistory.length > 100) this.resultHistory.splice(0, this.resultHistory.length - 100);
+            this.resultHistory.push(data);
+        }
         return data;
     }
 
