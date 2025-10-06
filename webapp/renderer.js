@@ -114,6 +114,16 @@ function attachEventListeners() {
     detailsModal.querySelector('.modal-background').addEventListener('click', closeDetailsModal);
     detailsModal.querySelector('.delete').addEventListener('click', closeDetailsModal);
 
+    notificationContainer.addEventListener('click', async (event) => {
+        const link = event.target.closest('a');
+        if (link && link.dataset.id) {
+            event.preventDefault();
+            const id = link.dataset.id;
+            await application.fetchDetails(id);
+            showDetailsModal(id, application.focus);
+        }
+    });
+
     // Archive button listener
     archiveButton.addEventListener('click', async (event) => {
         const id = event.currentTarget.dataset.id;
@@ -313,14 +323,13 @@ async function handleResponseFetch(options = {}) {
 // --- UI Component Rendering ---
 
 /**
- * NEW: Renders notifications from the application state into the container.
+ * Renders notifications and makes specific IDs clickable.
  */
 function renderNotifications() {
     if (!notificationContainer) return;
     notificationContainer.innerHTML = ''; // Clear existing notifications
     
     application.notifications.forEach(notif => {
-        console.log("Rendering notification:", notif);
         const notifDiv = document.createElement('div');
         const colorClass = notif.Error ? 'is-danger' : 'is-success';
         notifDiv.className = `notification ${colorClass} is-light`;
@@ -335,9 +344,16 @@ function renderNotifications() {
         };
 
         const message = document.createElement('p');
-        // Format the timestamp for readability
         const timestamp = new Date(notif.created).toLocaleTimeString();
-        message.innerHTML = `<strong>[${timestamp}]</strong> ${escapeHtml(notif.info)}`;
+        const escapedInfo = escapeHtml(notif.info);
+
+        const idRegex = /(with ID )([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
+        const processedInfo = escapedInfo.replace(idRegex, (match, prefix, uuid) => {
+            // We replace the match, keeping the prefix and wrapping the UUID in a clickable link.
+            return `${prefix}<a href="#" class="has-text-weight-bold" data-id="${uuid}">${uuid}</a>`;
+        });
+
+        message.innerHTML = `<strong>[${timestamp}]</strong> ${processedInfo}`;
 
         notifDiv.appendChild(deleteButton);
         notifDiv.appendChild(message);
