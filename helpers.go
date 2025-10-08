@@ -176,6 +176,18 @@ func IrisPivotURLBuilder(thisUrl, uname, key, time string, req ProxyRequest) str
 	return fmt.Sprintf("%s%s", thisUrl, uri)
 }
 
+func truncateString(s string, length int) string {
+	if len(s) <= length {
+		return s
+	}
+	// Convert to runes to handle multi-byte characters correctly
+	runes := []rune(s)
+	if len(runes) > length {
+		return string(runes[:length])
+	}
+	return s
+}
+
 func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]byte, error) {
 	// fmt.Println("ParseOtherMispResponse")
 	if len(response) != 0 {
@@ -196,6 +208,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				}
 				info += fmt.Sprintf("ID %s: %s; ", r.ID, r.Info)
 			}
+			info = truncateString(info, 150)
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
@@ -323,6 +336,7 @@ func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRespon
 					attrs += a
 				}
 			}
+			info = truncateString(info, 150)
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
