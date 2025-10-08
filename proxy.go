@@ -228,19 +228,27 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 		fmt.Println("MandiantHelper: bad vendor response", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
-	ind := response.Indicators[0]
-	attrCount := len(ind.AttributedAssociations)
-	info := `mandiant got hits for that value with score %v: %v`
-	if len(ind.AttributedAssociations) > 0 {
-		info = fmt.Sprintf(info, ind.Mscore, GetAttributedAssociationsString(ind))
-	} else {
-		info = fmt.Sprintf(info, ind.Mscore, "no attributed associations")
-	}
+	var sources int
+	var associations []string
+	var mscore int
+	var Iid string
+	for _, ind := range response.Indicators {
+		if ind.ID != "" {
+			Iid = ind.ID
+		}
 
+		sources += len(ind.Sources)
+		mscore += ind.Mscore
+		for _, assoc := range ind.AttributedAssociations {
+			associations = append(associations, assoc.Name)
+		}
+	}
+	info := `%s total score %d: from %v sources`
+	info = fmt.Sprintf(info, strings.Join(associations, ", "), mscore, sources)
 	sum := SummarizedEvent{
-		ID:            ind.ID,
-		AttrCount:     attrCount,
-		ThreatLevelID: ind.ThreatRating.ThreatScore,
+		ID:            Iid,
+		AttrCount:     len(associations),
+		ThreatLevelID: mscore,
 		Timestamp:     time.Now(),
 		Background:    "has-background-warning",
 		Info:          info,
@@ -248,7 +256,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched: len(ind.AttributedAssociations) > 0,
+		Matched: len(associations) > 0,
 		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		Type:    req.Type,
 	}
