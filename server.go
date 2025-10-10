@@ -564,6 +564,32 @@ func LogItemsToArticle(logs []LogItem) string {
 	return out
 }
 
+func LogItemsToPanel(logs []LogItem) string {
+	out := `<div class="scrollbar">
+            <div class="thumb"></div>
+        </div>`
+	// Note the template is now for a panel, not a message
+	templ := `<article class="panel is-%s">
+                <p class="panel-heading">
+                    %s
+                </p>
+                <div class="panel-block">
+                    %v
+                </div>
+              </article>`
+	for _, log := range logs {
+		var color string
+		if log.Error {
+			color = "danger"
+		} else {
+			color = "info"
+		}
+		// We add a little margin to each panel
+		out += fmt.Sprintf(`<div style="margin-bottom: 1em;">`+templ+`</div>`, color, log.Time, log.Data)
+	}
+	return out
+}
+
 func (s *Server) FakeLoggingEvent(n int) {
 	for i := 0; i < n; i++ {
 		s.LogError(fmt.Errorf("this is a fake error %d", i))

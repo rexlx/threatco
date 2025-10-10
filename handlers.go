@@ -838,7 +838,7 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 		step = len(s.Cache.Logs)
 	}
 	chunk := s.Cache.Logs[0:step]
-	out := LogItemsToArticle(chunk)
+	out := LogItemsToPanel(chunk)
 
 	fmt.Fprint(w, out)
 }
