@@ -371,7 +371,9 @@ function renderResultCards(resultsArray, isHistoryView = false) {
         return;
     }
 
-    resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
+    if (!isHistoryView) {
+        resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
+    }
 
     for (const result of resultsArray) {
         const article = document.createElement('article');
@@ -385,9 +387,12 @@ function renderResultCards(resultsArray, isHistoryView = false) {
         body.className = 'message-body has-background-dark-ter';
         body.innerHTML = `
             <p class="has-text-white">Match: <span class="has-text-white">${escapeHtml(String(result.value))}</span></p>
+            <p class="has-text-white">Matched: <span class="has-text-white">${escapeHtml(String(result.matched))}</span></p>
             <p class="has-text-white">ID: <span class="has-text-white">${escapeHtml(String(result.id))}</span></p>
             <p class="has-text-white">Server ID: <span class="has-text-white">${escapeHtml(String(result.link))}</span></p>
             <p class="has-text-white">Info: <span class="has-text-white">${escapeHtml(String(result.info))}</span></p>
+            <p class="has-text-white">Score: <span class="has-text-white">${escapeHtml(String(result.threat_level_id))}</span></p>
+            <p class="has-text-white">Attrs: <span class="has-text-white">${escapeHtml(String(result.attr_count))}</span></p>
         `;
 
         const footer = document.createElement('footer');
@@ -595,25 +600,66 @@ function renderHealthStatus(stats) {
     if (!healthStatusContainer) return;
     healthStatusContainer.innerHTML = '';
     let hasHealthChecks = false;
+
+    // --- Configuration ---
+    // A service is "degraded" if its failure rate is above this threshold, even if it's currently up.
+    const DEGRADED_THRESHOLD = 0.2; // 20% failure rate
+
     const title = document.createElement('h1');
     title.className = 'title has-text-info';
     title.textContent = 'Health Check';
     healthStatusContainer.appendChild(title);
+
     const table = document.createElement('table');
     table.className = 'table is-fullwidth is-striped has-background-dark';
-    table.innerHTML = `<thead class="has-background-black"><tr><th class="has-text-info">Service</th><th class="has-text-info">Status</th></tr></thead>`;
+    // Added an "Uptime" column to the table header
+    table.innerHTML = `<thead class="has-background-black"><tr><th class="has-text-info">Service</th><th class="has-text-info">Status</th><th class="has-text-info">Uptime (Recent)</th></tr></thead>`;
     const tbody = document.createElement('tbody');
+
     for (const key in stats) {
         if (key.startsWith('health-check-')) {
             hasHealthChecks = true;
             const serviceName = key.replace('health-check-', '');
-            const status = stats[key];
+            const history = stats[key]; // This is now an array e.g., [1, 1, 0, 1]
+
+            let statusText = 'NO DATA';
+            let statusClass = 'is-light'; // Default color
+            let uptimePercentage = 'N/A';
+
+            if (Array.isArray(history) && history.length > 0) {
+                const lastStatus = history[history.length - 1];
+                const totalChecks = history.length;
+                const failures = history.filter(s => s === 0).length;
+                const successRate = (totalChecks - failures) / totalChecks;
+                uptimePercentage = `${(successRate * 100).toFixed(1)}%`;
+
+                // 1. If the last check failed, the service is DOWN (red).
+                if (lastStatus === 0) {
+                    statusText = 'DOWN';
+                    statusClass = 'is-danger';
+                // 2. If the last check succeeded, check the overall failure rate.
+                } else {
+                    const failureRate = failures / totalChecks;
+                    // If failure rate exceeds the threshold, it's DEGRADED (yellow).
+                    if (failureRate > DEGRADED_THRESHOLD) {
+                        statusText = 'DEGRADED';
+                        statusClass = 'is-warning';
+                    // Otherwise, it's UP (green).
+                    } else {
+                        statusText = 'UP';
+                        statusClass = 'is-success';
+                    }
+                }
+            }
+
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td class="has-text-white">${serviceName}</td><td><span class="tag ${status === 1 || status === '1' ? 'is-success' : 'is-danger'}">${status === 1 || status === '1' ? 'UP' : 'DOWN'}</span></td>`;
+            tr.innerHTML = `<td class="has-text-white">${escapeHtml(serviceName)}</td><td><span class="tag ${statusClass}">${statusText}</span></td><td class="has-text-white">${uptimePercentage}</td>`;
             tbody.appendChild(tr);
         }
     }
+
     table.appendChild(tbody);
+
     if (hasHealthChecks) {
         healthStatusContainer.appendChild(table);
     } else {

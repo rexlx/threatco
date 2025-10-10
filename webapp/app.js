@@ -349,7 +349,7 @@ export class Application {
     }
 
     async getServerStats() {
-        let thisURL = `/stats`;
+        let thisURL = `/coordinate`;
         try {
             let response = await this._fetch(thisURL, { method: 'GET' });
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);

@@ -818,6 +818,17 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+func (s *Server) GetCoordinateHandler(w http.ResponseWriter, r *http.Request) {
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+	coord, err := json.Marshal(s.Cache.Coordinates)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(coord)
+}
+
 func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 	s.Log.Println("LogsSSRHandler")
 	s.Memory.RLock()
