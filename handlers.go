@@ -843,6 +843,7 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, out)
 }
 
+// bump
 func (s *Server) GetLogsHandler(w http.ResponseWriter, r *http.Request) {
 	var MaxLogs = 1000
 	start, _ := strconv.Atoi(r.URL.Query().Get("start"))
