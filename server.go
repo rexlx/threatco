@@ -67,11 +67,16 @@ type Details struct {
 type Cache struct {
 	Logs           []LogItem               `json:"logs"`
 	Charts         []byte                  `json:"charts"`
-	Coordinates    map[string][]float64    `json:"coordinates"`
+	Coordinates    map[string][]Coord      `json:"coordinates"`
 	ResponseExpiry time.Duration           `json:"response_expiry"`
 	Services       []ServiceType           `json:"services"`
 	StatsHistory   []StatItem              `json:"stats_history"`
 	Responses      map[string]ResponseItem `json:"responses"`
+}
+
+type Coord struct {
+	Value float64 `json:"value"`
+	Time  int64   `json:"time"`
 }
 type StatItem struct {
 	Time int64              `json:"time"`
@@ -103,7 +108,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	gateway := http.NewServeMux()
 	cache := &Cache{
 		Logs:         make([]LogItem, 0),
-		Coordinates:  make(map[string][]float64),
+		Coordinates:  make(map[string][]Coord),
 		StatsHistory: make([]StatItem, 0),
 		Responses:    make(map[string]ResponseItem),
 		Charts:       []byte(views.NoDataView),
@@ -516,12 +521,12 @@ func (s *Server) UpdateCharts() {
 	for i, stat := range s.Details.Stats {
 		_, ok := s.Cache.Coordinates[i]
 		if !ok {
-			s.Cache.Coordinates[i] = make([]float64, 0)
+			s.Cache.Coordinates[i] = make([]Coord, 0)
 		}
 		if len(s.Cache.Coordinates[i]) > 100 {
 			s.Cache.Coordinates[i] = s.Cache.Coordinates[i][1:]
 		}
-		s.Cache.Coordinates[i] = append(s.Cache.Coordinates[i], stat)
+		s.Cache.Coordinates[i] = append(s.Cache.Coordinates[i], Coord{Value: stat, Time: time.Now().Unix()})
 	}
 
 	var buf bytes.Buffer

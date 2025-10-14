@@ -528,22 +528,44 @@ func DeepMapCopy(x, y map[string]float64) {
 	}
 }
 
-func createLineChart(seriesName string, data []float64) *charts.Line {
+func createLineChart(seriesName string, data []Coord) *charts.Line {
 	line := charts.NewLine()
 	line.SetGlobalOptions(
 		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemePurplePassion}),
+		charts.WithTitleOpts(opts.Title{
+			Title: seriesName,
+		}),
+		// Add a tooltip for better user experience
+		charts.WithTooltipOpts(opts.Tooltip{
+			Show:    opts.Bool(true),
+			Trigger: "axis",
+		}),
+		charts.WithXAxisOpts(opts.XAxis{
+			AxisLabel: &opts.AxisLabel{
+				Rotate: 45,
+			},
+		}),
 	)
-	items := make([]opts.LineData, 0)
-	xAxis := []string{}
-	smoothLine := opts.LineChart{Smooth: opts.Bool(true)}
-	for i := 0; i < len(data); i++ {
-		xAxis = append(xAxis, strconv.Itoa(i))
-		items = append(items, opts.LineData{Value: data[i]})
+
+	// Create a slice of the concrete data type, not the interface.
+	items := make([]opts.LineData, 0, len(data))
+	xAxis := make([]string, 0, len(data))
+
+	// Loop through your data points
+	for _, point := range data {
+		// 1. Format the Unix timestamp into a human-readable string (e.g., "15:04:05") for the X-axis.
+		formattedTime := time.Unix(point.Time, 0).Format("15:04:05")
+		xAxis = append(xAxis, formattedTime)
+
+		// 2. Use the 'Value' field for the Y-axis data point.
+		items = append(items, opts.LineData{Value: point.Value})
 	}
 
+	// Set the X-axis and add the series data to the chart.
+	// The AddSeries function can accept a slice of concrete types like []opts.LineData.
 	line.SetXAxis(xAxis).
-		AddSeries(seriesName, items).
-		SetSeriesOptions(charts.WithLineChartOpts(smoothLine))
+		AddSeries(seriesName, items, charts.WithLineChartOpts(opts.LineChart{Smooth: opts.Bool(true)}))
+
 	return line
 }
 
