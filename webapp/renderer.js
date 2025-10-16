@@ -185,6 +185,14 @@ function attachEventListeners() {
                 const allMatches = Object.keys(contextualizer.expressions).map(key => ({ type: key, matches: [...new Set(contextualizer.getMatches(searchText, contextualizer.expressions[key]))] }));
                 for (let svr of application.user.services) {
                     for (let matchPair of allMatches) {
+                        if (matchPair.type === "domain" && matchPair.matches.length > 0) {
+                            matchPair.matches.forEach(domain => {
+                                const baseDomain = contextualizer.extractSecondLevelDomain(domain);
+                                if (baseDomain) {
+                                    matchPair.matches.push(baseDomain);
+                                }
+                            });
+                        }
                         if (svr.type.includes(matchPair.type)) {
                             const route = getRouteByType(svr.route_map, matchPair.type);
                             handleMatches(svr.kind, matchPair, route, false);

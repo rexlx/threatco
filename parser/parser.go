@@ -51,9 +51,23 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 		if c.Checks.Ipv4 && isPrivateIP4(match) {
 			continue
 		}
+		if kind == "domain" {
+			baseUrl := extractSecondLevelDomain(match)
+			if baseUrl != "" {
+				results = append(results, Match{Value: baseUrl, Type: "base_domain"})
+			}
+		}
 		results = append(results, Match{Value: match, Type: kind})
 	}
 	return results
+}
+
+func extractSecondLevelDomain(domain string) string {
+	parts := strings.Split(domain, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[len(parts)-2] + "." + parts[len(parts)-1]
 }
 
 func isPrivateIP4(ip string) bool {
