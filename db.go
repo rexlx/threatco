@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io" // <-- ADDED THIS
 	"os/exec"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 )
 
 type Database interface {
+	Backup(w io.Writer) error // <-- CHANGED THIS
+	Restore(filePath string) error
 	GetUserByEmail(email string) (User, error)
 	DeleteUser(email string) error
 	GetAllUsers() ([]User, error)
@@ -92,6 +95,16 @@ func (db *BboltDB) StoreResponse(archive bool, id string, data []byte, vendor st
 		}
 		return b.Put([]byte(id), data)
 	})
+}
+
+func (db *BboltDB) Backup(w io.Writer) error { // <-- CHANGED THIS
+	fmt.Println("not implemented: BboltDB Backup")
+	return nil
+}
+
+func (db *BboltDB) Restore(filePath string) error {
+	fmt.Println("not implemented: BboltDB Restore")
+	return nil
 }
 
 func (db *BboltDB) GetResponse(id string) ([]byte, error) {
@@ -285,48 +298,51 @@ func (db *PostgresDB) createTables() error {
             type TEXT[],
             route_map JSONB
         );
-		CREATE TABLE IF NOT EXISTS responses (
-    	id TEXT PRIMARY KEY,
-    	data BYTEA NOT NULL,
-    	created TIMESTAMP,
-    	vendor TEXT NOT NULL
+        CREATE TABLE IF NOT EXISTS responses (
+        id TEXT PRIMARY KEY,
+        data BYTEA NOT NULL,
+        created TIMESTAMP,
+        vendor TEXT NOT NULL
 );
-	CREATE TABLE IF NOT EXISTS archived_responses (
-			id TEXT PRIMARY KEY,
-			data BYTEA NOT NULL,
-			created TIMESTAMP,
-			vendor TEXT NOT NULL
-	);
-		CREATE TABLE IF NOT EXISTS users (
-				email TEXT PRIMARY KEY,
-				admin BOOLEAN,
-				key TEXT,
-				hash BYTEA,
-				services JSONB,
-				created TIMESTAMP,
-				updated TIMESTAMP
-		);
-		CREATE TABLE IF NOT EXISTS tokens (
-				token TEXT PRIMARY KEY,
-				expires_at TIMESTAMP,
-				email TEXT,
-				hash BYTEA
-				);
-			`)
+    CREATE TABLE IF NOT EXISTS archived_responses (
+            id TEXT PRIMARY KEY,
+            data BYTEA NOT NULL,
+            created TIMESTAMP,
+            vendor TEXT NOT NULL
+    );
+        CREATE TABLE IF NOT EXISTS users (
+                email TEXT PRIMARY KEY,
+                admin BOOLEAN,
+                key TEXT,
+                hash BYTEA,
+                services JSONB,
+                created TIMESTAMP,
+                updated TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS tokens (
+                token TEXT PRIMARY KEY,
+                expires_at TIMESTAMP,
+                email TEXT,
+                hash BYTEA
+                );
+            `)
 	return err
 }
 
-// Backup executes pg_dump using the pool's connection string.
-func (db *PostgresDB) Backup(filePath string) error {
-	// Get the original connection string from the pool's config
+// Backup executes pg_dump and streams its output to the provided io.Writer.
+func (db *PostgresDB) Backup(w io.Writer) error {
 	dsn := db.Pool.Config().ConnString()
 
+	// Prepare the pg_dump command
+	// By omitting -f, pg_dump writes to stdout.
 	cmd := exec.Command("pg_dump",
 		"-d", dsn,
-		"-f", filePath, // Output file
+		// "-f", filePath, // <-- REMOVED
 		"--clean",     // Add 'DROP' statements before 'CREATE'
 		"--if-exists", // Add 'IF EXISTS' to 'DROP' statements
 	)
+
+	cmd.Stdout = w
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -336,7 +352,7 @@ func (db *PostgresDB) Backup(filePath string) error {
 		return fmt.Errorf("pg_dump failed: %s: %w", stderr.String(), err)
 	}
 
-	fmt.Printf("Database backup successful: %s\n", filePath)
+	fmt.Println("Database backup stream successful.")
 	return nil
 }
 
@@ -513,7 +529,7 @@ func (db *PostgresDB) GetServiceByKind(kind string) (ServiceType, error) {
 func (db *PostgresDB) AddService(st ServiceType) error {
 	_, err := db.Pool.Exec(context.Background(),
 		`INSERT INTO services (upload_service, expires, secret, selected, insecure, name, url, rate_limited, max_requests, refill_rate, auth_type, key, kind, type, route_map)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		st.UploadService, st.Expires, st.Secret, st.Selected, st.Insecure, st.Name, st.URL, st.RateLimited, st.MaxRequests, st.RefillRate, st.AuthType, st.Key, st.Kind, st.Type, st.RouteMap,
 	)
 	return err

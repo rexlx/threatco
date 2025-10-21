@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -841,6 +842,34 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 	out := LogItemsToPanel(chunk)
 
 	fmt.Fprint(w, out)
+}
+
+func (s *Server) BackupHandler(w http.ResponseWriter, r *http.Request) {
+	s.Log.Println("BackupHandler called")
+
+	// Set response headers *before* writing any data
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Encoding", "gzip")
+
+	// Create a dynamic filename
+	filename := fmt.Sprintf("threatco_backup_%s.sql.gz", time.Now().Format("2006-01-02_150405"))
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+
+	// Create a gzip writer that writes to the http.ResponseWriter
+	gz := gzip.NewWriter(w)
+	defer gz.Close()
+
+	// Pass the gzip writer to your Backup function
+	err := s.DB.Backup(gz)
+	if err != nil {
+		// IMPORTANT: If the backup fails mid-stream, the headers
+		// are already sent, so we can't send a clean http.Error.
+		// We log the error here for server-side debugging.
+		s.Log.Printf("ERROR during backup stream: %v", err)
+		return
+	}
+
+	s.Log.Println("Backup stream completed successfully.")
 }
 
 // bump
