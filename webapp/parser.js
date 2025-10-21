@@ -25,4 +25,12 @@ export class Contextualizer {
     }
     return matches;
   }
+
+  extractSecondLevelDomain(domain) {
+    let parts = domain.split('.');
+    if (parts.length < 2) {
+      return '';
+    }
+    return parts[parts.length - 2] + '.' + parts[parts.length - 1];
+  }
 }

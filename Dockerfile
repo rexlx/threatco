@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     tzdata \
-    procps && rm -rf /var/lib/apt/lists/*
+    procps postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Set the timezone.
 ENV TZ=America/Chicago

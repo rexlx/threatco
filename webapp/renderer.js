@@ -185,6 +185,17 @@ function attachEventListeners() {
                 const allMatches = Object.keys(contextualizer.expressions).map(key => ({ type: key, matches: [...new Set(contextualizer.getMatches(searchText, contextualizer.expressions[key]))] }));
                 for (let svr of application.user.services) {
                     for (let matchPair of allMatches) {
+                        if (matchPair.type === "domain" && matchPair.matches.length > 0) {
+                            const baseDomains = new Set();
+                            for (const domain of matchPair.matches) {
+                                const baseDomain = contextualizer.extractSecondLevelDomain(domain);
+                                if (baseDomain) {
+                                    baseDomains.add(baseDomain);
+                                }
+                            }
+                            matchPair.matches = [...new Set([...matchPair.matches, ...baseDomains])];
+                        }
+
                         if (svr.type.includes(matchPair.type)) {
                             const route = getRouteByType(svr.route_map, matchPair.type);
                             handleMatches(svr.kind, matchPair, route, false);
@@ -506,8 +517,9 @@ function getRouteByType(routeMap, type) {
 }
 
 async function handleMatches(kind, matchData, route, dontParse = false) {
-    application.resultWorkers.push(1);
     if (dontParse) {
+        // This is a single job, so wrap it in push/pop
+        application.resultWorkers.push(1);
         try {
             // In this case, matchData is an object like { value: "raw text" }
             let result = await application.fetchMatchDontParse(matchData.value);
@@ -520,20 +532,35 @@ async function handleMatches(kind, matchData, route, dontParse = false) {
         } catch (error) {
             application.errors.push(error.toString());
         }
+        application.resultWorkers.pop(); // Remove the single job
     } else {
-        // Existing logic: matchData is a matchPair object with a .matches property
+        // Run all individual matches in parallel
+        const promises = [];
         for (let match of matchData.matches) {
             if (isPrivateIP(match)) continue;
-            try {
-                let result = await application.fetchMatch(kind, match, matchData.type, route);
-                application.results.push(result);
-            } catch (error) {
-                application.errors.push(error.toString());
-            }
+
+            // Push one job *per match*
+            application.resultWorkers.push(1);
+
+            const promise = application.fetchMatch(kind, match, matchData.type, route)
+                .then(result => {
+                    application.results.push(result);
+                })
+                .catch(error => {
+                    application.errors.push(error.toString());
+                })
+                .finally(() => {
+                    // Always remove the job, even if it failed
+                    application.resultWorkers.pop();
+                });
+            promises.push(promise);
         }
+        // Wait for all parallel API calls for this batch to finish
+        await Promise.allSettled(promises);
     }
+    
+    // Save history after the batch is done
     await application.setHistory();
-    application.resultWorkers.pop();
 }
 
 function isPrivateIP(ip) {
@@ -620,7 +647,13 @@ function renderHealthStatus(stats) {
         if (key.startsWith('health-check-')) {
             hasHealthChecks = true;
             const serviceName = key.replace('health-check-', '');
-            const history = stats[key]; // This is now an array e.g., [1, 1, 0, 1]
+            // const history = stats[key]; // This is now an array e.g., [1, 1, 0, 1]
+            const VerboseHistory = stats[key];
+            const history = [];
+            VerboseHistory.forEach(entry => {
+                console.log(entry);
+                history.push(entry.value);
+            });
 
             let statusText = 'NO DATA';
             let statusClass = 'is-light'; // Default color

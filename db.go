@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -312,6 +314,75 @@ func (db *PostgresDB) createTables() error {
 				);
 			`)
 	return err
+}
+
+// Backup executes pg_dump using the pool's connection string.
+func (db *PostgresDB) Backup(filePath string) error {
+	// Get the original connection string from the pool's config
+	dsn := db.Pool.Config().ConnString()
+
+	cmd := exec.Command("pg_dump",
+		"-d", dsn,
+		"-f", filePath, // Output file
+		"--clean",     // Add 'DROP' statements before 'CREATE'
+		"--if-exists", // Add 'IF EXISTS' to 'DROP' statements
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	// Run the command
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("pg_dump failed: %s: %w", stderr.String(), err)
+	}
+
+	fmt.Printf("Database backup successful: %s\n", filePath)
+	return nil
+}
+
+// Restore executes psql using the pool's connection string.
+// !! WARNING: This is a destructive operation.
+func (db *PostgresDB) Restore(filePath string) error {
+	// Get the original connection string for re-connecting
+	// and for the psql command.
+	dsn := db.Pool.Config().ConnString()
+
+	// --- 1. Close the current connection pool ---
+	db.Pool.Close()
+	fmt.Println("Database pool closed for restore.")
+
+	// --- 2. Prepare and run the psql command ---
+	// psql also accepts the full DSN with the -d flag.
+	cmd := exec.Command("psql",
+		"-d", dsn,
+		"-f", filePath, // Input file
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	// Run the command
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("psql restore failed: %s: %w", stderr.String(), err)
+	}
+
+	fmt.Printf("Database restore successful from: %s\n", filePath)
+
+	// --- 3. Re-open the connection pool ---
+	poolCfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return fmt.Errorf("failed to parse config for re-connect: %w", err)
+	}
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	if err != nil {
+		return fmt.Errorf("failed to re-connect pool after restore: %w", err)
+	}
+
+	// Assign the new pool back to the struct
+	db.Pool = pool
+	fmt.Println("Database pool re-connected.")
+	return nil
 }
 
 func (db *PostgresDB) CleanResponses() error {
