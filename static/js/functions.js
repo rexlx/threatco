@@ -214,7 +214,7 @@ window.onload = () => {
             const userData = {
                 "email": email,
                 "password": key,
-                "is_admin": admin
+                "admin": admin
             };
             fetch('/adduser', {
                 method: 'POST',
