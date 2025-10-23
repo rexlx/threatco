@@ -847,6 +847,15 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) BackupHandler(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value("email").(string)
 	s.LogInfo(fmt.Sprintf("%v requested a backup", user))
+	u, err := s.DB.GetUserByEmail(user)
+	if err != nil {
+		http.Error(w, "error retrieving user info", http.StatusInternalServerError)
+		return
+	}
+	if !u.Admin {
+		http.Error(w, "only admin users can request backups", http.StatusForbidden)
+		return
+	}
 
 	// Set response headers *before* writing any data
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -861,7 +870,7 @@ func (s *Server) BackupHandler(w http.ResponseWriter, r *http.Request) {
 	defer gz.Close()
 
 	// Pass the gzip writer to your Backup function
-	err := s.DB.Backup(gz)
+	err = s.DB.Backup(gz)
 	if err != nil {
 		// IMPORTANT: If the backup fails mid-stream, the headers
 		// are already sent, so we can't send a clean http.Error.
