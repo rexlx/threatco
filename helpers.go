@@ -531,7 +531,7 @@ func DeepMapCopy(x, y map[string]float64) {
 func createLineChart(seriesName string, data []Coord) *charts.Line {
 	line := charts.NewLine()
 	line.SetGlobalOptions(
-		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemePurplePassion}),
+		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeMacarons, BackgroundColor: "#333"}),
 		charts.WithTitleOpts(opts.Title{
 			Title: seriesName,
 		}),

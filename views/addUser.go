@@ -32,7 +32,7 @@ var AddUserSection string = `
 
             <div class="field">
                 <div class="control">
-                    <button class="button is-primary" type="sumbit">add</button>
+                    <button class="button is-primary" type="submit">add</button>
                 </div>
             </div>
         </form>

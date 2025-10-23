@@ -37,6 +37,7 @@ var (
 	syslogHost    = flag.String("syslog-host", "localhost", "Syslog host")
 	syslogIndex   = flag.String("syslog-index", "threatco", "Syslog index")
 	healthCheck   = flag.Int("health-check", 60, "Health check interval in seconds")
+	restoreDB     = flag.String("restore-db", "", "filepath to sql file if one needs to restore")
 )
 
 type Server struct {
@@ -141,6 +142,14 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		database = db
 	default:
 		log.Fatalf("unsupported database type: %s", dbType)
+	}
+	if *restoreDB != "" {
+		fmt.Println("got the restore db flag:", *restoreDB)
+		err := database.Restore(*restoreDB)
+		if err != nil {
+			log.Fatalf("could not restore database from %s: %v", *restoreDB, err)
+		}
+		fmt.Printf("database restored from %s successfully", *restoreDB)
 	}
 	svr := &Server{
 		Hub:            NewHub(),
@@ -482,6 +491,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
 	s.Gateway.HandleFunc("/coordinate", http.HandlerFunc(s.ValidateSessionToken(s.GetCoordinateHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
+	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*knowledgeBase))))

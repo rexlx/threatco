@@ -845,7 +845,8 @@ func (s *Server) LogsSSRHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) BackupHandler(w http.ResponseWriter, r *http.Request) {
-	s.Log.Println("BackupHandler called")
+	user := r.Context().Value("email").(string)
+	s.LogInfo(fmt.Sprintf("%v requested a backup", user))
 
 	// Set response headers *before* writing any data
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -869,7 +870,7 @@ func (s *Server) BackupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Log.Println("Backup stream completed successfully.")
+	s.LogInfo("Backup stream completed successfully.")
 }
 
 // bump
