@@ -61,6 +61,14 @@ curl -X POST http://localhost:8080/adduser -d '{"email": "rxlx@nullferatu.com", 
 curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", "admin": true, "password": "beepbo0p"}'
 ```
 
+## backup and restore
+
+backup and restore is limited to the postgresql database type at this time. it is recommneded that you encrypt your backup as the users api keys are not hashed.
+
+- user must be *admin* to call the /backup endpoint.
+- backup calls are logged to your configured logger for auditing purposes
+- use **-restore-db file.sql** to restore (this is DESTRUCTIVE!)
+
 ## supported plugins
 - crowdstrike
 - [deepfry](https://github.com/rexlx/deepfry)
