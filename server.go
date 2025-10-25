@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -57,6 +60,7 @@ type Server struct {
 }
 
 type Details struct {
+	Key               *cipher.AEAD       `json:"-"`
 	FirstUserMode     bool               `json:"first_user_mode"`
 	FQDN              string             `json:"fqdn"`
 	SupportedServices []ServiceType      `json:"supported_services"`
@@ -101,6 +105,10 @@ type LogItem struct {
 }
 
 func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
+	keyHex := os.Getenv("THREATCO_ENCRYPTION_KEY")
+	if keyHex == "" {
+		logger.Fatal("THREATCO_ENCRYPTION_KEY environment variable not set")
+	}
 	var database Database
 	targets := make(map[string]*Endpoint)
 	operators := make(map[string]ProxyOperator)
@@ -126,6 +134,19 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.HttpOnly = true
 	if dbLocation == "" {
 		dbLocation = os.Getenv("THREATCO_DB_LOCATION")
+	}
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		log.Fatalf("Failed to decode ENCRYPTION_KEY: %v", err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		log.Fatalf("Failed to create cipher block: %v", err)
+	}
+	aesGCM, err := cipher.NewGCM(block)
+
+	if err != nil {
+		log.Fatalf("Failed to create GCM: %v", err)
 	}
 	switch dbType {
 	case "bbolt":
@@ -165,6 +186,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		Targets:        targets,
 		ID:             id,
 		Details: Details{
+			Key:               &aesGCM,
 			FQDN:              *fqdn,
 			SupportedServices: SupportedServices,
 			Address:           address,
@@ -177,13 +199,55 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	return svr
 }
 
-func GetDBHost() string {
-	host := os.Getenv("DB_HOST")
-	if host == "" {
-		fmt.Println("DB_HOST not set, using localhost")
-		host = "localhost"
+func (s *Server) Encrypt(plaintext string) (string, error) {
+	// 1. Get the cipher from your server struct
+	aesGCM := *s.Details.Key
+
+	// 2. Create a new, unique nonce
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to create nonce: %w", err)
 	}
-	return host
+
+	// 3. Encrypt the data
+	ciphertext := aesGCM.Seal(nil, nonce, []byte(plaintext), nil)
+
+	// 4. Return as "nonce:ciphertext"
+	return fmt.Sprintf("%x:%x", nonce, ciphertext), nil
+}
+
+// Decrypt takes an encrypted "nonce:ciphertext" string from the DB.
+// It returns the plaintext string or an error if decryption fails.
+func (s *Server) Decrypt(encryptedValue string) (string, error) {
+	start := time.Now()
+	defer func(t time.Time) {
+		fmt.Println("Decrypt took", time.Since(t))
+	}(start)
+	// 1. Split the "nonce:ciphertext" parts
+	parts := strings.Split(encryptedValue, ":")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid encrypted data format")
+	}
+
+	nonce, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode nonce: %w", err)
+	}
+	ciphertext, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
+	}
+
+	// 2. Get the cipher and decrypt
+	aesGCM := *s.Details.Key
+	plaintextBytes, err := aesGCM.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		// Decryption failed! This means the key is wrong or data is corrupt.
+		return "", fmt.Errorf("failed to decrypt data: %w", err)
+	}
+
+	// 3. Success! Return the plaintext.
+	return string(plaintextBytes), nil
 }
 
 func (s *Server) addStat(key string, value float64) {

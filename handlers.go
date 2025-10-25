@@ -358,7 +358,14 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// s.Memory.Lock()
+	enc, err := s.Encrypt(user.Key)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmp := user.Key
+	user.Key = enc
 	err = s.DB.AddUser(*user)
 	if err != nil {
 		s.Log.Println("error", err)
@@ -366,6 +373,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		// s.Memory.Unlock()
 		return
 	}
+	user.Key = tmp
 	// s.Memory.Unlock()
 	out, err := json.Marshal(user)
 	if err != nil {

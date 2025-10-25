@@ -47,14 +47,20 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 			}
 
 			email := parts[0]
+			plaintext := parts[1]
 			user, err := s.DB.GetUserByEmail(email)
 			if err != nil {
 				fmt.Println("Error getting user by email:", err, user, token)
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}
-
-			if user.Key != parts[1] {
+			decrypted, err := s.Decrypt(user.Key)
+			if err != nil {
+				fmt.Println("Error decrypting token part:", err, plaintext, token)
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
+			}
+			if string(decrypted) != plaintext {
 				fmt.Println("User key mismatch:", user.Key, parts[1], token, parts)
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
