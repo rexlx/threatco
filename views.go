@@ -19,7 +19,7 @@ func (s *Server) LogViewHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	email := r.Context().Value("email").(string)
 	user, err := s.DB.GetUserByEmail(email)
-	if err != nil || !user.Admin {
+	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

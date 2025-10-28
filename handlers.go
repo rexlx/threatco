@@ -343,7 +343,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	//
 	var b bool
-	if nur.Admin == "on" {
+	if nur.Admin == "on" || nur.Admin == "true" {
 		b = true
 	}
 	user, err := NewUser(nur.Email, b, s.Details.SupportedServices)

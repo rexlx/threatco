@@ -4,6 +4,7 @@ var ViewUsersSection string = `
 <section class="section has-background-black">
 	<div class="container">
 		<h1 class="title has-text-primary">Users</h1>
+		<div id="userResults" style="margin-bottom: 1rem;"></div>
 		<table class="table is-fullwidth is-striped">
 			<thead>
 				<tr>
@@ -13,6 +14,7 @@ var ViewUsersSection string = `
 					<th>Created</th>
 					<th>Updated</th>
 					<th>Delete</th>
+					<th>New API Key</th>
 				</tr>
 			</thead>
 			<tbody>
