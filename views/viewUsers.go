@@ -31,5 +31,6 @@ var UserTableBody string = `
 	<td>%v</td>
 	<td>%v</td>
 	<td>%v</td>
+	<td>%v</td>
 </tr>
 `

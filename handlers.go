@@ -384,6 +384,93 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+func (s *Server) NewApiKeyGeneratorHandler(w http.ResponseWriter, r *http.Request) {
+	email := r.Context().Value("email").(string)
+	user, err := s.DB.GetUserByEmail(email)
+	if err != nil {
+		fmt.Println("error getting user by email:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = user.UpdateApiKey()
+	if err != nil {
+		fmt.Println("error updating api key:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	enc, err := s.Encrypt(user.Key)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmp := user.Key
+	user.Key = enc
+	err = s.DB.AddUser(user)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// s.Memory.Unlock()
+		return
+	}
+	user.Key = tmp
+	out, err := json.Marshal(user)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
+type GenerateAPIKeyRequest struct {
+	Email string `json:"email"`
+}
+
+func (s *Server) GenerateAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
+	var gar GenerateAPIKeyRequest
+	err := json.NewDecoder(r.Body).Decode(&gar)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	user, err := s.DB.GetUserByEmail(gar.Email)
+	if err != nil {
+		fmt.Println("error getting user by email:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = user.UpdateApiKey()
+	if err != nil {
+		fmt.Println("error updating user API key:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	enc, err := s.Encrypt(user.Key)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmp := user.Key
+	user.Key = enc
+	err = s.DB.AddUser(user)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// s.Memory.Unlock()
+		return
+	}
+	user.Key = tmp
+	out, err := json.Marshal(user)
+	if err != nil {
+		s.Log.Println("error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// var written int
 	var req ProxyRequest

@@ -556,6 +556,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/coordinate", http.HandlerFunc(s.ValidateSessionToken(s.GetCoordinateHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
+	s.Gateway.HandleFunc("/updatekey", http.HandlerFunc(s.ValidateSessionToken(s.NewApiKeyGeneratorHandler)))
+	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
 	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*knowledgeBase))))

@@ -73,6 +73,15 @@ func (u *User) SetPassword(password string) error {
 	return nil
 }
 
+func (u *User) UpdateApiKey() error {
+	key, err := generateAPIKey()
+	if err != nil {
+		return err
+	}
+	u.Key = key
+	return nil
+}
+
 func (u *User) MarshalBinary() ([]byte, error) {
 	return json.Marshal(u)
 }

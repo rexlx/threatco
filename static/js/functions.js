@@ -4,6 +4,7 @@ const logarea = document.getElementById('logarea');
 const scrollbar = document.querySelector('.scrollbar');
 const thumb = document.querySelector('.thumb');
 
+
 function deleteUser(email) {
     if (!confirm('Are you sure you want to delete this user?')) {
         return;
@@ -30,6 +31,62 @@ function deleteUser(email) {
             document.getElementById('userResults').innerHTML = '<div class="notification is-danger">There was a problem deleting the user</div>';
         });
 }
+
+
+function generateNewKey(email) {
+    // Assumed endpoint for the Go handler
+    const endpoint = '/generateapikey'; 
+    const resultsDiv = document.getElementById('userResults');
+
+    // Clear previous results
+    if (resultsDiv) {
+        resultsDiv.innerHTML = '';
+    }
+
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            // The Go handler uses json.NewDecoder, so we must send JSON
+            'Content-Type': 'application/json' 
+        },
+        // Send the email as a JSON object
+        body: JSON.stringify({ email: email }) 
+    })
+    .then(response => {
+        if (response.ok) {
+            // The Go handler returns the full user object as JSON
+            return response.json(); 
+        }
+        // Handle HTTP errors (e.g., 400, 500)
+        return response.text().then(text => {
+            throw new Error(`Server error: ${text}`);
+        });
+    })
+    .then(user => {
+        // Successfully got the user object
+        if (user && user.key) {
+            // Display the key in a custom modal instead of alert()
+            // displayApiKeyModal(user.key);
+
+            // Reverted to a standard alert() per user request to avoid CSS collisions
+            // This matches the style used in deleteUser()
+            alert(`New API Key:\n\n${user.key}\n\nPlease copy this key. You will not be able to see it again.`);
+        } else {
+            // Handle cases where the key is missing from the response
+            throw new Error('Invalid user data received from server.');
+        }
+    })
+    .catch(error => {
+        // Handle fetch errors (network failure) or errors thrown above
+        console.error('There was a problem with the generate key operation:', error);
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `<div class="notification is-danger">Error generating key: ${error.message}</div>`;
+        }
+    });
+}
+
+
+
 function logout() {
     fetch('/logout', {
         method: 'GET'

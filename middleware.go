@@ -34,8 +34,11 @@ func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// type contextKey string
+
 func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// const emailKey = contextKey("email")
 		token, err := s.GetTokenFromSession(r)
 
 		if err != nil {
