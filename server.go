@@ -60,6 +60,7 @@ type Server struct {
 }
 
 type Details struct {
+	PreviousKey       *cipher.AEAD       `json:"-"`
 	Key               *cipher.AEAD       `json:"-"`
 	FirstUserMode     bool               `json:"first_user_mode"`
 	FQDN              string             `json:"fqdn"`
@@ -109,6 +110,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	if keyHex == "" {
 		logger.Fatal("THREATCO_ENCRYPTION_KEY environment variable not set")
 	}
+	keyOldHex := os.Getenv("THREATCO_OLD_ENCRYPTION_KEY")
 	var database Database
 	targets := make(map[string]*Endpoint)
 	operators := make(map[string]ProxyOperator)
@@ -194,6 +196,22 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 			Stats:             make(map[string]float64),
 		},
 	}
+	if keyOldHex != "" {
+		logger.Println("Old encryption key detected, will attempt to support decryption with old key")
+		oldKey, err := hex.DecodeString(keyOldHex)
+		if err != nil {
+			logger.Fatalf("Failed to decode THREATCO_OLD_ENCRYPTION_KEY: %v", err)
+		}
+		oldBlock, err := aes.NewCipher(oldKey)
+		if err != nil {
+			logger.Fatalf("Failed to create cipher block for old key: %v", err)
+		}
+		oldAesGCM, err := cipher.NewGCM(oldBlock)
+		if err != nil {
+			logger.Fatalf("Failed to create GCM for old key: %v", err)
+		}
+		svr.Details.PreviousKey = &oldAesGCM
+	}
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	fmt.Println("Server initialized with ID:", svr.ID, svr.Details.Address)
 	return svr
@@ -216,9 +234,71 @@ func (s *Server) Encrypt(plaintext string) (string, error) {
 	return fmt.Sprintf("%x:%x", nonce, ciphertext), nil
 }
 
+// In server.go
+
+// A helper error to identify plaintext
+var ErrInvalidFormat = errors.New("invalid encrypted data format (might be plaintext)")
+
+// tryDecrypt is a helper to attempt decryption with a specific key.
+func (s *Server) tryDecrypt(encryptedValue string, key cipher.AEAD) (string, error) {
+	parts := strings.Split(encryptedValue, ":")
+	if len(parts) != 2 {
+		return "", ErrInvalidFormat
+	}
+
+	nonce, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return "", ErrInvalidFormat
+	}
+	ciphertext, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return "", ErrInvalidFormat
+	}
+
+	// This is the main decryption call
+	plaintextBytes, err := key.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		// This is a real crypto error, e.g., "message authentication failed"
+		return "", err
+	}
+
+	return string(plaintextBytes), nil
+}
+
+// Decrypt handles new keys, old keys, and plaintext.
+func (s *Server) Decrypt(dbValue string) (string, error) {
+	// 1. Try decrypting with the NEW key first
+	if s.Details.Key != nil {
+		plaintext, err := s.tryDecrypt(dbValue, *s.Details.Key)
+		if err == nil {
+			return plaintext, nil // Success with new key
+		}
+		// If err is NOT a format error, it's a real crypto failure.
+		if !errors.Is(err, ErrInvalidFormat) {
+			return "", err
+		}
+	}
+
+	// 2. If it failed, check if we have an OLD key to try
+	if s.Details.PreviousKey != nil {
+		plaintext, errOld := s.tryDecrypt(dbValue, *s.Details.PreviousKey)
+		if errOld == nil {
+			return plaintext, nil // Success with old key
+		}
+		// If err is NOT a format error, it's a real crypto failure.
+		if !errors.Is(errOld, ErrInvalidFormat) {
+			return "", errOld
+		}
+	}
+
+	// 3. If both failed with format errors, it must be plaintext.
+	// We return the original value from the DB.
+	return dbValue, nil
+}
+
 // Decrypt takes an encrypted "nonce:ciphertext" string from the DB.
 // It returns the plaintext string or an error if decryption fails.
-func (s *Server) Decrypt(encryptedValue string) (string, error) {
+func (s *Server) LegacyDecrypt(encryptedValue string) (string, error) {
 	start := time.Now()
 	defer func(t time.Time) {
 		fmt.Println("Decrypt took", time.Since(t))

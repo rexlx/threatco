@@ -57,16 +57,26 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}
-			decrypted, err := s.Decrypt(user.Key)
+			decryptedDBKey, err := s.Decrypt(user.Key)
 			if err != nil {
-				fmt.Println("Error decrypting token part:", err, plaintext, token)
+				fmt.Println("Error decrypting key:", err, user.Key)
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}
-			if string(decrypted) != plaintext {
+			if decryptedDBKey != plaintext {
 				fmt.Println("User key mismatch:", user.Key, parts[1], token, parts)
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
+			}
+
+			newlyEncrypted, _ := s.Encrypt(plaintext)
+			if user.Key != newlyEncrypted {
+				user.Key = newlyEncrypted
+				go func(u User) {
+					if err := s.DB.AddUser(u); err != nil {
+						s.LogError(fmt.Errorf("failed to migrate key for user %s: %w", u.Email, err))
+					}
+				}(user)
 			}
 
 			ctx := context.WithValue(r.Context(), "email", email)
