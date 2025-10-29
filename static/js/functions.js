@@ -4,6 +4,7 @@ const logarea = document.getElementById('logarea');
 const scrollbar = document.querySelector('.scrollbar');
 const thumb = document.querySelector('.thumb');
 
+
 function deleteUser(email) {
     if (!confirm('Are you sure you want to delete this user?')) {
         return;
@@ -30,6 +31,68 @@ function deleteUser(email) {
             document.getElementById('userResults').innerHTML = '<div class="notification is-danger">There was a problem deleting the user</div>';
         });
 }
+
+/**
+ * Generates a new API key for a user and displays it in a custom modal.
+ * @param {string} email - The email of the user to generate a key for.
+ */
+function generateNewKey(email) {
+    const endpoint = '/generatekey'; 
+    const resultsDiv = document.getElementById('userResults');
+
+    if (resultsDiv) {
+        resultsDiv.innerHTML = '';
+    }
+
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ email: email }) 
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json(); 
+        }
+        return response.text().then(text => {
+            throw new Error(`Server error: ${text}`);
+        });
+    })
+    .then(user => {
+        // Successfully got the user object
+        if (user && user.key) {
+
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `
+                    <div class="notification is-success">
+                        <strong style="display: block; margin-bottom: 8px;">New API Key Generated</strong>
+                        <p style="margin-bottom: 12px;">Click the key below to select it, then press Ctrl+C or Cmd+C to copy. You will not be able to see this key again.</p>
+                        <input type="text" class="input" 
+                               value="${user.key}" 
+                               readonly 
+                               onclick="this.select();" 
+                               style="width: 100%; cursor: pointer;">
+                    </div>
+                `;
+            } else {
+                console.error("Could not find 'userResults' div to display API key.");
+                prompt("New API Key. Press Ctrl+C to copy:", user.key);
+            }
+
+
+        } else {
+            throw new Error('Invalid user data received from server.');
+        }
+    })
+    .catch(error => {
+        console.error('There was a problem with the generate key operation:', error);
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `<div class="notification is-danger">Error generating key: ${error.message}</div>`;
+        }
+    });
+}
+
 function logout() {
     fetch('/logout', {
         method: 'GET'

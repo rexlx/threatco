@@ -17,20 +17,32 @@ func (s *Server) LogViewHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
-	// s.Memory.RLock()
-	// defer s.Memory.RUnlock()
+	email := r.Context().Value("email").(string)
+	user, err := s.DB.GetUserByEmail(email)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	_users, err := s.DB.GetAllUsers()
 	if err != nil {
 		s.Log.Println("AllUsersViewHandler", err)
 	}
+	var deleteButton, newKeyButton string
 	users := ""
 	for _, u := range _users {
-		deleteButton := fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')">Delete</button>`, u.Email)
+		if user.Admin {
+			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')">Delete</button>`, u.Email)
+			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined" onclick="generateNewKey('%s')">New API Key</button>`, u.Email)
+		} else {
+			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')" disabled>Delete</button>`, u.Email)
+			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined" onclick="generateNewKey('%s')" disabled>New API Key</button>`, u.Email)
+		}
+
 		svcs := []string{}
 		for _, svc := range u.Services {
 			svcs = append(svcs, svc.Kind)
 		}
-		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated, deleteButton)
+		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated, deleteButton, newKeyButton)
 	}
 	tempDiv := fmt.Sprintf(views.ViewUsersSection, users)
 	fmt.Fprintf(w, views.BaseView, tempDiv)

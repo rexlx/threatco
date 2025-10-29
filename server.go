@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -57,6 +60,8 @@ type Server struct {
 }
 
 type Details struct {
+	PreviousKey       *cipher.AEAD       `json:"-"`
+	Key               *cipher.AEAD       `json:"-"`
 	FirstUserMode     bool               `json:"first_user_mode"`
 	FQDN              string             `json:"fqdn"`
 	SupportedServices []ServiceType      `json:"supported_services"`
@@ -100,7 +105,20 @@ type LogItem struct {
 	Error bool      `json:"error"`
 }
 
+var ErrInvalidFormat = errors.New("invalid encrypted data format (might be plaintext)")
+
+const (
+	KeyUsedNew       = "new"
+	KeyUsedOld       = "old"
+	KeyUsedPlaintext = "plaintext"
+)
+
 func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
+	keyHex := os.Getenv("THREATCO_ENCRYPTION_KEY")
+	if keyHex == "" {
+		logger.Fatal("THREATCO_ENCRYPTION_KEY environment variable not set")
+	}
+	keyOldHex := os.Getenv("THREATCO_OLD_ENCRYPTION_KEY")
 	var database Database
 	targets := make(map[string]*Endpoint)
 	operators := make(map[string]ProxyOperator)
@@ -126,6 +144,19 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.HttpOnly = true
 	if dbLocation == "" {
 		dbLocation = os.Getenv("THREATCO_DB_LOCATION")
+	}
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		log.Fatalf("Failed to decode ENCRYPTION_KEY: %v", err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		log.Fatalf("Failed to create cipher block: %v", err)
+	}
+	aesGCM, err := cipher.NewGCM(block)
+
+	if err != nil {
+		log.Fatalf("Failed to create GCM: %v", err)
 	}
 	switch dbType {
 	case "bbolt":
@@ -165,6 +196,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		Targets:        targets,
 		ID:             id,
 		Details: Details{
+			Key:               &aesGCM,
 			FQDN:              *fqdn,
 			SupportedServices: SupportedServices,
 			Address:           address,
@@ -172,18 +204,117 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 			Stats:             make(map[string]float64),
 		},
 	}
+	if keyOldHex != "" {
+		logger.Println("Old encryption key detected, will attempt to support decryption with old key")
+		oldKey, err := hex.DecodeString(keyOldHex)
+		if err != nil {
+			logger.Fatalf("Failed to decode THREATCO_OLD_ENCRYPTION_KEY: %v", err)
+		}
+		oldBlock, err := aes.NewCipher(oldKey)
+		if err != nil {
+			logger.Fatalf("Failed to create cipher block for old key: %v", err)
+		}
+		oldAesGCM, err := cipher.NewGCM(oldBlock)
+		if err != nil {
+			logger.Fatalf("Failed to create GCM for old key: %v", err)
+		}
+		svr.Details.PreviousKey = &oldAesGCM
+	}
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	fmt.Println("Server initialized with ID:", svr.ID, svr.Details.Address)
 	return svr
 }
 
-func GetDBHost() string {
-	host := os.Getenv("DB_HOST")
-	if host == "" {
-		fmt.Println("DB_HOST not set, using localhost")
-		host = "localhost"
+func (s *Server) Encrypt(plaintext string) (string, error) {
+	// 1. Get the cipher from your server struct
+	aesGCM := *s.Details.Key
+
+	// 2. Create a new, unique nonce
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to create nonce: %w", err)
 	}
-	return host
+
+	// 3. Encrypt the data
+	ciphertext := aesGCM.Seal(nil, nonce, []byte(plaintext), nil)
+
+	// 4. Return as "nonce:ciphertext"
+	return fmt.Sprintf("%x:%x", nonce, ciphertext), nil
+}
+
+func (s *Server) tryDecrypt(encryptedValue string, key cipher.AEAD) (string, error) {
+	parts := strings.Split(encryptedValue, ":")
+	if len(parts) != 2 {
+		return "", ErrInvalidFormat
+	}
+
+	nonce, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return "", ErrInvalidFormat
+	}
+	ciphertext, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return "", ErrInvalidFormat
+	}
+
+	plaintextBytes, err := key.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintextBytes), nil
+}
+
+func (s *Server) Decrypt(dbValue string) (string, string, error) {
+	if s.Details.Key != nil {
+		plaintext, err := s.tryDecrypt(dbValue, *s.Details.Key)
+		if err == nil {
+			return plaintext, KeyUsedNew, nil
+		}
+		if !errors.Is(err, ErrInvalidFormat) {
+			return "", "", err
+		}
+	}
+
+	if s.Details.PreviousKey != nil {
+		plaintext, errOld := s.tryDecrypt(dbValue, *s.Details.PreviousKey)
+		if errOld == nil {
+			return plaintext, KeyUsedOld, nil
+		}
+		if !errors.Is(errOld, ErrInvalidFormat) {
+			return "", "", errOld
+		}
+	}
+
+	return dbValue, KeyUsedPlaintext, nil
+}
+
+func (s *Server) LegacyDecrypt(encryptedValue string) (string, error) {
+	start := time.Now()
+	defer func(t time.Time) {
+		fmt.Println("Decrypt took", time.Since(t))
+	}(start)
+	parts := strings.Split(encryptedValue, ":")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid encrypted data format")
+	}
+
+	nonce, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode nonce: %w", err)
+	}
+	ciphertext, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
+	}
+
+	aesGCM := *s.Details.Key
+	plaintextBytes, err := aesGCM.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt data: %w", err)
+	}
+
+	return string(plaintextBytes), nil
 }
 
 func (s *Server) addStat(key string, value float64) {
@@ -206,8 +337,6 @@ func (s *Server) updateCache() {
 	for k, v := range s.Details.Stats {
 		stat.Data[k] = v
 	}
-	// set the size limit of the cache here by removing the oldest item if
-	// the length is greater than whatever you set
 	s.Cache.StatsHistory = append(s.Cache.StatsHistory, stat)
 }
 
@@ -247,7 +376,6 @@ func (s *Server) ProcessTransientResponses() {
 		select {
 		case resp := <-s.RespCh:
 			s.Memory.Lock()
-			// TODO: check if the response already exists in the cache, if so append to the existing entry?
 			r, ok := s.Cache.Responses[resp.ID]
 			if !ok {
 				initialData, err := MergeJSONData(nil, resp.Data)
@@ -331,7 +459,6 @@ func (s *Server) GetTokenFromSession(r *http.Request) (string, error) {
 }
 
 func (s *Server) AddResponse(vendor, uid string, data []byte) {
-	// uid := uuid.New().String()
 	resp := ResponseItem{
 		Vendor: vendor,
 		ID:     uid,
@@ -458,12 +585,10 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 	s.Gateway.HandleFunc("/history", s.GetStatHistoryHandler)
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
-	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
 	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateSessionToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateSessionToken(s.GetUserHandler)))
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateSessionToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/ring", http.HandlerFunc(s.ValidateSessionToken(s.SendTestNotificationHandler)))
-	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.Handle("/archive", http.HandlerFunc(s.ValidateSessionToken(s.ArchiveResponseHandler)))
 	s.Gateway.Handle("/stats", http.HandlerFunc(s.ValidateSessionToken(s.GetStatsHandler)))
@@ -476,7 +601,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/create-user", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
 	s.Gateway.HandleFunc("/login", s.LoginHandler)
-	// s.Gateway.HandleFunc("/splash", s.LoginViewHandler)
 	s.Gateway.HandleFunc("/services", http.HandlerFunc(s.ValidateSessionToken(s.ViewServicesHandler)))
 	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
@@ -492,10 +616,10 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/coordinate", http.HandlerFunc(s.ValidateSessionToken(s.GetCoordinateHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
-	// s.FileServer = http.FileServer(http.Dir(*staticPath))
+	s.Gateway.HandleFunc("/updatekey", http.HandlerFunc(s.ValidateSessionToken(s.NewApiKeyGeneratorHandler)))
+	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*knowledgeBase))))
-	// s.Gateway.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(*webApp))))
 	appDir := http.Dir(*webApp)
 	s.Gateway.Handle("/app/", http.StripPrefix("/app/", s.ProtectedFileServer(appDir)))
 	if s.Details.FirstUserMode {
@@ -506,7 +630,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
 	go s.Hub.Run()
-	// s.AddResponse("fake", CreateFakeResponse())
 }
 
 func (s *Server) UpdateCharts() {
@@ -524,9 +647,6 @@ func (s *Server) UpdateCharts() {
 	s.Details.Stats["total_alloc"] = float64(m.TotalAlloc) / 1024
 	s.Details.Stats["sys"] = float64(m.Sys) / 1024
 	s.Details.Stats["num_gc"] = float64(m.NumGC)
-	// s.Details.Stats["poll_time"] = float64(time.Now().Unix())
-	// s.Details.Stats["poll_interval"] = float64(t.Seconds())
-	// s.Details.Stats["last_gc"] = float64(m.LastGC) / 1000000
 	s.Details.Stats["pause_total_ns"] = float64(m.PauseTotalNs) / 1000000
 	for i, stat := range s.Details.Stats {
 		_, ok := s.Cache.Coordinates[i]
@@ -550,10 +670,6 @@ func (s *Server) UpdateCharts() {
 	}
 	s.Cache.Charts = buf.Bytes()
 }
-
-// func (s *Server) BroacastToAPIs(fn string, uh UploadHandler) {
-
-// }
 
 func LogItemsToArticle(logs []LogItem) string {
 	out := `<div class="scrollbar">
@@ -583,7 +699,6 @@ func LogItemsToPanel(logs []LogItem) string {
 	out := `<div class="scrollbar">
             <div class="thumb"></div>
         </div>`
-	// Note the template is now for a panel, not a message
 	templ := `<article class="panel is-%s">
                 <p class="panel-heading">
                     %s
@@ -599,7 +714,6 @@ func LogItemsToPanel(logs []LogItem) string {
 		} else {
 			color = "info"
 		}
-		// We add a little margin to each panel
 		out += fmt.Sprintf(`<div style="margin-bottom: 1em;">`+templ+`</div>`, color, log.Time, log.Data)
 	}
 	return out

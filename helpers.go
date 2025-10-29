@@ -528,6 +528,15 @@ func DeepMapCopy(x, y map[string]float64) {
 	}
 }
 
+func GetDBHost() string {
+	host := os.Getenv("DB_HOST")
+	if host == "" {
+		fmt.Println("DB_HOST not set, using localhost")
+		host = "localhost"
+	}
+	return host
+}
+
 func createLineChart(seriesName string, data []Coord) *charts.Line {
 	line := charts.NewLine()
 	line.SetGlobalOptions(
