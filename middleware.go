@@ -70,9 +70,9 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 				newlyEncrypted, _ := s.Encrypt(plaintext)
 				user.Key = newlyEncrypted
 				go func(u User) {
-					s.LogInfo(fmt.Sprintf("Lazily migrating API key for user %s", u.Email))
+					fmt.Printf("Lazily migrating API key for user %s", u.Email)
 					if err := s.DB.AddUser(u); err != nil {
-						s.LogError(fmt.Errorf("failed to migrate key for user %s: %w", u.Email, err))
+						fmt.Printf("failed to migrate key for user %s: %v", u.Email, err)
 					}
 				}(user)
 			}
