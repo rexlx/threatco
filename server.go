@@ -105,6 +105,14 @@ type LogItem struct {
 	Error bool      `json:"error"`
 }
 
+var ErrInvalidFormat = errors.New("invalid encrypted data format (might be plaintext)")
+
+const (
+	KeyUsedNew       = "new"
+	KeyUsedOld       = "old"
+	KeyUsedPlaintext = "plaintext"
+)
+
 func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
 	keyHex := os.Getenv("THREATCO_ENCRYPTION_KEY")
 	if keyHex == "" {
@@ -234,12 +242,6 @@ func (s *Server) Encrypt(plaintext string) (string, error) {
 	return fmt.Sprintf("%x:%x", nonce, ciphertext), nil
 }
 
-// In server.go
-
-// A helper error to identify plaintext
-var ErrInvalidFormat = errors.New("invalid encrypted data format (might be plaintext)")
-
-// tryDecrypt is a helper to attempt decryption with a specific key.
 func (s *Server) tryDecrypt(encryptedValue string, key cipher.AEAD) (string, error) {
 	parts := strings.Split(encryptedValue, ":")
 	if len(parts) != 2 {
@@ -255,55 +257,43 @@ func (s *Server) tryDecrypt(encryptedValue string, key cipher.AEAD) (string, err
 		return "", ErrInvalidFormat
 	}
 
-	// This is the main decryption call
 	plaintextBytes, err := key.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		// This is a real crypto error, e.g., "message authentication failed"
 		return "", err
 	}
 
 	return string(plaintextBytes), nil
 }
 
-// Decrypt handles new keys, old keys, and plaintext.
-func (s *Server) Decrypt(dbValue string) (string, error) {
-	// 1. Try decrypting with the NEW key first
+func (s *Server) Decrypt(dbValue string) (string, string, error) {
 	if s.Details.Key != nil {
 		plaintext, err := s.tryDecrypt(dbValue, *s.Details.Key)
 		if err == nil {
-			return plaintext, nil // Success with new key
+			return plaintext, KeyUsedNew, nil
 		}
-		// If err is NOT a format error, it's a real crypto failure.
 		if !errors.Is(err, ErrInvalidFormat) {
-			return "", err
+			return "", "", err
 		}
 	}
 
-	// 2. If it failed, check if we have an OLD key to try
 	if s.Details.PreviousKey != nil {
 		plaintext, errOld := s.tryDecrypt(dbValue, *s.Details.PreviousKey)
 		if errOld == nil {
-			return plaintext, nil // Success with old key
+			return plaintext, KeyUsedOld, nil
 		}
-		// If err is NOT a format error, it's a real crypto failure.
 		if !errors.Is(errOld, ErrInvalidFormat) {
-			return "", errOld
+			return "", "", errOld
 		}
 	}
 
-	// 3. If both failed with format errors, it must be plaintext.
-	// We return the original value from the DB.
-	return dbValue, nil
+	return dbValue, KeyUsedPlaintext, nil
 }
 
-// Decrypt takes an encrypted "nonce:ciphertext" string from the DB.
-// It returns the plaintext string or an error if decryption fails.
 func (s *Server) LegacyDecrypt(encryptedValue string) (string, error) {
 	start := time.Now()
 	defer func(t time.Time) {
 		fmt.Println("Decrypt took", time.Since(t))
 	}(start)
-	// 1. Split the "nonce:ciphertext" parts
 	parts := strings.Split(encryptedValue, ":")
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid encrypted data format")
@@ -318,15 +308,12 @@ func (s *Server) LegacyDecrypt(encryptedValue string) (string, error) {
 		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
 	}
 
-	// 2. Get the cipher and decrypt
 	aesGCM := *s.Details.Key
 	plaintextBytes, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		// Decryption failed! This means the key is wrong or data is corrupt.
 		return "", fmt.Errorf("failed to decrypt data: %w", err)
 	}
 
-	// 3. Success! Return the plaintext.
 	return string(plaintextBytes), nil
 }
 
@@ -350,8 +337,6 @@ func (s *Server) updateCache() {
 	for k, v := range s.Details.Stats {
 		stat.Data[k] = v
 	}
-	// set the size limit of the cache here by removing the oldest item if
-	// the length is greater than whatever you set
 	s.Cache.StatsHistory = append(s.Cache.StatsHistory, stat)
 }
 
@@ -391,7 +376,6 @@ func (s *Server) ProcessTransientResponses() {
 		select {
 		case resp := <-s.RespCh:
 			s.Memory.Lock()
-			// TODO: check if the response already exists in the cache, if so append to the existing entry?
 			r, ok := s.Cache.Responses[resp.ID]
 			if !ok {
 				initialData, err := MergeJSONData(nil, resp.Data)
@@ -475,7 +459,6 @@ func (s *Server) GetTokenFromSession(r *http.Request) (string, error) {
 }
 
 func (s *Server) AddResponse(vendor, uid string, data []byte) {
-	// uid := uuid.New().String()
 	resp := ResponseItem{
 		Vendor: vendor,
 		ID:     uid,
@@ -602,12 +585,10 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 	s.Gateway.HandleFunc("/history", s.GetStatHistoryHandler)
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
-	// s.Gateway.Handle("/charts", http.HandlerFunc(s.ValidateToken(s.ChartViewHandler)))
 	s.Gateway.Handle("/pipe", http.HandlerFunc(s.ValidateSessionToken(s.ProxyHandler)))
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateSessionToken(s.GetUserHandler)))
 	s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateSessionToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/ring", http.HandlerFunc(s.ValidateSessionToken(s.SendTestNotificationHandler)))
-	// s.Gateway.Handle("/upload", http.HandlerFunc(s.ValidateToken(s.UploadFileHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.Handle("/archive", http.HandlerFunc(s.ValidateSessionToken(s.ArchiveResponseHandler)))
 	s.Gateway.Handle("/stats", http.HandlerFunc(s.ValidateSessionToken(s.GetStatsHandler)))
@@ -620,7 +601,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/create-user", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
 	s.Gateway.HandleFunc("/login", s.LoginHandler)
-	// s.Gateway.HandleFunc("/splash", s.LoginViewHandler)
 	s.Gateway.HandleFunc("/services", http.HandlerFunc(s.ValidateSessionToken(s.ViewServicesHandler)))
 	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
@@ -638,10 +618,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
 	s.Gateway.HandleFunc("/updatekey", http.HandlerFunc(s.ValidateSessionToken(s.NewApiKeyGeneratorHandler)))
 	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
-	// s.FileServer = http.FileServer(http.Dir(*staticPath))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))
 	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*knowledgeBase))))
-	// s.Gateway.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(*webApp))))
 	appDir := http.Dir(*webApp)
 	s.Gateway.Handle("/app/", http.StripPrefix("/app/", s.ProtectedFileServer(appDir)))
 	if s.Details.FirstUserMode {
@@ -652,7 +630,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
 	go s.Hub.Run()
-	// s.AddResponse("fake", CreateFakeResponse())
 }
 
 func (s *Server) UpdateCharts() {
@@ -670,9 +647,6 @@ func (s *Server) UpdateCharts() {
 	s.Details.Stats["total_alloc"] = float64(m.TotalAlloc) / 1024
 	s.Details.Stats["sys"] = float64(m.Sys) / 1024
 	s.Details.Stats["num_gc"] = float64(m.NumGC)
-	// s.Details.Stats["poll_time"] = float64(time.Now().Unix())
-	// s.Details.Stats["poll_interval"] = float64(t.Seconds())
-	// s.Details.Stats["last_gc"] = float64(m.LastGC) / 1000000
 	s.Details.Stats["pause_total_ns"] = float64(m.PauseTotalNs) / 1000000
 	for i, stat := range s.Details.Stats {
 		_, ok := s.Cache.Coordinates[i]
@@ -696,10 +670,6 @@ func (s *Server) UpdateCharts() {
 	}
 	s.Cache.Charts = buf.Bytes()
 }
-
-// func (s *Server) BroacastToAPIs(fn string, uh UploadHandler) {
-
-// }
 
 func LogItemsToArticle(logs []LogItem) string {
 	out := `<div class="scrollbar">
@@ -729,7 +699,6 @@ func LogItemsToPanel(logs []LogItem) string {
 	out := `<div class="scrollbar">
             <div class="thumb"></div>
         </div>`
-	// Note the template is now for a panel, not a message
 	templ := `<article class="panel is-%s">
                 <p class="panel-heading">
                     %s
@@ -745,7 +714,6 @@ func LogItemsToPanel(logs []LogItem) string {
 		} else {
 			color = "info"
 		}
-		// We add a little margin to each panel
 		out += fmt.Sprintf(`<div style="margin-bottom: 1em;">`+templ+`</div>`, color, log.Time, log.Data)
 	}
 	return out

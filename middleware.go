@@ -34,11 +34,8 @@ func (s *Server) ValidateToken(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// type contextKey string
-
 func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// const emailKey = contextKey("email")
 		token, err := s.GetTokenFromSession(r)
 
 		if err != nil {
@@ -57,7 +54,7 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}
-			decryptedDBKey, err := s.Decrypt(user.Key)
+			decryptedDBKey, keyUsed, err := s.Decrypt(user.Key)
 			if err != nil {
 				fmt.Println("Error decrypting key:", err, user.Key)
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
@@ -69,10 +66,11 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 
-			newlyEncrypted, _ := s.Encrypt(plaintext)
-			if user.Key != newlyEncrypted {
+			if keyUsed != KeyUsedNew {
+				newlyEncrypted, _ := s.Encrypt(plaintext)
 				user.Key = newlyEncrypted
 				go func(u User) {
+					s.LogInfo(fmt.Sprintf("Lazily migrating API key for user %s", u.Email))
 					if err := s.DB.AddUser(u); err != nil {
 						s.LogError(fmt.Errorf("failed to migrate key for user %s: %w", u.Email, err))
 					}
@@ -96,7 +94,7 @@ func (s *Server) ValidateSessionToken(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "email", tk.Email) // Assumes tk has an Email field
+		ctx := context.WithValue(r.Context(), "email", tk.Email)
 		r = r.WithContext(ctx)
 
 		cspValue := `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data:; style-src 'self' 'unsafe-inline';`
@@ -113,17 +111,12 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Range, Authorization, x-filename, x-last-chunk, X-filename, X-last-chunk")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 
-		// --- Handle Preflight Request ---
-		// If the request method is OPTIONS, it's a preflight request.
-		// We handle it by writing the headers and a 204 No Content status.
 		if r.Method == "OPTIONS" {
 			fmt.Println("Handled preflight OPTIONS request")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		// --- Forward Request ---
-		// For all other requests, pass them to the next handler in the chain.
 		next.ServeHTTP(w, r)
 	})
 }
