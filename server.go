@@ -271,9 +271,6 @@ func (s *Server) Decrypt(dbValue string) (string, string, error) {
 		if err == nil {
 			return plaintext, KeyUsedNew, nil
 		}
-		if !errors.Is(err, ErrInvalidFormat) {
-			return "", "", err
-		}
 	}
 
 	if s.Details.PreviousKey != nil {
@@ -281,6 +278,7 @@ func (s *Server) Decrypt(dbValue string) (string, string, error) {
 		if errOld == nil {
 			return plaintext, KeyUsedOld, nil
 		}
+
 		if !errors.Is(errOld, ErrInvalidFormat) {
 			return "", "", errOld
 		}
