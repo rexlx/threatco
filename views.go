@@ -30,7 +30,7 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	var deleteButton, newKeyButton string
 	users := ""
 	for _, u := range _users {
-		if user.Admin {
+		if user.Admin || u.Email == email {
 			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')">Delete</button>`, u.Email)
 			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined" onclick="generateNewKey('%s')">New API Key</button>`, u.Email)
 		} else {
