@@ -43,6 +43,13 @@ var (
 	restoreDB     = flag.String("restore-db", "", "filepath to sql file if one needs to restore")
 )
 
+const (
+	Version          = "2025OCT01"
+	KeyUsedNew       = "new"
+	KeyUsedOld       = "old"
+	KeyUsedPlaintext = "plaintext"
+)
+
 type Server struct {
 	Session        *scs.SessionManager      `json:"-"`
 	RespCh         chan ResponseItem        `json:"-"`
@@ -106,12 +113,6 @@ type LogItem struct {
 }
 
 var ErrInvalidFormat = errors.New("invalid encrypted data format (might be plaintext)")
-
-const (
-	KeyUsedNew       = "new"
-	KeyUsedOld       = "old"
-	KeyUsedPlaintext = "plaintext"
-)
 
 func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
 	keyHex := os.Getenv("THREATCO_ENCRYPTION_KEY")
@@ -182,6 +183,9 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		}
 		fmt.Printf("database restored from %s successfully", *restoreDB)
 	}
+	if id == "" {
+		id = fmt.Sprintf("%v-%v-%v", time.Now().Unix(), Version, "non-prod")
+	}
 	svr := &Server{
 		Hub:            NewHub(),
 		ProxyOperators: operators,
@@ -221,7 +225,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		svr.Details.PreviousKey = &oldAesGCM
 	}
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
-	fmt.Println("Server initialized with ID:", svr.ID, svr.Details.Address)
+	fmt.Println("Server initialized with ID:", svr.ID)
 	return svr
 }
 
@@ -568,7 +572,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Details.FQDN = cfg.FQDN
 	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
-	s.ID = cfg.ServerID
+	// s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode
 	s.Session.Lifetime = time.Duration(cfg.SessionTokenTTL) * time.Hour
 	for name, service := range s.Targets {
