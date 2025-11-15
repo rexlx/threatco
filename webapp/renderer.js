@@ -105,6 +105,10 @@ function closeDetailsModal() {
     detailsModalContent.textContent = '';
     detailsModalTitle.textContent = 'Details';
     archiveButton.dataset.id = '';
+    
+    // FIX: Reset styles in case the MISP form modified them
+    detailsModalContent.style.whiteSpace = '';
+    detailsModalContent.style.fontFamily = '';
 }
 
 
@@ -740,44 +744,41 @@ function displayPastSearchesNotification(pastSearches, value) {
 }
 
 function renderMispFormInModal() {
-    // 1. Validation: Check if data is an array of exactly 3 items
     const currentData = application.focus;
 
     if (!Array.isArray(currentData) || currentData.length !== 3) {
+        detailsModalContent.style.whiteSpace = 'normal';
+        detailsModalContent.style.fontFamily = 'inherit';
+        
         detailsModalContent.innerHTML = `
-            <div class="box has-background-warning-light">
-                <article class="media">
-                    <div class="media-left">
-                        <span class="icon is-large has-text-warning-dark">
-                            <i class="material-icons is-size-1">warning</i>
-                        </span>
-                    </div>
-                    <div class="media-content">
-                        <h3 class="title is-5 has-text-dark">Insufficient Data</h3>
-                        <p class="has-text-dark">
-                            This event cannot be converted to MISP. The data structure is incomplete 
-                            (Expected 3 items, found ${Array.isArray(currentData) ? currentData.length : 'invalid format'}).
-                        </p>
-                    </div>
-                </article>
-                <div class="buttons is-right mt-4">
-                    <button class="button is-dark is-outlined" id="mispCancelBtn">Go Back</button>
-                </div>
+            <div class="notification is-warning is-light">
+                <button class="delete" id="mispWarningDismiss"></button>
+                <strong>Insufficient Data:</strong> Expected 3 items, found ${Array.isArray(currentData) ? currentData.length : 'invalid format'}.
+            </div>
+            <div class="buttons is-right">
+                <button class="button" id="mispCancelBtn">Go Back</button>
             </div>
         `;
         document.getElementById('mispCancelBtn').addEventListener('click', () => {
+            // Reset styles before going back
+            detailsModalContent.style.whiteSpace = '';
+            detailsModalContent.style.fontFamily = '';
             showDetailsModal(archiveButton.dataset.id, application.focus);
+        });
+        document.getElementById('mispWarningDismiss').addEventListener('click', () => {
+             detailsModalContent.style.whiteSpace = '';
+             detailsModalContent.style.fontFamily = '';
+             showDetailsModal(archiveButton.dataset.id, application.focus);
         });
         return;
     }
 
-    // 2. Extract Data from the SummarizedEvent (taking the first item in the array)
+    // 2. Extract Data
     const eventSource = currentData[2] || {};
-    
     let initialValue = eventSource.value || "";
-    
     let initialType = eventSource.type || "";
-    // Basic mapping for common types
+    
+    // Mapping
     if (initialType === 'ip') initialType = 'ip-src';
     if (initialType === 'ipv4') initialType = 'ip-src';
     if (initialType === 'ipv6') initialType = 'ip-src';
@@ -785,47 +786,44 @@ function renderMispFormInModal() {
     
     let initialInfo = `Investigation of ${initialValue}`;
     if (eventSource.info) {
-        // Clean up info if it's too long or messy
         initialInfo = `ThreatCo: ${eventSource.info.substring(0, 150)}${eventSource.info.length > 150 ? '...' : ''}`;
     }
 
-    // 3. Render Form HTML
+    // 3. Override <pre> Styles for Form Layout
+    // This is critical for the columns and buttons to fit width-wise
+    detailsModalContent.style.whiteSpace = 'normal';
+    detailsModalContent.style.fontFamily = 'sans-serif';
+
+    // 4. Render Form
     detailsModalContent.innerHTML = `
-        <div class="box has-background-grey-lighter">
-            <nav class="level is-mobile">
-                <div class="level-left">
-                    <div class="level-item">
-                        <h3 class="title is-5 has-text-dark">
-                            <span class="icon-text">
-                                <span class="icon has-text-danger"><i class="material-icons">bug_report</i></span>
-                                <span>Create MISP Event</span>
-                            </span>
-                        </h3>
-                    </div>
-                </div>
-            </nav>
+        <div class="box" style="box-shadow: none; padding: 0.5rem;">
+            <h3 class="title is-5 has-text-dark mb-4">
+                <span class="icon-text">
+                    <span class="icon has-text-danger"><i class="material-icons">bug_report</i></span>
+                    <span>Create MISP Event</span>
+                </span>
+            </h3>
             
             <form id="mispForm">
                 <div class="field">
-                    <label class="label has-text-dark">Event Description (Info)</label>
+                    <label class="label">Event Description</label>
                     <div class="control">
                         <input class="input" type="text" id="mispEventInfo" value="${escapeHtml(initialInfo)}" required>
                     </div>
-                    <p class="help">This will be the title of the event in MISP.</p>
                 </div>
 
-                <div class="columns">
+                <div class="columns is-variable is-2 mb-2">
                     <div class="column">
                         <div class="field">
-                            <label class="label has-text-dark">Attribute Value</label>
+                            <label class="label">Value</label>
                             <div class="control">
                                 <input class="input" type="text" id="mispAttrValue" value="${escapeHtml(initialValue)}" required>
                             </div>
                         </div>
                     </div>
-                    <div class="column">
+                    <div class="column is-narrow">
                         <div class="field">
-                            <label class="label has-text-dark">Attribute Type</label>
+                            <label class="label">Type</label>
                             <div class="control">
                                 <div class="select is-fullwidth">
                                     <select id="mispAttrType">
@@ -845,7 +843,7 @@ function renderMispFormInModal() {
                 </div>
 
                 <div class="field">
-                    <label class="label has-text-dark">Tag Name (Optional)</label>
+                    <label class="label">Tag (Optional)</label>
                     <div class="control has-icons-left">
                         <input class="input" type="text" id="mispTagName" placeholder="e.g., TLP:AMBER">
                         <span class="icon is-small is-left">
@@ -854,24 +852,24 @@ function renderMispFormInModal() {
                     </div>
                 </div>
 
-                <div class="field is-grouped is-grouped-right mt-5">
-                     <div class="control">
-                        <button type="button" class="button is-light" id="mispCancelBtn">Cancel</button>
-                    </div>
-                    <div class="control">
-                        <button type="submit" class="button is-danger" id="mispSubmitBtn">
-                            <span class="icon"><i class="material-icons">send</i></span>
-                            <span>Create Event</span>
-                        </button>
-                    </div>
+                <div id="mispFormResult" class="mt-3" style="word-break: break-word;"></div>
+
+                <div class="buttons is-right mt-5">
+                    <button type="button" class="button" id="mispCancelBtn">Cancel</button>
+                    <button type="submit" class="button is-danger" id="mispSubmitBtn">
+                        <span>Create Event</span>
+                        <span class="icon is-small"><i class="material-icons">send</i></span>
+                    </button>
                 </div>
             </form>
-            <div id="mispFormResult" class="mt-3"></div>
         </div>
     `;
 
-    // 4. Attach Internal Listeners
+    // 5. Attach Listeners
     document.getElementById('mispCancelBtn').addEventListener('click', () => {
+        // Reset styles back to code-block mode
+        detailsModalContent.style.whiteSpace = '';
+        detailsModalContent.style.fontFamily = '';
         showDetailsModal(archiveButton.dataset.id, application.focus); 
     });
 
@@ -893,22 +891,25 @@ function renderMispFormInModal() {
 
         try {
             await application.sendMispEvent(payload);
-            resultBox.innerHTML = `<div class="notification is-success">
+            resultBox.innerHTML = `<div class="notification is-success is-light">
                 <button class="delete"></button>
-                Event created successfully! Check notifications for ID.
+                Event created successfully!
             </div>`;
             setTimeout(() => {
+                 // Reset and close
+                 detailsModalContent.style.whiteSpace = '';
+                 detailsModalContent.style.fontFamily = '';
                  closeDetailsModal(); 
             }, 1500);
         } catch (err) {
-            resultBox.innerHTML = `<div class="notification is-danger">
+            // Notification will now wrap correctly due to parent word-break style
+            resultBox.innerHTML = `<div class="notification is-danger is-light">
                 <button class="delete"></button>
                 <strong>Failed:</strong> ${err.message}
             </div>`;
             submitBtn.classList.remove('is-loading');
             submitBtn.disabled = false;
             
-            // Allow dismissing the error
             resultBox.querySelector('.delete').addEventListener('click', () => {
                 resultBox.innerHTML = '';
             });
