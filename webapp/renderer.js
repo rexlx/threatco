@@ -33,7 +33,8 @@ const detailsModal = document.getElementById('detailsModal');
 const detailsModalTitle = document.getElementById('detailsModalTitle');
 const detailsModalContent = document.getElementById('detailsModalContent');
 const archiveButton = document.getElementById('archiveButton');
-const copyButton = document.getElementById('copyButton'); // <-- Added selector for the new button
+const copyButton = document.getElementById('copyButton');
+const mispButton = document.getElementById('copyButton').nextElementSibling.nextElementSibling;
 
 
 /**
@@ -75,19 +76,19 @@ function setActiveSidebar(activeLink) {
 
 /**
  * Shows a modal, truncates the ID, and displays the raw data received.
- * @param {string} fullId - The full, untruncated ID for the details view.
+ * @param {string} result - The full, untruncated ID for the details view.
  * @param {object | Array} details - The object or array to display as a formatted JSON string.
  */
-function showDetailsModal(fullId, details) {
-    let displayId = fullId;
-    if (typeof fullId === 'string' && fullId.length > 24) {
-        displayId = `${fullId.substring(0, 10)}...${fullId.substring(fullId.length - 10)}`;
+function showDetailsModal(result, details) {
+    console.log("Showing details modal for ID:", result, details);
+    let displayId = result.id;
+    if (typeof result.id === 'string' && result.id.length > 24) {
+        displayId = `${result.id.substring(0, 10)}...${result.id.substring(result.id.length - 10)}`;
     }
     detailsModalTitle.textContent = `Details for ${displayId}`;
-    detailsModalTitle.title = `Full ID: ${fullId}`;
-
+    detailsModalTitle.title = `Full ID: ${result.id}`;
     // Store the full ID on the archive button's dataset
-    archiveButton.dataset.id = fullId;
+    archiveButton.dataset.id = result.id;
 
     try {
         detailsModalContent.textContent = JSON.stringify(details, null, 2);
@@ -157,6 +158,12 @@ function attachEventListeners() {
         await application.fetchUser();
         alert('User profile re-synced!');
     });
+    const mispBtn = document.getElementById('mispButton'); // Select specifically
+    if (mispBtn) {
+        mispBtn.addEventListener('click', () => {
+            renderMispFormInModal();
+        });
+    }
 
     // Main search box actions
     matchBox.addEventListener('click', async (event) => {
@@ -428,7 +435,7 @@ function renderResultCards(resultsArray, isHistoryView = false) {
             e.preventDefault();
             if (!result.link || result.link === "none") return;
             await application.fetchDetails(result.link);
-            showDetailsModal(result.link, application.focus);
+            showDetailsModal(result, application.focus);
         });
 
         footer.appendChild(historyButton);
@@ -467,7 +474,7 @@ function renderResultCards(resultsArray, isHistoryView = false) {
 }
 
 let previousResults = [];
-let previousNotifications = []; // <-- Add state tracking for notifications
+let previousNotifications = [];
 function updateUI() {
     errorBox.innerHTML = '';
     if (application.errors.length > 0) {
@@ -730,6 +737,183 @@ function displayPastSearchesNotification(pastSearches, value) {
     }
     notification.appendChild(message);
     notificationContainer.appendChild(notification);
+}
+
+function renderMispFormInModal() {
+    // 1. Validation: Check if data is an array of exactly 3 items
+    const currentData = application.focus;
+
+    if (!Array.isArray(currentData) || currentData.length !== 3) {
+        detailsModalContent.innerHTML = `
+            <div class="box has-background-warning-light">
+                <article class="media">
+                    <div class="media-left">
+                        <span class="icon is-large has-text-warning-dark">
+                            <i class="material-icons is-size-1">warning</i>
+                        </span>
+                    </div>
+                    <div class="media-content">
+                        <h3 class="title is-5 has-text-dark">Insufficient Data</h3>
+                        <p class="has-text-dark">
+                            This event cannot be converted to MISP. The data structure is incomplete 
+                            (Expected 3 items, found ${Array.isArray(currentData) ? currentData.length : 'invalid format'}).
+                        </p>
+                    </div>
+                </article>
+                <div class="buttons is-right mt-4">
+                    <button class="button is-dark is-outlined" id="mispCancelBtn">Go Back</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('mispCancelBtn').addEventListener('click', () => {
+            showDetailsModal(archiveButton.dataset.id, application.focus);
+        });
+        return;
+    }
+
+    // 2. Extract Data from the SummarizedEvent (taking the first item in the array)
+    const eventSource = currentData[2] || {};
+    
+    let initialValue = eventSource.value || "";
+    
+    let initialType = eventSource.type || "";
+    // Basic mapping for common types
+    if (initialType === 'ip') initialType = 'ip-src';
+    if (initialType === 'ipv4') initialType = 'ip-src';
+    if (initialType === 'ipv6') initialType = 'ip-src';
+    if (initialType === 'email') initialType = 'email-src';
+    
+    let initialInfo = `Investigation of ${initialValue}`;
+    if (eventSource.info) {
+        // Clean up info if it's too long or messy
+        initialInfo = `ThreatCo: ${eventSource.info.substring(0, 150)}${eventSource.info.length > 150 ? '...' : ''}`;
+    }
+
+    // 3. Render Form HTML
+    detailsModalContent.innerHTML = `
+        <div class="box has-background-grey-lighter">
+            <nav class="level is-mobile">
+                <div class="level-left">
+                    <div class="level-item">
+                        <h3 class="title is-5 has-text-dark">
+                            <span class="icon-text">
+                                <span class="icon has-text-danger"><i class="material-icons">bug_report</i></span>
+                                <span>Create MISP Event</span>
+                            </span>
+                        </h3>
+                    </div>
+                </div>
+            </nav>
+            
+            <form id="mispForm">
+                <div class="field">
+                    <label class="label has-text-dark">Event Description (Info)</label>
+                    <div class="control">
+                        <input class="input" type="text" id="mispEventInfo" value="${escapeHtml(initialInfo)}" required>
+                    </div>
+                    <p class="help">This will be the title of the event in MISP.</p>
+                </div>
+
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label has-text-dark">Attribute Value</label>
+                            <div class="control">
+                                <input class="input" type="text" id="mispAttrValue" value="${escapeHtml(initialValue)}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="field">
+                            <label class="label has-text-dark">Attribute Type</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="mispAttrType">
+                                        <option value="ip-src" ${initialType === 'ip-src' ? 'selected' : ''}>ip-src</option>
+                                        <option value="ip-dst" ${initialType === 'ip-dst' ? 'selected' : ''}>ip-dst</option>
+                                        <option value="domain" ${initialType === 'domain' ? 'selected' : ''}>domain</option>
+                                        <option value="url" ${initialType === 'url' ? 'selected' : ''}>url</option>
+                                        <option value="sha256" ${initialType === 'sha256' ? 'selected' : ''}>sha256</option>
+                                        <option value="md5" ${initialType === 'md5' ? 'selected' : ''}>md5</option>
+                                        <option value="email-src" ${initialType === 'email-src' ? 'selected' : ''}>email-src</option>
+                                        <option value="other" ${initialType === 'other' || initialType === '' ? 'selected' : ''}>other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label has-text-dark">Tag Name (Optional)</label>
+                    <div class="control has-icons-left">
+                        <input class="input" type="text" id="mispTagName" placeholder="e.g., TLP:AMBER">
+                        <span class="icon is-small is-left">
+                            <i class="material-icons">label</i>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="field is-grouped is-grouped-right mt-5">
+                     <div class="control">
+                        <button type="button" class="button is-light" id="mispCancelBtn">Cancel</button>
+                    </div>
+                    <div class="control">
+                        <button type="submit" class="button is-danger" id="mispSubmitBtn">
+                            <span class="icon"><i class="material-icons">send</i></span>
+                            <span>Create Event</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <div id="mispFormResult" class="mt-3"></div>
+        </div>
+    `;
+
+    // 4. Attach Internal Listeners
+    document.getElementById('mispCancelBtn').addEventListener('click', () => {
+        showDetailsModal(archiveButton.dataset.id, application.focus); 
+    });
+
+    document.getElementById('mispForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = document.getElementById('mispSubmitBtn');
+        const resultBox = document.getElementById('mispFormResult');
+        
+        submitBtn.classList.add('is-loading');
+        submitBtn.disabled = true;
+        resultBox.innerHTML = '';
+
+        const payload = {
+            event_info: document.getElementById('mispEventInfo').value,
+            attribute_value: document.getElementById('mispAttrValue').value,
+            attribute_type: document.getElementById('mispAttrType').value,
+            tag_name: document.getElementById('mispTagName').value
+        };
+
+        try {
+            await application.sendMispEvent(payload);
+            resultBox.innerHTML = `<div class="notification is-success">
+                <button class="delete"></button>
+                Event created successfully! Check notifications for ID.
+            </div>`;
+            setTimeout(() => {
+                 closeDetailsModal(); 
+            }, 1500);
+        } catch (err) {
+            resultBox.innerHTML = `<div class="notification is-danger">
+                <button class="delete"></button>
+                <strong>Failed:</strong> ${err.message}
+            </div>`;
+            submitBtn.classList.remove('is-loading');
+            submitBtn.disabled = false;
+            
+            // Allow dismissing the error
+            resultBox.querySelector('.delete').addEventListener('click', () => {
+                resultBox.innerHTML = '';
+            });
+        }
+    });
 }
 
 // --- Start the App ---

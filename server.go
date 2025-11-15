@@ -393,6 +393,7 @@ func (s *Server) ProcessTransientResponses() {
 				mergedData, err := MergeJSONData(r.Data, resp.Data)
 				if err != nil {
 					s.Log.Printf("ERROR: could not merge JSON for ID %s: %v", r.ID, err)
+					fmt.Printf("ERROR: could not merge JSON for ID %s: %v", r.ID, err)
 				} else {
 					r.Data = mergedData
 				}
@@ -400,8 +401,15 @@ func (s *Server) ProcessTransientResponses() {
 			}
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
 			s.Details.Stats["vendor_responses"]++
+			newestResponse, ok := s.Cache.Responses[resp.ID]
 			s.Memory.Unlock()
-			go s.DB.StoreResponse(false, resp.ID, resp.Data, resp.Vendor)
+			if ok {
+				resp = newestResponse
+			}
+			err := s.DB.StoreResponse(false, resp.ID, resp.Data, resp.Vendor)
+			if err != nil {
+				s.Log.Printf("ERROR: could not store response ID %s: %v", resp.ID, err)
+			}
 			if resp.Notify {
 				s.Hub.SendToUser(s.RespCh, resp.Email, Notification{
 					Created: resp.Time,
@@ -618,6 +626,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/coordinate", http.HandlerFunc(s.ValidateSessionToken(s.GetCoordinateHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
+	s.Gateway.HandleFunc("/misp-workflow", http.HandlerFunc(s.ValidateSessionToken(s.TriggerMispWorkflowHandler)))
 	s.Gateway.HandleFunc("/updatekey", http.HandlerFunc(s.ValidateSessionToken(s.NewApiKeyGeneratorHandler)))
 	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*staticPath))))

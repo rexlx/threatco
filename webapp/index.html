@@ -12,132 +12,158 @@
 
 <body>
 
-<nav class="navbar has-background-custom" role="navigation" aria-label="main navigation">
-    <div class="navbar-brand">
-        <a class="navbar-item has-text-primary" href="#">
-            <strong>threatco</strong>
-        </a>
-    </div>
-    <div class="navbar-menu is-active">
-        <div class="navbar-start">
-            <div class="carousel-container">
-                <button class="scroll-button left" id="scroll-left">‹</button>
-                <div class="navbar-carousel" id="navbar-carousel">
-                    <a class="navbar-item has-background-custom has-text-primary" href="/app">app</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/kb">documentation</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/services">services</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/create-user">add user</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/users">users</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/view-logs">logs</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/charts">stats</a>
-                    <a class="navbar-item has-background-custom has-text-primary" href="/responses">responses</a>
+    <nav class="navbar has-background-custom" role="navigation" aria-label="main navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item has-text-primary" href="#">
+                <strong>threatco</strong>
+            </a>
+        </div>
+        <div class="navbar-menu is-active">
+            <div class="navbar-start">
+                <div class="carousel-container">
+                    <button class="scroll-button left" id="scroll-left">‹</button>
+                    <div class="navbar-carousel" id="navbar-carousel">
+                        <a class="navbar-item has-background-custom has-text-primary" href="/app">app</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/kb">documentation</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/services">services</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/create-user">add user</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/users">users</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/view-logs">logs</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/charts">stats</a>
+                        <a class="navbar-item has-background-custom has-text-primary" href="/responses">responses</a>
+                    </div>
+                    <button class="scroll-button right" id="scroll-right">›</button>
                 </div>
-                <button class="scroll-button right" id="scroll-right">›</button>
+            </div>
+            <div class="navbar-end">
+                <div class="navbar-item">
+                    <button class="button is-warning is-outlined" id="logoutButton">logout</button>
+                </div>
             </div>
         </div>
-        <div class="navbar-end">
-            <div class="navbar-item">
-                <button class="button is-warning is-outlined" id="logoutButton">logout</button>
-            </div>
+    </nav>
+
+    <div class="py-3 has-background-black" id="errata">
+        <div class="container" id="errors">
+            <p class="has-text-link-light">system nominal</p>
         </div>
     </div>
-</nav>
 
-<div class="py-3 has-background-black" id="errata">
-    <div class="container" id="errors"><p class="has-text-link-light">system nominal</p></div>
-</div>
-
-<section class="section has-background-black" id="mainSection">
-    <div class="columns" id="mainColumns">
-        <div class="column is-one-quarter">
-            <aside class="menu">
-                <p class="menu-label has-text-grey-light">Actions</p>
-                <ul class="menu-list">
-                    <li><a id="sidebarSearch" class="is-active"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></a></li>
-                    <li><a id="sidebarRecentActivity"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>Responses</span></span></a></li>
-                    <li><a id="sidebarHealth"><span class="icon-text"><span class="icon"><i class="material-icons">health_and_safety</i></span><span>Health</span></span></a></li>
-                </ul>
-                <p class="menu-label has-text-grey-light">Settings</p>
-                <ul class="menu-list">
-                    <li><a id="sidebarServices"><span class="icon-text"><span class="icon"><i class="material-icons">dns</i></span><span>Services</span></span></a></li>
-                    <li><a id="sidebarProfile"><span class="icon-text"><span class="icon"><i class="material-icons">person</i></span><span>Profile</span></span></a></li>
+    <section class="section has-background-black" id="mainSection">
+        <div class="columns" id="mainColumns">
+            <div class="column is-one-quarter">
+                <aside class="menu">
+                    <p class="menu-label has-text-grey-light">Actions</p>
+                    <ul class="menu-list">
+                        <li><a id="sidebarSearch" class="is-active"><span class="icon-text"><span class="icon"><i
+                                            class="material-icons">search</i></span><span>Search</span></span></a></li>
+                        <li><a id="sidebarRecentActivity"><span class="icon-text"><span class="icon"><i
+                                            class="material-icons">history</i></span><span>Responses</span></span></a>
+                        </li>
+                        <li><a id="sidebarHealth"><span class="icon-text"><span class="icon"><i
+                                            class="material-icons">health_and_safety</i></span><span>Health</span></span></a>
+                        </li>
                     </ul>
-            </aside>
-        </div>
-        <div class="column">
-            <div id="notificationContainer" class="mb-4"></div>
-            <div id="healthStatusContainer" class="box has-background-custom is-hidden"></div>
-            <div class="box has-background-custom" id="matchBox"></div>
-        </div>
-    </div>
-</section>
-
-<section class="section has-background-custom is-hidden" id="servicesView">
-    <div class="container">
-        <div class="block"><h1 class="title has-text-info">Services</h1></div>
-        <div class="block">
-            <div class="buttons">
-                <button class="button is-info is-outlined" id="backButtonServices" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back</span></span></button>
-                <button class="button is-success is-outlined" id="rectifyServicesButton" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">sync</i></span><span>Rectify</span></span></button>
+                    <p class="menu-label has-text-grey-light">Settings</p>
+                    <ul class="menu-list">
+                        <li><a id="sidebarServices"><span class="icon-text"><span class="icon"><i
+                                            class="material-icons">dns</i></span><span>Services</span></span></a></li>
+                        <li><a id="sidebarProfile"><span class="icon-text"><span class="icon"><i
+                                            class="material-icons">person</i></span><span>Profile</span></span></a></li>
+                    </ul>
+                </aside>
+            </div>
+            <div class="column">
+                <div id="notificationContainer" class="mb-4"></div>
+                <div id="healthStatusContainer" class="box has-background-custom is-hidden"></div>
+                <div class="box has-background-custom" id="matchBox"></div>
             </div>
         </div>
-        <div id="cardList" class="columns is-multiline is-variable is-2-tablet is-3-desktop is-4-widescreen"></div>
-    </div>
-</section>
+    </section>
 
-<section class="section has-background-custom is-hidden" id="profileView">
-    <div class="columns is-centered">
-        <div class="column is-two-thirds">
-            <h1 class="title has-text-info" style="margin:0px">Profile & Settings</h1>
-            <div class="box has-background-custom" id="profileBox">
-                <form>
-                    <div class="field">
-                        <label class="label">Email</label>
-                        <div class="control">
-                            <input class="input" type="text" id="editUserEmail" readonly>
+    <section class="section has-background-custom is-hidden" id="servicesView">
+        <div class="container">
+            <div class="block">
+                <h1 class="title has-text-info">Services</h1>
+            </div>
+            <div class="block">
+                <div class="buttons">
+                    <button class="button is-info is-outlined" id="backButtonServices" type="button"><span
+                            class="icon-text"><span class="icon"><i
+                                    class="material-icons">arrow_back</i></span><span>Back</span></span></button>
+                    <button class="button is-success is-outlined" id="rectifyServicesButton" type="button"><span
+                            class="icon-text"><span class="icon"><i
+                                    class="material-icons">sync</i></span><span>Rectify</span></span></button>
+                </div>
+            </div>
+            <div id="cardList" class="columns is-multiline is-variable is-2-tablet is-3-desktop is-4-widescreen"></div>
+        </div>
+    </section>
+
+    <section class="section has-background-custom is-hidden" id="profileView">
+        <div class="columns is-centered">
+            <div class="column is-two-thirds">
+                <h1 class="title has-text-info" style="margin:0px">Profile & Settings</h1>
+                <div class="box has-background-custom" id="profileBox">
+                    <form>
+                        <div class="field">
+                            <label class="label">Email</label>
+                            <div class="control">
+                                <input class="input" type="text" id="editUserEmail" readonly>
+                            </div>
                         </div>
-                    </div>
-                    <div class="field mt-5">
-                        <div class="control profileButtons">
-                            <button class="button is-info is-outlined" id="backButtonProfile" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back</span></span></button>
-                            <button class="button is-info is-outlined" id="updateUserButton" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">save</i></span><span>Update</span></span></button>
+                        <div class="field mt-5">
+                            <div class="control profileButtons">
+                                <button class="button is-info is-outlined" id="backButtonProfile" type="button"><span
+                                        class="icon-text"><span class="icon"><i
+                                                class="material-icons">arrow_back</i></span><span>Back</span></span></button>
+                                <button class="button is-info is-outlined" id="updateUserButton" type="button"><span
+                                        class="icon-text"><span class="icon"><i
+                                                class="material-icons">save</i></span><span>Update</span></span></button>
+                            </div>
                         </div>
-                    </div>
-                </form>
+                    </form>
+                </div>
             </div>
         </div>
-    </div>
-</section>
+    </section>
 
-<div class="modal" id="detailsModal">
-    <div class="modal-background"></div>
-    <div class="modal-card">
-        <header class="modal-card-head">
-            <p class="modal-card-title" id="detailsModalTitle">Details</p>
-            <button class="delete" aria-label="close"></button>
-        </header>
-        <section class="modal-card-body">
-            <pre id="detailsModalContent"></pre>
-        </section>
-        <footer class="modal-card-foot">
-          <button class="button is-success" id="copyButton"><span class="icon-text"><span class="icon"><i class="material-icons">content_copy</i></span><span>Copy</span></span></button>
-          <button class="button is-warning" id="archiveButton"><span class="icon-text"><span class="icon"><i class="material-icons">archive</i></span><span>Archive</span></span></button>
-        </footer>
+    <div class="modal" id="detailsModal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title" id="detailsModalTitle">Details</p>
+                <button class="delete" aria-label="close"></button>
+            </header>
+            <section class="modal-card-body">
+                <pre id="detailsModalContent"></pre>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" id="copyButton"><span class="icon-text"><span class="icon"><i
+                                class="material-icons">content_copy</i></span><span>Copy</span></span></button>
+                <button class="button is-warning" id="archiveButton"><span class="icon-text"><span class="icon"><i
+                                class="material-icons">archive</i></span><span>Archive</span></span></button>
+                <button class="button is-danger is-outlined" id="mispButton"><span class="icon-text"><span
+                            class="icon"><i class="material-icons">bug_report</i></span><span>Add to
+                            MISP</span></span></button>
+            </footer>
+        </div>
     </div>
-</div>
 
-<footer class="footer has-background-custom has-text-primary">
-    <div class="content has-text-centered">
-        <p>
-            <strong>threatco</strong> by <a href="#" class="has-text-primary">Your Company</a>. The source code is licensed
-            <a href="http://opensource.org/licenses/mit-license.php" class="has-text-primary">MIT</a>.
-        </p>
-        <p>
-            &copy; 2025 Your Company. All Rights Reserved.
-        </p>
-    </div>
-</footer>
+    <footer class="footer has-background-custom has-text-primary">
+        <div class="content has-text-centered">
+            <p>
+                <strong>threatco</strong> by <a href="#" class="has-text-primary">Your Company</a>. The source code is
+                licensed
+                <a href="http://opensource.org/licenses/mit-license.php" class="has-text-primary">MIT</a>.
+            </p>
+            <p>
+                &copy; 2025 Your Company. All Rights Reserved.
+            </p>
+        </div>
+    </footer>
 
-<script type="module" src="/app/renderer.js"></script>
+    <script type="module" src="/app/renderer.js"></script>
 </body>
+
 </html>

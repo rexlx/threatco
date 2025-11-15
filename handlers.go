@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rexlx/threatco/parser"
+	"github.com/rexlx/threatco/vendors"
 )
 
 var store *UploadStore
@@ -520,6 +521,12 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		// cant remember why we dont call storeresponse here
 		w.Write(r)
 		return
+	}
+	s.RespCh <- ResponseItem{
+		ID:     uid,
+		Vendor: req.To,
+		Data:   resp,
+		Time:   time.Now(),
 	}
 	w.Write(resp)
 }
@@ -1372,6 +1379,80 @@ func (s *Server) SendTestNotificationHandler(w http.ResponseWriter, r *http.Requ
 	}
 	s.Hub.SendToUser(s.RespCh, req.To, notification)
 	json.NewEncoder(w).Encode(map[string]string{"status": "notification sent"})
+}
+
+func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("misp_workflow_requests", 1)
+	start := time.Now()
+	defer func() {
+		s.Log.Println("TriggerMispWorkflowHandler took", time.Since(start))
+	}()
+
+	// 1. Parse Request
+	var req vendors.MispWorkflowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.EventInfo == "" || req.AttributeValue == "" || req.AttributeType == "" {
+		http.Error(w, "Missing required fields: event_info, attribute_value, or attribute_type", http.StatusBadRequest)
+		return
+	}
+	finalType := GetMispType(req.AttributeType)
+	// 2. Create the Event Object
+	// Using defaults for: Distribution (0=Org), Analysis (0=Initial), Threat (3=Low)
+	newEvent := vendors.NewEvent(
+		"2",           // OrgID (optional)
+		"0",           // Distribution
+		req.EventInfo, // Info
+		"0",           // Analysis
+		"3",           // Threat Level
+		"",            // Extends UUID
+	)
+
+	// 3. Send Event to MISP
+	eventID, _, err := s.CreateMispEvent(*newEvent)
+	if err != nil {
+		s.LogError(fmt.Errorf("misp workflow failed at event creation: %w", err))
+		http.Error(w, fmt.Sprintf("Failed to create event: %v", err), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(eventID, "DBUG")
+	// 4. Add the Attribute
+	// We map "Network activity" as a default category, but you could make this dynamic
+	_, err = s.AddMispAttribute(
+		eventID,
+		finalType,
+		req.AttributeValue,
+		"Network activity",
+		"0",
+		"Added via ThreatCo Workflow",
+		nil, // ToIDS defaults to true
+	)
+	if err != nil {
+		// We log the error but don't fail the whole request, as the event was created successfully
+		s.LogError(fmt.Errorf("misp workflow warning: event %s created, but attribute failed: %w", eventID, err))
+	}
+
+	// 5. Add the Tag (if provided)
+	if req.TagName != "" {
+		err = s.AddMispTag(eventID, req.TagName)
+		if err != nil {
+			s.LogError(fmt.Errorf("misp workflow warning: event %s created, but tagging failed: %w", eventID, err))
+		}
+	}
+
+	// 6. Response
+	response := map[string]string{
+		"status":   "success",
+		"event_id": eventID,
+		"message":  fmt.Sprintf("Event created, attribute added, tag '%s' applied.", req.TagName),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // func (s *Server) GetResponsesHandler(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,20 @@ import (
 	"github.com/google/uuid"
 )
 
+var IOCToMispMap = map[string]string{
+	"md5":      "md5",
+	"sha1":     "sha1",
+	"sha256":   "sha256",
+	"sha512":   "sha512",
+	"ipv4":     "ip-src",
+	"ipv6":     "ip-src",
+	"email":    "email-src",
+	"url":      "url",
+	"domain":   "domain",
+	"filepath": "filename",
+	"filename": "filename",
+}
+
 type MispEvent struct {
 	ID                 string      `json:"id"`
 	OrgID              string      `json:"org_id"`
@@ -28,16 +42,20 @@ type MispEvent struct {
 	DisableCorrelation bool        `json:"disable_correlation"`
 	ExtendsUUID        string      `json:"extends_uuid"`
 	EventCreatorEmail  string      `json:"event_creator_email"`
-	Protected          string      `json:"protected"`
+	Protected          bool        `json:"protected"`
 	Org                Org         `json:"Org"`
 	Orgc               Orgc        `json:"Orgc"`
 	Attribute          []Attribute `json:"Attribute"`
 }
 
 type MispEventResponse struct {
+	// Legacy/Search format: {"response": [{"Event": {...}}]}
 	Response []struct {
 		Event MispEvent `json:"Event"`
 	} `json:"response"`
+
+	// Creation/Direct format: {"Event": {...}}
+	Event *MispEvent `json:"Event"`
 }
 
 type Org struct {
@@ -111,6 +129,32 @@ type Tag struct {
 	IsGalaxy       bool   `json:"is_galaxy"`
 	IsCustomGalaxy bool   `json:"is_custom_galaxy"`
 	Inherited      int    `json:"inherited"`
+}
+
+// Add this to vendors/misp.go
+
+type MispAddAttrSchema struct {
+	EventID      string `json:"event_id"`
+	Category     string `json:"category"`
+	Type         string `json:"type"`
+	Value        string `json:"value"`
+	ToIDS        bool   `json:"to_ids"`
+	UUID         string `json:"uuid"`
+	Distribution string `json:"distribution"`
+	Comment      string `json:"comment"`
+}
+
+// Request payload for attaching a tag
+type MispAttachTagRequest struct {
+	UUID string `json:"uuid"` // The UUID or ID of the Event or Attribute
+	Tag  string `json:"tag"`  // The Tag ID or Tag Name
+}
+
+type MispWorkflowRequest struct {
+	EventInfo      string `json:"event_info"`
+	AttributeValue string `json:"attribute_value"`
+	AttributeType  string `json:"attribute_type"`
+	TagName        string `json:"tag_name"`
 }
 
 func NewTag(name, color, org, user string) *Tag {

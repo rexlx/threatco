@@ -26,7 +26,7 @@ export class Application {
     async init() {
         // Fetch user data. This succeeds only if the user has a valid session.
         await this.fetchUser();
-        
+
         // Only proceed if we successfully got user data
         if (this.user && this.user.email) {
             await this.fetchHistory();
@@ -97,12 +97,12 @@ export class Application {
         // console.log(finalOptions)
         // Determine if this is a file upload, which shouldn't have a Content-Type set by us.
         const isFileUpload = finalOptions.body instanceof FormData || finalOptions.body instanceof Blob || finalOptions.body instanceof File;
-    
+
         // Set default Content-Type to JSON if it's not a file upload and no Content-Type is already set.
         if (!isFileUpload && !finalOptions.headers['Content-Type']) {
             finalOptions.headers['Content-Type'] = 'application/json';
         }
-    
+
         return fetch(this.apiUrl + url, finalOptions);
     }
 
@@ -238,13 +238,13 @@ export class Application {
             const end = Math.min(start + chunkSize, file.size);
             const chunk = file.slice(start, end);
             this.errors = [`<progress class="progress" value="${Math.ceil((end / file.size) * 100)}" max="100"></progress>`];
-            
+
             try {
                 const uploadHeaders = {
-                        'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
-                        'X-filename': file.name,
-                        'X-last-chunk': currentChunk === Math.ceil(file.size / chunkSize) - 1,
-                    }
+                    'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
+                    'X-filename': file.name,
+                    'X-last-chunk': currentChunk === Math.ceil(file.size / chunkSize) - 1,
+                }
                 const response = await this._fetch(thisURL, {
                     method: 'POST',
                     headers: uploadHeaders,
@@ -252,7 +252,7 @@ export class Application {
                 });
 
                 if (!response.ok) throw new Error(`Error uploading chunk: ${response.status}`);
-                
+
                 currentChunk++;
                 if (currentChunk < Math.ceil(file.size / chunkSize)) {
                     uploadChunk();
@@ -361,7 +361,39 @@ export class Application {
             return null;
         }
     }
-    
+
+    // Add this method to the Application class in app.js
+
+    /**
+     * Sends a request to the backend to create a MISP event and attribute.
+     * @param {object} payload - { event_info, attribute_value, attribute_type, tag_name }
+     */
+    async sendMispEvent(payload) {
+        const thisURL = `/misp-workflow`;
+        try {
+            const response = await this._fetch(thisURL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Server error: ${response.status} - ${errText}`);
+            }
+
+            const data = await response.json();
+            this.notifications.push({
+                id: `notif-${Date.now()}`,
+                info: `MISP Event Created! ID: ${data.event_id}`,
+                created: new Date().toISOString()
+            });
+            return data;
+        } catch (error) {
+            this.errors.push(`MISP Workflow Error: ${error.message}`);
+            throw error; // Re-throw so the UI can handle the loading state
+        }
+    }
+
     /**
      * Archives a result by its ID.
      * @param {string} id - The ID of the result to archive.

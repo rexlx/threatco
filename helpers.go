@@ -75,18 +75,25 @@ func MergeJSONData(existingData, newData []byte) ([]byte, error) {
 		return existingData, nil
 	}
 
-	if len(existingData) == 0 {
-		initialArray := []json.RawMessage{json.RawMessage(newData)}
-		return json.Marshal(initialArray)
-	}
-
 	var objects []json.RawMessage
 
-	if err := json.Unmarshal(existingData, &objects); err != nil {
-		objects = []json.RawMessage{json.RawMessage(existingData)}
+	if len(existingData) > 0 {
+		if err := json.Unmarshal(existingData, &objects); err != nil {
+
+			objects = []json.RawMessage{json.RawMessage(existingData)}
+		}
 	}
 
-	objects = append(objects, json.RawMessage(newData))
+	trimmedNew := bytes.TrimSpace(newData)
+	if len(trimmedNew) > 0 && trimmedNew[0] == '[' {
+		var newObjects []json.RawMessage
+		if err := json.Unmarshal(trimmedNew, &newObjects); err != nil {
+			return nil, fmt.Errorf("failed to unpack new JSON array: %w", err)
+		}
+		objects = append(objects, newObjects...)
+	} else {
+		objects = append(objects, json.RawMessage(newData))
+	}
 
 	return json.Marshal(objects)
 }
@@ -924,6 +931,8 @@ func (s *Server) AddMispAttribute(eventID, attrType, attrValue, category, distri
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MISP attribute request: %w", err)
 	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
 	// Headers like Content-Type, Accept, and Authorization should be handled by mispTarget.Do or set here
 	// request.Header.Set("Content-Type", "application/json")
 	// request.Header.Set("Accept", "application/json")
@@ -961,7 +970,10 @@ func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte
 		eventDetails.Date = time.Now().Format("2006-01-02")
 	}
 
+	// Thread-safe target retrieval (Preserved from your code)
+	s.Memory.RLock()
 	mispTarget, ok := s.Targets["misp"]
+	s.Memory.RUnlock()
 	if !ok {
 		return "", nil, fmt.Errorf("misp endpoint configuration not found in Targets")
 	}
@@ -977,27 +989,104 @@ func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create MISP event request: %w", err)
 	}
-	// Headers handled by mispTarget.Do in this example
 
-	s.Log.Println("Sending create event request to MISP:", url, "Payload:", string(payloadBytes))
+	// Explicit headers (Preserved from your code)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+
 	respBody := mispTarget.Do(request)
 
-	// Parse the response to get the event ID
+	// Debugging print (Preserved)
+	// fmt.Println(string(respBody))
+
+	// --- MERGED LOGIC: Check for HTML/Login Page response ---
+	trimmed := bytes.TrimSpace(respBody)
+	if len(trimmed) > 0 && trimmed[0] == '<' {
+		s.Log.Printf("ERROR: Received HTML instead of JSON. Likely auth failure.")
+		return "", respBody, fmt.Errorf("received HTML response (likely login page) instead of JSON; check API key")
+	}
+
+	// Parse the response
 	var mispResponse vendors.MispEventResponse
 	if err := json.Unmarshal(respBody, &mispResponse); err != nil {
-		s.Log.Println("Failed to unmarshal MISP event creation response:", err, "Body:", string(respBody))
+		fmt.Println("Failed to unmarshal MISP event creation response:", err, "Body:", string(respBody))
 		return "", respBody, fmt.Errorf("failed to unmarshal MISP event creation response: %w. Body: %s", err, string(respBody))
 	}
-	if len(mispResponse.Response) == 0 {
-		s.Log.Println("MISP event creation response is empty")
-		return "", respBody, fmt.Errorf("misp event creation response is empty")
+
+	// --- MERGED LOGIC: Extract ID from either Root Object or Response Array ---
+	var eventID string
+
+	// Case 1: New MISP format (Root object)
+	if mispResponse.Event != nil && mispResponse.Event.ID != "" {
+		eventID = mispResponse.Event.ID
+	} else if len(mispResponse.Response) > 0 {
+		// Case 2: Legacy/Search format (Array)
+		eventID = mispResponse.Response[0].Event.ID
+	} else {
+		// Case 3: Error or Empty
+		if strings.Contains(string(respBody), "message") {
+			return "", respBody, fmt.Errorf("misp returned error: %s", string(respBody))
+		}
+		s.Log.Println("MISP event creation response is empty or missing ID")
+		return "", respBody, fmt.Errorf("misp event creation response is empty or missing ID")
 	}
-	eventID := mispResponse.Response[0].Event.ID
-	s.Log.Println("Successfully created MISP event with ID:", eventID, ". Response:", string(respBody))
+
+	s.Log.Println("Successfully created MISP event with ID:", eventID)
 	return eventID, respBody, nil
 }
 
-// Target represents a Splunk target (adjust as needed)
+// targetID: The ID or UUID of the Event or Attribute.
+// tagName: The name of the tag (e.g., "TLP:AMBER").
+func (s *Server) AddMispTag(targetID string, tagName string) error {
+	defer s.addStat("add_misp_tag_calls", 1)
+
+	if targetID == "" || tagName == "" {
+		return fmt.Errorf("targetID and tagName are required")
+	}
+
+	mispTarget, ok := s.Targets["misp"]
+	if !ok {
+		return fmt.Errorf("misp endpoint configuration not found")
+	}
+
+	payload := vendors.MispAttachTagRequest{
+		UUID: targetID,
+		Tag:  tagName,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tag payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/tags/attachTagToObject", mispTarget.GetURL())
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create tag request: %w", err)
+	}
+
+	// Headers should be handled by your endpoint wrapper,
+	// but standard MISP needs: Content-Type: application/json
+
+	s.Log.Printf("Attaching tag '%s' to object '%s'...", tagName, targetID)
+	respBody := mispTarget.Do(req)
+
+	if strings.Contains(string(respBody), "\"errors\"") {
+		return fmt.Errorf("misp returned error: %s", string(respBody))
+	}
+
+	s.Log.Println("Tag attached successfully.")
+	return nil
+}
+
+func GetMispType(iocType string) string {
+	if val, ok := vendors.IOCToMispMap[iocType]; ok {
+		return val
+	}
+	return "other"
+}
+
 type Target struct {
 	URL      string
 	Username string
