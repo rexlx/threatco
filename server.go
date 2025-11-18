@@ -604,7 +604,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/stats", http.HandlerFunc(s.ValidateSessionToken(s.GetStatsHandler)))
 	s.Gateway.Handle("/updateuser", http.HandlerFunc(s.ValidateSessionToken(s.UpdateUserHandler)))
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
-	s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
+	// s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
 	s.Gateway.HandleFunc("/ws", http.HandlerFunc(s.ValidateSessionToken(s.ServeWs)))
 	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
 	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))

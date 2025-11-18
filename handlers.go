@@ -1419,16 +1419,23 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, fmt.Sprintf("Failed to create event: %v", err), http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(eventID, "DBUG")
+	parts := strings.Split(eventID, "|")
+	if len(parts) < 2 {
+		s.LogError(fmt.Errorf("misp workflow failed: invalid event ID format: %s", eventID))
+		http.Error(w, fmt.Sprintf("Invalid event ID format: %s", eventID), http.StatusInternalServerError)
+		return
+	}
+	category := GetMispCategory(finalType)
+	link := parts[0]
 	// 4. Add the Attribute
 	// We map "Network activity" as a default category, but you could make this dynamic
 	_, err = s.AddMispAttribute(
-		eventID,
+		parts[1],
 		finalType,
 		req.AttributeValue,
-		"Network activity",
+		category,
 		"0",
-		"Added via ThreatCo Workflow",
+		"added via threatco workflow",
 		nil, // ToIDS defaults to true
 	)
 	if err != nil {
@@ -1446,6 +1453,7 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 
 	// 6. Response
 	response := map[string]string{
+		"link":     link,
 		"status":   "success",
 		"event_id": eventID,
 		"message":  fmt.Sprintf("Event created, attribute added, tag '%s' applied.", req.TagName),

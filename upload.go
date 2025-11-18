@@ -276,6 +276,7 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 }
 
 func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error {
+	fmt.Println("Uploading file to MISP:--------------->", file.FileName)
 	hasher := sha256.New()
 	_, err := hasher.Write(file.Data)
 	if err != nil {
@@ -302,7 +303,20 @@ func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id
 	request.Header.Set("Accept", "application/json")
 	res := ep.Do(request)
 	if len(res) == 0 {
+		fmt.Println("MISPFileHelper: received empty response for file:", file.FileName)
 		return fmt.Errorf("received an empty response for file %s", file.FileName)
+	}
+	if string(res) == "[]" {
+		newJson := map[string]string{
+			"vendor":  "misp",
+			"message": "No event found with the provided hash. Creating a new event.",
+			"status":  "success",
+			"value":   hash,
+		}
+		res, err = json.Marshal(newJson)
+		if err != nil {
+			return fmt.Errorf("failed to marshal new event response for file %s: %w", file.FileName, err)
+		}
 	}
 	resch <- ResponseItem{
 		Notify: true,

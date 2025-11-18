@@ -379,6 +379,15 @@ function renderNotifications() {
 
         notifDiv.appendChild(deleteButton);
         notifDiv.appendChild(message);
+        if (notif.link) {
+            const linkAnchor = document.createElement('a');
+            linkAnchor.href = notif.link;
+            linkAnchor.target = '_blank';
+            linkAnchor.rel = 'noopener noreferrer';
+            linkAnchor.textContent = 'View';
+            linkAnchor.className = 'button is-small is-link ml-2';
+            notifDiv.appendChild(linkAnchor);
+        }
         notificationContainer.appendChild(notifDiv);
     });
 }

@@ -385,7 +385,8 @@ export class Application {
             this.notifications.push({
                 id: `notif-${Date.now()}`,
                 info: `MISP Event Created! ID: ${data.event_id}`,
-                created: new Date().toISOString()
+                created: new Date().toISOString(),
+                link: data.link
             });
             return data;
         } catch (error) {

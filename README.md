@@ -8,6 +8,8 @@ a service for enriching indicators of compromise.
 - frontend with webapp, server management, and a knowledge base
 - view statistics and application performance
 - remote logging if desired
+- backup and restore
+- add events to misp
 
 ## base install dependencies
 - go programming language installed
@@ -63,7 +65,7 @@ curl -X POST http://localhost:8081/adduser -d '{"email": "rxlx@nullferatu.com", 
 
 ## backup and restore
 
-backup and restore is limited to the postgresql database type at this time. it is recommneded that you encrypt your backup as the users api keys are not hashed.
+backup and restore is limited to the postgresql database type at this time.
 
 - user must be *admin* to call the /backup endpoint.
 - backup calls are logged to your configured logger for auditing purposes

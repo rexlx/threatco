@@ -1032,7 +1032,8 @@ func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte
 	}
 
 	s.Log.Println("Successfully created MISP event with ID:", eventID)
-	return eventID, respBody, nil
+	link := fmt.Sprintf("%s/events/view/%s", mispTarget.GetURL(), eventID)
+	return fmt.Sprintf("%v|%v", link, eventID), respBody, nil
 }
 
 // targetID: The ID or UUID of the Event or Attribute.
@@ -1195,6 +1196,34 @@ func TestConnectivity(rawURL string) error {
 
 	// fmt.Printf("Successfully connected to %s\n", address)
 	return nil
+}
+
+func GetMispCategory(attrType string) string {
+	switch attrType {
+	// Hash and File artifacts -> Payload delivery
+	case "md5", "sha1", "sha256", "sha512", "ssdeep", "imphash", "filename", "filename|md5", "filename|sha1", "filename|sha256":
+		return "Payload delivery"
+
+	// Network identifiers -> Network activity
+	case "ip-src", "ip-dst", "ip-src|port", "ip-dst|port", "domain", "hostname", "url", "user-agent", "http-method":
+		return "Network activity"
+
+	// Email specific -> Payload delivery (or "Network activity" depending on preference, but Payload is safer for malicious emails)
+	case "email-src", "email-dst", "email-subject", "email-attachment", "email-body":
+		return "Payload delivery"
+
+	// External analysis links -> External analysis
+	case "link", "text", "comment", "other":
+		return "External analysis"
+
+	// Financial
+	case "btc", "iban", "bic", "bank-account-nr":
+		return "Financial fraud"
+
+	// Default fallback
+	default:
+		return "Other"
+	}
 }
 
 type PromptRequest = optional.LlmToolsPromptRequest
