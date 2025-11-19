@@ -752,22 +752,68 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 			RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		})
 	}
-	info = "domaintools returned some hits for that value"
+	var maxRisk int
+	var riskComponents []string
+
+	// Iterate over results to find the highest risk score and collect components
+	for _, res := range response.Response.Results {
+		if res.DomainRisk.RiskScore > maxRisk {
+			maxRisk = res.DomainRisk.RiskScore
+		}
+		for _, comp := range res.DomainRisk.Components {
+			// Only add components that contribute to the risk
+			if comp.RiskScore > 0 {
+				riskComponents = append(riskComponents, comp.Name)
+			}
+		}
+	}
+
+	// Construct a meaningful info string
+	if maxRisk > 0 {
+		// Join unique components if necessary, or just list them
+		compStr := ""
+		if len(riskComponents) > 0 {
+			compStr = fmt.Sprintf(" (%s)", strings.Join(uniqueStrings(riskComponents), ", "))
+		}
+		info = fmt.Sprintf("Risk Score: %d%s", maxRisk, compStr)
+	} else {
+		info = "Domain found but no risk detected"
+	}
+
+	// Determine background color based on risk
+	bg := "has-background-info" // Default (blue)
+	if maxRisk >= 70 {
+		bg = "has-background-danger" // High risk (red)
+	} else if maxRisk > 0 {
+		bg = "has-background-warning" // Moderate risk (yellow)
+	}
+
 	sum := SummarizedEvent{
 		Timestamp:     time.Now(),
-		Background:    "has-background-warning",
+		Background:    bg,
 		Info:          info,
 		From:          req.To,
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		AttrCount:     response.Response.ResultsCount,
-		ThreatLevelID: response.Response.ResultsCount,
-		Matched:       true,
+		ThreatLevelID: maxRisk,     // Use the actual risk score here
+		Matched:       maxRisk > 0, // Only flag as 'Matched' (alerting) if there is actual risk
 		Type:          req.Type,
 		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
-	// return resp, nil
+}
+
+func uniqueStrings(input []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range input {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }
 
 func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
