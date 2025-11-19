@@ -235,10 +235,12 @@ function attachEventListeners() {
             const vendor = document.getElementById('filterVendor').value;
             const start = document.getElementById('filterStart').value;
             const limit = document.getElementById('filterLimit').value;
+            const matched = document.getElementById('filterMatched').checked;
             const options = {};
             if (vendor) options.vendor = vendor;
             if (start) options.start = parseInt(start, 10);
             if (limit) options.limit = parseInt(limit, 10);
+            if (matched) options.matched = true;
             handleResponseFetch(options);
         }
     });
@@ -727,6 +729,11 @@ function renderResponseFilters() {
             <p class="control is-expanded"><input class="input" type="text" id="filterVendor" placeholder="Vendor"></p>
             <p class="control"><input class="input" type="number" id="filterStart" placeholder="Start (e.g., 0)"></p>
             <p class="control"><input class="input" type="number" id="filterLimit" placeholder="Limit (e.g., 100)"></p>
+            <p class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="filterMatched"> only matches
+                </label>
+            </p>
             <p class="control"><button class="button is-info" id="applyResponseFilters" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">filter_list</i></span><span>Apply</span></span></button></p>
         </div><hr class="has-background-grey-dark"><div id="responseTableContainer"><p class="has-text-info">Fetching initial responses...</p></div>`;
 }

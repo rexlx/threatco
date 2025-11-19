@@ -125,6 +125,7 @@ export class Application {
         if (options.vendor) params.append('vendor', options.vendor);
         if (options.start !== undefined) params.append('start', options.start);
         if (options.limit !== undefined) params.append('limit', options.limit);
+        if (options.matched) params.append('matched', 'true');
         const finalURL = `/getresponses?${params.toString()}`;
 
         try {

@@ -1097,18 +1097,20 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 
 // ResponseFilterOptions defines the available query parameters for filtering and pagination.
 type ResponseFilterOptions struct {
-	Vendor string
-	Start  int
-	Limit  int
+	Vendor  string
+	Start   int
+	Limit   int
+	Matched bool
 }
 
 // NewResponseFilterOptions creates a new options object from the request's query parameters.
 // It sets sensible defaults for pagination.
 func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 	opts := &ResponseFilterOptions{
-		Vendor: r.URL.Query().Get("vendor"),
-		Start:  0,
-		Limit:  100, // Default limit
+		Vendor:  r.URL.Query().Get("vendor"),
+		Start:   0,
+		Limit:   100, // Default limit
+		Matched: r.URL.Query().Get("matched") == "true",
 	}
 
 	// Parse 'start' query parameter
@@ -1190,8 +1192,38 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		filteredResponses = responses
 	}
 
+	// Apply Matched Filter
+	if options.Matched {
+		var matchedResponses []ResponseItem
+		for _, v := range filteredResponses {
+			var events []SummarizedEvent
+			// Try unmarshalling as slice
+			if err := json.Unmarshal(v.Data, &events); err == nil {
+				for _, e := range events {
+					if e.Matched {
+						matchedResponses = append(matchedResponses, v)
+						break // Found a match in this response, keep it
+					}
+				}
+			} else {
+				// Fallback: Try unmarshalling as single object just in case
+				var evt SummarizedEvent
+				if err := json.Unmarshal(v.Data, &evt); err == nil {
+					if evt.Matched {
+						matchedResponses = append(matchedResponses, v)
+					}
+				}
+			}
+		}
+		filteredResponses = matchedResponses
+	}
+
 	if len(filteredResponses) == 0 {
-		fmt.Fprintf(w, "No responses found for vendor: %s", options.Vendor)
+		if options.Matched {
+			fmt.Fprint(w, "No matched responses found.")
+		} else {
+			fmt.Fprintf(w, "No responses found for vendor: %s", options.Vendor)
+		}
 		return
 	}
 
