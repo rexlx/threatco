@@ -29,7 +29,7 @@ type Database interface {
 	StoreResponse(archive bool, id string, data []byte, vendor string) error
 	GetResponse(id string) ([]byte, error)
 	GetResponses(expiration time.Time) ([]ResponseItem, error)
-	DeleteResponse(archived bool, id string) error
+	DeleteResponse(id string) error
 	TestAndRecconect() error
 }
 
@@ -122,7 +122,7 @@ func (db *BboltDB) GetResponse(id string) ([]byte, error) {
 	return data, err
 }
 
-func (db *BboltDB) DeleteResponse(archived bool, id string) error {
+func (db *BboltDB) DeleteResponse(id string) error {
 	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
 		if err != nil {
@@ -440,13 +440,30 @@ func (db *PostgresDB) GetResponse(id string) ([]byte, error) {
 	return nil, fmt.Errorf("database error checking primary table for id %s: %w", id, err)
 }
 
-func (db *PostgresDB) DeleteResponse(archived bool, id string) error {
-	tableName := "responses"
-	if archived {
-		tableName = "archived_responses"
+func (db *PostgresDB) DeleteResponse(id string) error {
+	// 1. Try to delete from the active 'responses' table
+	ct, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("db error deleting from responses: %w", err)
 	}
-	_, err := db.Pool.Exec(context.Background(), fmt.Sprintf("DELETE FROM %s WHERE id = $1", tableName), id)
-	return err
+
+	// If we deleted at least 1 row, we are done.
+	if ct.RowsAffected() > 0 {
+		return nil
+	}
+
+	// 2. If RowsAffected was 0, try the 'archived_responses' table
+	ct, err = db.Pool.Exec(context.Background(), "DELETE FROM archived_responses WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("db error deleting from archived_responses: %w", err)
+	}
+
+	// 3. If RowsAffected is still 0, the ID doesn't exist in either table
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("response id %s not found in either table", id)
+	}
+
+	return nil
 }
 
 func (db *PostgresDB) TestAndRecconect() error {

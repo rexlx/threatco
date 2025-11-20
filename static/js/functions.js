@@ -32,6 +32,32 @@ function deleteUser(email) {
         });
 }
 
+function deleteResponse(id) {
+    if (!confirm('Are you sure you want to delete this response?')) {
+        return;
+    }
+
+    fetch('/deleteresponse', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ archived: archived, id: id })
+    }).then(response => {
+        if (response.ok) {
+            return response.text();
+        }
+        throw new Error('Network response was not ok.');
+    })
+        .then(data => {
+            alert('Response deleted successfully. Please refresh the page to see the changes.');
+        })
+        .catch(error => {
+            console.error('There was a problem with the fetch operation', error);
+            alert('There was a problem deleting the response.');
+        });
+}
+
 /**
  * Generates a new API key for a user and displays it in a custom modal.
  * @param {string} email - The email of the user to generate a key for.

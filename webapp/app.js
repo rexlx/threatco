@@ -209,14 +209,33 @@ export class Application {
         }
     }
 
-    /**
-     * REPLACED: Uses localStorage instead of Electron store.
-     */
+
     async setHistory() {
         if (this.resultHistory.length > 50) {
             this.resultHistory.splice(0, this.resultHistory.length - 50);
         }
         localStorage.setItem("threatpunch_history", JSON.stringify(this.resultHistory));
+    }
+
+    async deleteResponse(id) {
+        const thisURL = `/deleteresponse`;
+        try {
+            const response = await this._fetch(thisURL, {
+                method: 'POST',
+                body: JSON.stringify({ id: id})
+            });
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            const data = await response.json();
+            this.notifications.push({
+                id: `notif-${Date.now()}`,
+                info: data.message || `Successfully deleted response ${id}.`,
+                created: new Date().toISOString()
+            });
+            return data;
+        } catch (error) {
+            this.errors.push(`Error deleting response: ${error.message}`);
+            return null;
+        }
     }
 
     async sendLog(message) {

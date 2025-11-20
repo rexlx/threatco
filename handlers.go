@@ -934,7 +934,7 @@ func (s *Server) DeleteResponseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Println("Deleting response", dr.ID, "archived:", dr.Archived)
-	err = s.DB.DeleteResponse(dr.Archived, dr.ID)
+	err = s.DB.DeleteResponse(dr.ID)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
