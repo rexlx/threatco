@@ -450,24 +450,50 @@ func (db *PostgresDB) TestAndRecconect() error {
 }
 
 func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
-	rows, err := db.Pool.Query(context.Background(), "SELECT id, data, created, vendor FROM responses WHERE created > $1", expiration)
+	var query string
+	var args []interface{}
+
+	if expiration.IsZero() {
+		// CASE 1: Show Archived (Checkbox Checked)
+		// Combine both tables using UNION ALL.
+		query = `
+            SELECT id, data, created, vendor FROM responses
+            UNION ALL
+            SELECT id, data, created, vendor FROM archived_responses
+            ORDER BY created DESC`
+	} else {
+		// CASE 2: Standard View (Checkbox Unchecked)
+		// Select only from the active table with the time filter.
+		query = `
+            SELECT id, data, created, vendor FROM responses 
+            WHERE created > $1 
+            ORDER BY created DESC`
+		args = append(args, expiration)
+	}
+	fmt.Println(expiration, query, args)
+	// Pass the variable arguments (args...) to the query
+	rows, err := db.Pool.Query(context.Background(), query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var responses []ResponseItem
 	for rows.Next() {
 		var resp ResponseItem
 		var data []byte
+
 		if err := rows.Scan(&resp.ID, &data, &resp.Time, &resp.Vendor); err != nil {
 			return nil, err
 		}
 		resp.Data = data
 		responses = append(responses, resp)
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
 	return responses, nil
 }
 

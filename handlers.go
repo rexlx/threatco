@@ -1146,38 +1146,43 @@ func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 // It now supports filtering by vendor and pagination using 'start' and 'limit' query parameters.
 // Example URL: /responses?vendor=some_vendor&start=0&limit=50
 func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request) {
-	// Add headers to prevent caching by clients.
-	// This ensures that the user's browser will always fetch the latest data.
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
-	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
-	w.Header().Set("Expires", "0")                                         // Proxies.
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
-	// Parse filter and pagination options from query parameters
 	options, err := NewResponseFilterOptions(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// CHANGE 1: Check for the "archived" checkbox/param
+	// We default to looking back 24 hours (standard view)
+	lookbackTime := time.Now().Add(-24 * time.Hour)
+
+	// If the user checked "Show Archived", we pass a Zero time to trigger the UNION ALL query
+	if r.URL.Query().Get("archived") == "true" {
+		lookbackTime = time.Time{}
+	}
+
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
-	// 1. Fetch all responses from the last 24 hours
-	responses, err := s.DB.GetResponses(time.Now().Add(-24 * time.Hour))
+	// CHANGE 2: Pass the dynamic lookbackTime variable
+	responses, err := s.DB.GetResponses(lookbackTime)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if len(responses) == 0 {
-		fmt.Fprint(w, "No responses in cache for the last 24 hours.")
+		// Updated message to be accurate regardless of mode
+		fmt.Fprint(w, "No responses found in the selected time range.")
 		return
 	}
 
-	// 2. Sort all responses by time (most recent first)
-	sort.Slice(responses, func(i, j int) bool {
-		return responses[i].Time.After(responses[j].Time)
-	})
+	// CHANGE 3: Removed manual sort.Slice.
+	// The SQL query now handles 'ORDER BY created DESC', so the data arrives sorted.
 
 	// 3. Apply Vendor Filter
 	var filteredResponses []ResponseItem
@@ -1188,7 +1193,6 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 			}
 		}
 	} else {
-		// If no vendor is specified, use the whole list
 		filteredResponses = responses
 	}
 
@@ -1202,11 +1206,11 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 				for _, e := range events {
 					if e.Matched {
 						matchedResponses = append(matchedResponses, v)
-						break // Found a match in this response, keep it
+						break
 					}
 				}
 			} else {
-				// Fallback: Try unmarshalling as single object just in case
+				// Fallback: Try unmarshalling as single object
 				var evt SummarizedEvent
 				if err := json.Unmarshal(v.Data, &evt); err == nil {
 					if evt.Matched {
@@ -1233,11 +1237,9 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	end := options.Start + options.Limit
 
 	if start >= len(filteredResponses) {
-		fmt.Println("Start index is out of bounds, returning empty set.")
-		// If the start index is out of bounds, return an empty set
+		// Return empty set silently or print log, usually empty table is fine
 		paginatedResponses = []ResponseItem{}
 	} else {
-		// Ensure the end index does not go out of bounds
 		if end > len(filteredResponses) {
 			end = len(filteredResponses)
 		}
@@ -1258,6 +1260,8 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
                 %v
             </tbody>
         </table>`
+
+	// Added a CSS class or visual indicator for archived items could be a nice touch later
 	tmpl := `<tr>
         <td>%v</td>
         <td>%v</td>

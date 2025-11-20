@@ -17,6 +17,11 @@ export class ResponseController {
                         <input type="checkbox" id="filterMatched"> only matches
                     </label>
                 </p>
+                <p class="control">
+                    <label class="checkbox">
+                        <input type="checkbox" id="filterArchived"> archived
+                    </label>
+                </p>
                 <p class="control"><button class="button is-info" id="applyResponseFilters" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">filter_list</i></span><span>Apply</span></span></button></p>
             </div>
             <hr class="has-background-grey-dark">
@@ -28,12 +33,15 @@ export class ResponseController {
             const start = document.getElementById('filterStart').value;
             const limit = document.getElementById('filterLimit').value;
             const matched = document.getElementById('filterMatched').checked;
+            // Capture the archived state
+            const archived = document.getElementById('filterArchived').checked;
 
             const options = {};
             if (vendor) options.vendor = vendor;
             if (start) options.start = parseInt(start, 10);
             if (limit) options.limit = parseInt(limit, 10);
             if (matched) options.matched = true;
+            if (archived) options.archived = true; // Add to options
             
             this.fetch(options);
         });
@@ -48,6 +56,7 @@ export class ResponseController {
         
         tableContainer.innerHTML = '<p class="has-text-info">Fetching...</p><progress class="progress is-small is-info" max="100"></progress>';
         
+        // This calls the method we updated in the previous step
         const cacheHtml = await this.app.fetchResponseCache(options);
         tableContainer.innerHTML = cacheHtml;
 

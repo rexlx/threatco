@@ -121,22 +121,25 @@ export class Application {
     }
 
     async fetchResponseCache(options = {}) {
-        const params = new URLSearchParams();
-        if (options.vendor) params.append('vendor', options.vendor);
-        if (options.start !== undefined) params.append('start', options.start);
-        if (options.limit !== undefined) params.append('limit', options.limit);
-        if (options.matched) params.append('matched', 'true');
-        const finalURL = `/getresponses?${params.toString()}`;
+    const params = new URLSearchParams();
+    
+    if (options.vendor) params.append('vendor', options.vendor);
+    if (options.start !== undefined) params.append('start', options.start);
+    if (options.limit !== undefined) params.append('limit', options.limit);
+    if (options.matched) params.append('matched', 'true');    
+    if (options.archived) params.append('archived', 'true');
 
-        try {
-            const response = await this._fetch(finalURL, { method: 'GET' });
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            return await response.text();
-        } catch (error) {
-            this.errors.push(`Error fetching response cache: ${error.message}`);
-            return `<p class="has-text-danger">Error fetching response cache: ${error.message}</p>`;
-        }
+    const finalURL = `/getresponses?${params.toString()}`;
+
+    try {
+        const response = await this._fetch(finalURL, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        return await response.text();
+    } catch (error) {
+        this.errors.push(`Error fetching response cache: ${error.message}`);
+        return `<p class="has-text-danger">Error fetching response cache: ${error.message}</p>`;
     }
+}
 
     async fetchPastSearches(value) {
         const thisURL = `/previous-results`;
