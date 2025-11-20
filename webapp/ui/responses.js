@@ -72,5 +72,48 @@ export class ResponseController {
                 }
             });
         });
+
+        // NEW: Attach listeners to delete buttons
+        tableContainer.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopPropagation(); // Prevent bubbling
+                
+                const id = btn.getAttribute('data-id');
+                if (!confirm(`Are you sure you want to delete response ${id}?`)) {
+                    return;
+                }
+
+                // Optimistic UI update: disable button while processing
+                btn.classList.add('is-loading');
+
+                try {
+                    const resp = await fetch('/deleteresponse', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        // The handler expects 'id' and 'archived' boolean
+                        body: JSON.stringify({ 
+                            id: id, 
+                            archived: options.archived || false 
+                        })
+                    });
+
+                    if (resp.ok) {
+                        // Refresh the table to reflect changes
+                        await this.fetch(options);
+                    } else {
+                        const errText = await resp.text();
+                        alert('Failed to delete: ' + errText);
+                        btn.classList.remove('is-loading');
+                    }
+                } catch (err) {
+                    console.error('Delete error:', err);
+                    alert('An error occurred while deleting.');
+                    btn.classList.remove('is-loading');
+                }
+            });
+        });
     }
 }

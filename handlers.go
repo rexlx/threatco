@@ -1273,9 +1273,10 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	table := `<table class="table is-fullwidth is-striped">
             <thead>
                 <tr>
-                    <th>time</th>
-                    <th>vendor</th>
-                    <th>link</th>
+                    <th>Time</th>
+                    <th>Vendor</th>
+                    <th>Link</th>
+                    <th>Actions</th> 
                 </tr>
             </thead>
             <tbody>
@@ -1283,15 +1284,19 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
             </tbody>
         </table>`
 
-	// Added a CSS class or visual indicator for archived items could be a nice touch later
 	tmpl := `<tr>
         <td>%v</td>
         <td>%v</td>
         <td><a href="/events/%v">%v</a></td>
+        <td>
+            <button class="button is-small is-danger is-light delete-btn" data-id="%v">
+                <span class="icon is-small"><i class="material-icons">delete</i></span>
+            </button>
+        </td>
     </tr>`
 
 	for _, v := range paginatedResponses {
-		out += fmt.Sprintf(tmpl, v.Time.Format(time.RFC3339), v.Vendor, v.ID, v.ID)
+		out += fmt.Sprintf(tmpl, v.Time.Format(time.RFC3339), v.Vendor, v.ID, v.ID, v.ID)
 	}
 
 	if out == "" {
