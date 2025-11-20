@@ -29,7 +29,7 @@ type Database interface {
 	StoreResponse(archive bool, id string, data []byte, vendor string) error
 	GetResponse(id string) ([]byte, error)
 	GetResponses(expiration time.Time) ([]ResponseItem, error)
-	DeleteResponse(id string) error
+	DeleteResponse(archived bool, id string) error
 	TestAndRecconect() error
 }
 
@@ -122,7 +122,7 @@ func (db *BboltDB) GetResponse(id string) ([]byte, error) {
 	return data, err
 }
 
-func (db *BboltDB) DeleteResponse(id string) error {
+func (db *BboltDB) DeleteResponse(archived bool, id string) error {
 	return db.DB.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
 		if err != nil {
@@ -440,8 +440,12 @@ func (db *PostgresDB) GetResponse(id string) ([]byte, error) {
 	return nil, fmt.Errorf("database error checking primary table for id %s: %w", id, err)
 }
 
-func (db *PostgresDB) DeleteResponse(id string) error {
-	_, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE id = $1", id)
+func (db *PostgresDB) DeleteResponse(archived bool, id string) error {
+	tableName := "responses"
+	if archived {
+		tableName = "archived_responses"
+	}
+	_, err := db.Pool.Exec(context.Background(), fmt.Sprintf("DELETE FROM %s WHERE id = $1", tableName), id)
 	return err
 }
 
@@ -470,7 +474,6 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
             ORDER BY created DESC`
 		args = append(args, expiration)
 	}
-	fmt.Println(expiration, query, args)
 	// Pass the variable arguments (args...) to the query
 	rows, err := db.Pool.Query(context.Background(), query, args...)
 	if err != nil {

@@ -921,6 +921,28 @@ func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+type deleteRequest struct {
+	ID       string `json:"id"`
+	Archived bool   `json:"archived"`
+}
+
+func (s *Server) DeleteResponseHandler(w http.ResponseWriter, r *http.Request) {
+	var dr deleteRequest
+	err := json.NewDecoder(r.Body).Decode(&dr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.Log.Println("Deleting response", dr.ID, "archived:", dr.Archived)
+	err = s.DB.DeleteResponse(dr.Archived, dr.ID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte(`{"status": "ok"}`))
+}
+
 func (s *Server) GetCoordinateHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
