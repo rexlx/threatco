@@ -128,6 +128,7 @@ export class Application {
         if (options.limit !== undefined) params.append('limit', options.limit);
         if (options.matched) params.append('matched', 'true');
         if (options.archived) params.append('archived', 'true');
+        if (options.id) params.append('id', options.id);
 
         const finalURL = `/getresponses?${params.toString()}`;
 

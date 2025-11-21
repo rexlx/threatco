@@ -39,7 +39,6 @@ export class ResponseController {
 
             // UUID Regex (8-4-4-4-12 hex characters)
             const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
             if (rawInput) {
                 if (uuidPattern.test(rawInput)) {
                     // It looks like a UUID, so we filter by ID
@@ -54,7 +53,6 @@ export class ResponseController {
             if (limit) options.limit = parseInt(limit, 10);
             if (matched) options.matched = true;
             if (archived) options.archived = true;
-            
             this.fetch(options);
         });
 
