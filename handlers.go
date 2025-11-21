@@ -1180,9 +1180,11 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	searchID := r.URL.Query().Get("id")
 	lookbackTime := time.Now().Add(-24 * time.Hour)
 
-	if r.URL.Query().Get("archived") == "true" {
+	// If searching by ID or requesting archives, ignore the 24h limit
+	if r.URL.Query().Get("archived") == "true" || searchID != "" {
 		lookbackTime = time.Time{}
 	}
 
@@ -1200,6 +1202,19 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// 1. Apply ID Filter (Highest Priority)
+	if searchID != "" {
+		var idFiltered []ResponseItem
+		for _, v := range responses {
+			if v.ID == searchID {
+				idFiltered = append(idFiltered, v)
+				break
+			}
+		}
+		responses = idFiltered
+	}
+
+	// 2. Apply Vendor Filter
 	var filteredResponses []ResponseItem
 	if options.Vendor != "" {
 		for _, v := range responses {
@@ -1211,6 +1226,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		filteredResponses = responses
 	}
 
+	// 3. Apply Matched Filter
 	if options.Matched {
 		var matchedResponses []ResponseItem
 		for _, v := range filteredResponses {
@@ -1235,7 +1251,9 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	}
 
 	if len(filteredResponses) == 0 {
-		if options.Matched {
+		if searchID != "" {
+			fmt.Fprintf(w, "No response found with ID: %s", searchID)
+		} else if options.Matched {
 			fmt.Fprint(w, "No matched responses found.")
 		} else {
 			fmt.Fprintf(w, "No responses found for vendor: %s", options.Vendor)
@@ -1243,6 +1261,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// 4. Pagination
 	var paginatedResponses []ResponseItem
 	start := options.Start
 	end := options.Start + options.Limit
@@ -1256,6 +1275,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		paginatedResponses = filteredResponses[start:end]
 	}
 
+	// 5. Render HTML
 	var out string
 	table := `<table class="table is-fullwidth is-striped">
             <thead>
