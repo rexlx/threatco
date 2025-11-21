@@ -9,7 +9,7 @@ export class ResponseController {
         this.container.innerHTML = `
             <h1 class="title has-text-info">Responses</h1>
             <div class="field is-grouped">
-                <p class="control is-expanded"><input class="input" type="text" id="filterVendor" placeholder="Vendor"></p>
+                <p class="control is-expanded"><input class="input" type="text" id="filterVendor" placeholder="Vendor or ID"></p>
                 <p class="control"><input class="input" type="number" id="filterStart" placeholder="Start (e.g., 0)"></p>
                 <p class="control"><input class="input" type="number" id="filterLimit" placeholder="Limit (e.g., 100)"></p>
                 <p class="control">
@@ -29,19 +29,31 @@ export class ResponseController {
 
         // Attach Listener for Filter Button
         document.getElementById('applyResponseFilters').addEventListener('click', () => {
-            const vendor = document.getElementById('filterVendor').value;
+            const rawInput = document.getElementById('filterVendor').value.trim();
             const start = document.getElementById('filterStart').value;
             const limit = document.getElementById('filterLimit').value;
             const matched = document.getElementById('filterMatched').checked;
-            // Capture the archived state
             const archived = document.getElementById('filterArchived').checked;
 
             const options = {};
-            if (vendor) options.vendor = vendor;
+
+            // UUID Regex (8-4-4-4-12 hex characters)
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+            if (rawInput) {
+                if (uuidPattern.test(rawInput)) {
+                    // It looks like a UUID, so we filter by ID
+                    options.id = rawInput;
+                } else {
+                    // It's just text, so we filter by Vendor
+                    options.vendor = rawInput;
+                }
+            }
+
             if (start) options.start = parseInt(start, 10);
             if (limit) options.limit = parseInt(limit, 10);
             if (matched) options.matched = true;
-            if (archived) options.archived = true; // Add to options
+            if (archived) options.archived = true;
             
             this.fetch(options);
         });
@@ -56,35 +68,30 @@ export class ResponseController {
         
         tableContainer.innerHTML = '<p class="has-text-info">Fetching...</p><progress class="progress is-small is-info" max="100"></progress>';
         
-        // This calls the method we updated in the previous step
         const cacheHtml = await this.app.fetchResponseCache(options);
         tableContainer.innerHTML = cacheHtml;
 
-        // Re-attach listeners to the new links in the HTML returned by the server
         tableContainer.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', async (event) => {
                 event.preventDefault();
                 const id = new URL(link.href).pathname.split('/').pop();
                 if (id) {
-                    // Dispatch event to open modal (handled in renderer.js)
                     const customEvent = new CustomEvent('req-open-details', { detail: id });
                     document.dispatchEvent(customEvent);
                 }
             });
         });
 
-        // NEW: Attach listeners to delete buttons
         tableContainer.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', async (event) => {
                 event.preventDefault();
-                event.stopPropagation(); // Prevent bubbling
+                event.stopPropagation(); 
                 
                 const id = btn.getAttribute('data-id');
                 if (!confirm(`Are you sure you want to delete response ${id}?`)) {
                     return;
                 }
 
-                // Optimistic UI update: disable button while processing
                 btn.classList.add('is-loading');
 
                 try {
@@ -93,7 +100,6 @@ export class ResponseController {
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        // The handler expects 'id' and 'archived' boolean
                         body: JSON.stringify({ 
                             id: id, 
                             archived: options.archived || false 
@@ -101,7 +107,6 @@ export class ResponseController {
                     });
 
                     if (resp.ok) {
-                        // Refresh the table to reflect changes
                         await this.fetch(options);
                     } else {
                         const errText = await resp.text();

@@ -1123,6 +1123,7 @@ type ResponseFilterOptions struct {
 	Start   int
 	Limit   int
 	Matched bool
+	ID      string
 }
 
 // NewResponseFilterOptions creates a new options object from the request's query parameters.
@@ -1133,6 +1134,7 @@ func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 		Start:   0,
 		Limit:   100, // Default limit
 		Matched: r.URL.Query().Get("matched") == "true",
+		ID:      r.URL.Query().Get("id"),
 	}
 
 	// Parse 'start' query parameter
