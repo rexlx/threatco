@@ -121,25 +121,25 @@ export class Application {
     }
 
     async fetchResponseCache(options = {}) {
-    const params = new URLSearchParams();
-    
-    if (options.vendor) params.append('vendor', options.vendor);
-    if (options.start !== undefined) params.append('start', options.start);
-    if (options.limit !== undefined) params.append('limit', options.limit);
-    if (options.matched) params.append('matched', 'true');    
-    if (options.archived) params.append('archived', 'true');
+        const params = new URLSearchParams();
 
-    const finalURL = `/getresponses?${params.toString()}`;
+        if (options.vendor) params.append('vendor', options.vendor);
+        if (options.start !== undefined) params.append('start', options.start);
+        if (options.limit !== undefined) params.append('limit', options.limit);
+        if (options.matched) params.append('matched', 'true');
+        if (options.archived) params.append('archived', 'true');
 
-    try {
-        const response = await this._fetch(finalURL, { method: 'GET' });
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        return await response.text();
-    } catch (error) {
-        this.errors.push(`Error fetching response cache: ${error.message}`);
-        return `<p class="has-text-danger">Error fetching response cache: ${error.message}</p>`;
+        const finalURL = `/getresponses?${params.toString()}`;
+
+        try {
+            const response = await this._fetch(finalURL, { method: 'GET' });
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            return await response.text();
+        } catch (error) {
+            this.errors.push(`Error fetching response cache: ${error.message}`);
+            return `<p class="has-text-danger">Error fetching response cache: ${error.message}</p>`;
+        }
     }
-}
 
     async fetchPastSearches(value) {
         const thisURL = `/previous-results`;
@@ -222,7 +222,7 @@ export class Application {
         try {
             const response = await this._fetch(thisURL, {
                 method: 'POST',
-                body: JSON.stringify({ id: id})
+                body: JSON.stringify({ id: id })
             });
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             const data = await response.json();
@@ -236,6 +236,23 @@ export class Application {
             this.errors.push(`Error deleting response: ${error.message}`);
             return null;
         }
+    }
+
+    extractStandardized(responseArray) {
+        // Validate input
+        if (!Array.isArray(responseArray) || responseArray.length < 3) {
+            console.error("Invalid data format received");
+            return null;
+        }
+
+        // Use destructuring to pull index 0 and 2, skipping index 1 (raw vendor)
+        const [request, , summary] = responseArray;
+
+        // Return as a named object for clarity
+        return {
+            request: request,
+            summary: summary
+        };
     }
 
     async sendLog(message) {

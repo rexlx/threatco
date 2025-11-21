@@ -1178,11 +1178,8 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// CHANGE 1: Check for the "archived" checkbox/param
-	// We default to looking back 24 hours (standard view)
 	lookbackTime := time.Now().Add(-24 * time.Hour)
 
-	// If the user checked "Show Archived", we pass a Zero time to trigger the UNION ALL query
 	if r.URL.Query().Get("archived") == "true" {
 		lookbackTime = time.Time{}
 	}
@@ -1190,7 +1187,6 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
-	// CHANGE 2: Pass the dynamic lookbackTime variable
 	responses, err := s.DB.GetResponses(lookbackTime)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1198,15 +1194,10 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	}
 
 	if len(responses) == 0 {
-		// Updated message to be accurate regardless of mode
 		fmt.Fprint(w, "No responses found in the selected time range.")
 		return
 	}
 
-	// CHANGE 3: Removed manual sort.Slice.
-	// The SQL query now handles 'ORDER BY created DESC', so the data arrives sorted.
-
-	// 3. Apply Vendor Filter
 	var filteredResponses []ResponseItem
 	if options.Vendor != "" {
 		for _, v := range responses {
@@ -1218,12 +1209,10 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		filteredResponses = responses
 	}
 
-	// Apply Matched Filter
 	if options.Matched {
 		var matchedResponses []ResponseItem
 		for _, v := range filteredResponses {
 			var events []SummarizedEvent
-			// Try unmarshalling as slice
 			if err := json.Unmarshal(v.Data, &events); err == nil {
 				for _, e := range events {
 					if e.Matched {
@@ -1232,7 +1221,6 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 					}
 				}
 			} else {
-				// Fallback: Try unmarshalling as single object
 				var evt SummarizedEvent
 				if err := json.Unmarshal(v.Data, &evt); err == nil {
 					if evt.Matched {
@@ -1253,13 +1241,11 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 4. Apply Slicing/Pagination
 	var paginatedResponses []ResponseItem
 	start := options.Start
 	end := options.Start + options.Limit
 
 	if start >= len(filteredResponses) {
-		// Return empty set silently or print log, usually empty table is fine
 		paginatedResponses = []ResponseItem{}
 	} else {
 		if end > len(filteredResponses) {
@@ -1268,14 +1254,13 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		paginatedResponses = filteredResponses[start:end]
 	}
 
-	// 5. Render the final list as an HTML table
 	var out string
 	table := `<table class="table is-fullwidth is-striped">
             <thead>
                 <tr>
                     <th>Time</th>
                     <th>Vendor</th>
-                    <th>Link</th>
+                    <th>Value</th>
                     <th>Actions</th> 
                 </tr>
             </thead>
@@ -1287,16 +1272,35 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	tmpl := `<tr>
         <td>%v</td>
         <td>%v</td>
-        <td><a href="/events/%v">%v</a></td>
+        <td style="word-break: break-all;">%v</td>
         <td>
-            <button class="button is-small is-danger is-light delete-btn" data-id="%v">
-                <span class="icon is-small"><i class="material-icons">delete</i></span>
-            </button>
+            <div class="field is-grouped">
+                <p class="control">
+                    <a href="/events/%v" class="button is-small is-info is-light" title="View Event">
+                        <span class="icon is-small"><i class="material-icons">visibility</i></span>
+                    </a>
+                </p>
+                <p class="control">
+                    <button class="button is-small is-danger is-light delete-btn" data-id="%v">
+                        <span class="icon is-small"><i class="material-icons">delete</i></span>
+                    </button>
+                </p>
+            </div>
         </td>
     </tr>`
 
 	for _, v := range paginatedResponses {
-		out += fmt.Sprintf(tmpl, v.Time.Format(time.RFC3339), v.Vendor, v.ID, v.ID, v.ID)
+		var rawParts []json.RawMessage
+		var proxyReq ProxyRequest
+		displayValue := "N/A"
+
+		if err := json.Unmarshal(v.Data, &rawParts); err == nil && len(rawParts) > 0 {
+			if err := json.Unmarshal(rawParts[0], &proxyReq); err == nil {
+				displayValue = proxyReq.Value
+			}
+		}
+
+		out += fmt.Sprintf(tmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID)
 	}
 
 	if out == "" {
@@ -1548,11 +1552,6 @@ type ProxyRequest struct {
 	Username      string `json:"username"`
 }
 
-type GenericOut struct {
-	Value string `json:"value"`
-	Type  string `json:"type"`
-}
-
 type SummarizedEvent struct {
 	Timestamp     time.Time `json:"timestamp"`
 	Matched       bool      `json:"matched"`
@@ -1567,6 +1566,11 @@ type SummarizedEvent struct {
 	Info          string    `json:"info"`
 	RawLink       string    `json:"raw_link"`
 	Type          string    `json:"type"`
+}
+
+type GenericOut struct {
+	Value string `json:"value"`
+	Type  string `json:"type"`
 }
 
 type AttributeRequest struct {
