@@ -1277,7 +1277,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 
 	// 5. Render HTML
 	var out string
-	table := `<table class="table is-fullwidth is-striped">
+	table := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
             <thead>
                 <tr>
                     <th>Time</th>
