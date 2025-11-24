@@ -78,15 +78,27 @@ export class ModalManager {
 
     renderMispForm() {
         const currentData = this.app.focus;
+        let eventSource = null;
 
-        // 1. Validate Data
-        if (!Array.isArray(currentData) || currentData.length !== 3) {
+        // 1. Validate Data & Find SummarizedEvent
+        // We look for an object that matches the SummarizedEvent struct signature (matched, value, from)
+        if (Array.isArray(currentData)) {
+            eventSource = currentData.find(item => 
+                item && 
+                typeof item === 'object' && 
+                'matched' in item && 
+                'value' in item && 
+                'from' in item
+            );
+        }
+
+        if (!eventSource) {
             this.content.style.whiteSpace = 'normal';
             this.content.style.fontFamily = 'inherit';
             
             this.content.innerHTML = `
                 <div class="notification is-warning is-light">
-                    <strong>Insufficient Data:</strong> Expected 3 items, found ${Array.isArray(currentData) ? currentData.length : 'invalid format'}.
+                    <strong>Insufficient Data:</strong> Could not find valid event data in the response.
                 </div>
                 <div class="buttons is-right">
                     <button class="button" id="mispCancelBtn">Go Back</button>
@@ -99,7 +111,6 @@ export class ModalManager {
         }
 
         // 2. Extract Data
-        const eventSource = currentData[2] || {};
         let initialValue = eventSource.value || "";
         let initialType = eventSource.type || "";
         
