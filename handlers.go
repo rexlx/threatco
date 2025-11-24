@@ -1229,22 +1229,33 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	// 3. Apply Matched Filter
 	if options.Matched {
 		var matchedResponses []ResponseItem
+
+		// Recursive helper to find "matched": true in arbitrary JSON structures
+		var containsMatch func([]byte) bool
+		containsMatch = func(data []byte) bool {
+			if len(data) == 0 {
+				return false
+			}
+			// Try as single event
+			var evt SummarizedEvent
+			if err := json.Unmarshal(data, &evt); err == nil && evt.Matched {
+				return true
+			}
+			// Try as array
+			var arr []json.RawMessage
+			if err := json.Unmarshal(data, &arr); err == nil {
+				for _, item := range arr {
+					if containsMatch(item) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+
 		for _, v := range filteredResponses {
-			var events []SummarizedEvent
-			if err := json.Unmarshal(v.Data, &events); err == nil {
-				for _, e := range events {
-					if e.Matched {
-						matchedResponses = append(matchedResponses, v)
-						break
-					}
-				}
-			} else {
-				var evt SummarizedEvent
-				if err := json.Unmarshal(v.Data, &evt); err == nil {
-					if evt.Matched {
-						matchedResponses = append(matchedResponses, v)
-					}
-				}
+			if containsMatch(v.Data) {
+				matchedResponses = append(matchedResponses, v)
 			}
 		}
 		filteredResponses = matchedResponses
@@ -1516,10 +1527,11 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 	}
 	category := GetMispCategory(finalType)
 	link := parts[0]
+	eId := parts[1]
 	// 4. Add the Attribute
 	// We map "Network activity" as a default category, but you could make this dynamic
 	_, err = s.AddMispAttribute(
-		parts[1],
+		eId,
 		finalType,
 		req.AttributeValue,
 		category,
@@ -1534,7 +1546,7 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 
 	// 5. Add the Tag (if provided)
 	if req.TagName != "" {
-		err = s.AddMispTag(eventID, req.TagName)
+		err = s.AddMispTag(eId, req.TagName)
 		if err != nil {
 			s.LogError(fmt.Errorf("misp workflow warning: event %s created, but tagging failed: %w", eventID, err))
 		}

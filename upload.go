@@ -286,7 +286,9 @@ func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id
 	uid := uuid.New().String()
 	info := fmt.Sprintf("%v: File %s uploaded with hash %s", uid, file.FileName, hash)
 	file.ID = uid
-	fmt.Println(info)
+	if info == "" {
+		fmt.Println("MISPFileHelper: empty info string for file:", file.FileName)
+	}
 	thisUrl := fmt.Sprintf("%s/", ep.GetURL())
 	var output GenericOut
 	output.Type = "sha256"
