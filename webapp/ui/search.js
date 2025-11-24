@@ -5,6 +5,7 @@ export class SearchController {
         this.container = document.getElementById(containerId);
         this.app = app;
         this.contextualizer = contextualizer;
+        this.isSearching = false; // Track search state
         
         // FIX: Attach the listener ONCE here.
         // Since we use event delegation (this.container.addEventListener), 
@@ -54,6 +55,7 @@ export class SearchController {
     }
 
     async handleSearch() {
+        this.isSearching = true; // Set flag to prevent UI loop from overwriting loader
         this.app.results = [];
         this.app.errors = [];
         
@@ -61,41 +63,52 @@ export class SearchController {
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
         
         const userSearchInput = document.getElementById('userSearch');
-        if (!userSearchInput) return; 
+        if (!userSearchInput) {
+            this.isSearching = false;
+            return; 
+        }
         const searchText = userSearchInput.value;
         const dontParse = document.getElementById('dontParseCheckbox').checked;
         
-        this.container.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-primary'></progress>";
+        // Restored style to is-danger and max=100
+        this.container.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-link' max='100'></progress>";
 
-        if (dontParse) {
-            await this.processMatches(null, { value: searchText }, null, true);
-        } else {
-            const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({ 
-                type: key, 
-                matches: [...new Set(this.contextualizer.getMatches(searchText, this.contextualizer.expressions[key]))] 
-            }));
-            
-            const promises = [];
+        try {
+            if (dontParse) {
+                await this.processMatches(null, { value: searchText }, null, true);
+            } else {
+                const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({ 
+                    type: key, 
+                    matches: [...new Set(this.contextualizer.getMatches(searchText, this.contextualizer.expressions[key]))] 
+                }));
+                
+                const promises = [];
 
-            for (let svr of this.app.user.services) {
-                for (let matchPair of allMatches) {
-                    if (matchPair.type === "domain" && matchPair.matches.length > 0) {
-                        const baseDomains = new Set();
-                        for (const domain of matchPair.matches) {
-                            const baseDomain = this.contextualizer.extractSecondLevelDomain(domain);
-                            if (baseDomain) baseDomains.add(baseDomain);
+                for (let svr of this.app.user.services) {
+                    for (let matchPair of allMatches) {
+                        if (matchPair.type === "domain" && matchPair.matches.length > 0) {
+                            const baseDomains = new Set();
+                            for (const domain of matchPair.matches) {
+                                const baseDomain = this.contextualizer.extractSecondLevelDomain(domain);
+                                if (baseDomain) baseDomains.add(baseDomain);
+                            }
+                            matchPair.matches = [...new Set([...matchPair.matches, ...baseDomains])];
                         }
-                        matchPair.matches = [...new Set([...matchPair.matches, ...baseDomains])];
-                    }
 
-                    if (svr.type.includes(matchPair.type)) {
-                        const route = svr.route_map ? svr.route_map.find(r => r.type === matchPair.type)?.route : "";
-                        // We don't await here so they run in parallel
-                        promises.push(this.processMatches(svr.kind, matchPair, route, false));
+                        if (svr.type.includes(matchPair.type)) {
+                            const route = svr.route_map ? svr.route_map.find(r => r.type === matchPair.type)?.route : "";
+                            // We don't await here so they run in parallel
+                            promises.push(this.processMatches(svr.kind, matchPair, route, false));
+                        }
                     }
                 }
+                await Promise.allSettled(promises);
             }
-            await Promise.allSettled(promises);
+        } finally {
+            this.isSearching = false;
+            // Force render at the end to ensure we show "No results" if empty,
+            // or clean up the progress bar if results came in.
+            this.renderResultCards(this.app.results);
         }
     }
 
@@ -154,6 +167,11 @@ export class SearchController {
     }
 
     renderResultCards(resultsArray, isHistoryView = false) {
+        // If searching and no results yet, DO NOT clear the container (keep the progress bar)
+        if (this.isSearching && (!resultsArray || resultsArray.length === 0)) {
+            return;
+        }
+
         this.container.innerHTML = "";
         
         if (!resultsArray || resultsArray.length === 0) {
