@@ -1169,7 +1169,12 @@ func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 // GetResponseCacheHandler handles requests for viewing cached responses.
 // It now supports filtering by vendor and pagination using 'start' and 'limit' query parameters.
 // Example URL: /responses?vendor=some_vendor&start=0&limit=50
+
 func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	defer func(t time.Time) {
+		fmt.Println("GetResponseCacheHandler2 took", time.Since(t))
+	}(start)
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
@@ -1180,10 +1185,9 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Determine time range
 	searchID := r.URL.Query().Get("id")
 	lookbackTime := time.Now().Add(-24 * time.Hour)
-
-	// If searching by ID or requesting archives, ignore the 24h limit
 	if r.URL.Query().Get("archived") == "true" || searchID != "" {
 		lookbackTime = time.Time{}
 	}
@@ -1191,6 +1195,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
+	// 1. Fetch
 	responses, err := s.DB.GetResponses(lookbackTime)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1202,64 +1207,8 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 1. Apply ID Filter (Highest Priority)
-	if searchID != "" {
-		var idFiltered []ResponseItem
-		for _, v := range responses {
-			if v.ID == searchID {
-				idFiltered = append(idFiltered, v)
-				break
-			}
-		}
-		responses = idFiltered
-	}
-
-	// 2. Apply Vendor Filter
-	var filteredResponses []ResponseItem
-	if options.Vendor != "" {
-		for _, v := range responses {
-			if v.Vendor == options.Vendor {
-				filteredResponses = append(filteredResponses, v)
-			}
-		}
-	} else {
-		filteredResponses = responses
-	}
-
-	// 3. Apply Matched Filter
-	if options.Matched {
-		var matchedResponses []ResponseItem
-
-		// Recursive helper to find "matched": true in arbitrary JSON structures
-		var containsMatch func([]byte) bool
-		containsMatch = func(data []byte) bool {
-			if len(data) == 0 {
-				return false
-			}
-			// Try as single event
-			var evt SummarizedEvent
-			if err := json.Unmarshal(data, &evt); err == nil && evt.Matched {
-				return true
-			}
-			// Try as array
-			var arr []json.RawMessage
-			if err := json.Unmarshal(data, &arr); err == nil {
-				for _, item := range arr {
-					if containsMatch(item) {
-						return true
-					}
-				}
-			}
-			return false
-		}
-
-		for _, v := range filteredResponses {
-			if containsMatch(v.Data) {
-				matchedResponses = append(matchedResponses, v)
-			}
-		}
-		filteredResponses = matchedResponses
-	}
+	// 2. Filter
+	filteredResponses := applyResponseFilters(responses, options, searchID)
 
 	if len(filteredResponses) == 0 {
 		if searchID != "" {
@@ -1272,23 +1221,93 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 4. Pagination
-	var paginatedResponses []ResponseItem
-	start := options.Start
-	end := options.Start + options.Limit
+	// 3. Paginate
+	paginatedResponses := paginateResponses(filteredResponses, options.Start, options.Limit)
 
-	if start >= len(filteredResponses) {
-		paginatedResponses = []ResponseItem{}
-	} else {
-		if end > len(filteredResponses) {
-			end = len(filteredResponses)
+	// 4. Render
+	if err := renderResponseTable(w, paginatedResponses); err != nil {
+		s.Log.Println("Error rendering response table:", err)
+		http.Error(w, "Error rendering output", http.StatusInternalServerError)
+	}
+}
+
+// applyResponseFilters applies ID, Vendor, and Matched filters to the dataset.
+func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions, searchID string) []ResponseItem {
+	var filtered []ResponseItem
+
+	// 1. Apply ID Filter (Highest Priority)
+	if searchID != "" {
+		for _, v := range responses {
+			if v.ID == searchID {
+				// ID is unique, so we can return immediately
+				return []ResponseItem{v}
+			}
 		}
-		paginatedResponses = filteredResponses[start:end]
+		return []ResponseItem{}
 	}
 
-	// 5. Render HTML
-	var out string
-	table := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
+	// 2. Apply Vendor Filter
+	if opts.Vendor != "" {
+		for _, v := range responses {
+			if v.Vendor == opts.Vendor {
+				filtered = append(filtered, v)
+			}
+		}
+	} else {
+		filtered = responses
+	}
+
+	// 3. Apply Matched Filter
+	if opts.Matched {
+		var matched []ResponseItem
+		for _, v := range filtered {
+			if containsMatch(v.Data) {
+				matched = append(matched, v)
+			}
+		}
+		filtered = matched
+	}
+
+	return filtered
+}
+
+// containsMatch recursively checks if "matched": true exists in the JSON data.
+func containsMatch(data []byte) bool {
+	if len(data) == 0 {
+		return false
+	}
+	// Try as single event
+	var evt SummarizedEvent
+	if err := json.Unmarshal(data, &evt); err == nil && evt.Matched {
+		return true
+	}
+	// Try as array
+	var arr []json.RawMessage
+	if err := json.Unmarshal(data, &arr); err == nil {
+		for _, item := range arr {
+			if containsMatch(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// paginateResponses slices the response slice based on start and limit.
+func paginateResponses(responses []ResponseItem, start, limit int) []ResponseItem {
+	if start >= len(responses) {
+		return []ResponseItem{}
+	}
+	end := start + limit
+	if end > len(responses) {
+		end = len(responses)
+	}
+	return responses[start:end]
+}
+
+// renderResponseTable writes the HTML table to the writer.
+func renderResponseTable(w io.Writer, responses []ResponseItem) error {
+	tableHeader := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
             <thead>
                 <tr>
                     <th>Time</th>
@@ -1297,12 +1316,9 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
                     <th>Actions</th> 
                 </tr>
             </thead>
-            <tbody>
-                %v
-            </tbody>
-        </table>`
-
-	tmpl := `<tr>
+            <tbody>`
+	tableFooter := `</tbody></table>`
+	rowTmpl := `<tr>
         <td>%v</td>
         <td>%v</td>
         <td style="word-break: break-all;">%v</td>
@@ -1322,27 +1338,42 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
         </td>
     </tr>`
 
-	for _, v := range paginatedResponses {
-		var rawParts []json.RawMessage
-		var proxyReq ProxyRequest
-		displayValue := "N/A"
+	var buffer bytes.Buffer
+	buffer.WriteString(tableHeader)
 
-		if err := json.Unmarshal(v.Data, &rawParts); err == nil && len(rawParts) > 0 {
+	for _, v := range responses {
+		displayValue := extractDisplayValue(v.Data)
+		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID)
+		buffer.WriteString(row)
+	}
+
+	buffer.WriteString(tableFooter)
+	_, err := w.Write(buffer.Bytes())
+	return err
+}
+
+// extractDisplayValue attempts to find a meaningful value to display in the table.
+// It handles nested JSON arrays (e.g., [[{...}]]).
+func extractDisplayValue(data []byte) string {
+	var rawParts []json.RawMessage
+	var proxyReq ProxyRequest
+
+	if err := json.Unmarshal(data, &rawParts); err == nil && len(rawParts) > 0 {
+		// Check if first element is ITSELF an array (nested)
+		var nestedParts []json.RawMessage
+		if err := json.Unmarshal(rawParts[0], &nestedParts); err == nil && len(nestedParts) > 0 {
+			// It is nested, unmarshal the inner element
+			if err := json.Unmarshal(nestedParts[0], &proxyReq); err == nil {
+				return proxyReq.Value
+			}
+		} else {
+			// It is not nested, unmarshal the top level element
 			if err := json.Unmarshal(rawParts[0], &proxyReq); err == nil {
-				displayValue = proxyReq.Value
+				return proxyReq.Value
 			}
 		}
-
-		out += fmt.Sprintf(tmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID)
 	}
-
-	if out == "" {
-		fmt.Fprint(w, "No results for the specified page/filter.")
-		return
-	}
-
-	out = fmt.Sprintf(table, out)
-	fmt.Fprint(w, out)
+	return "N/A"
 }
 
 type previousResponseQuery struct {
