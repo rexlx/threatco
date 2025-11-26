@@ -622,6 +622,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/deleteresponse", http.HandlerFunc(s.ValidateSessionToken(s.DeleteResponseHandler)))
 	s.Gateway.HandleFunc("/previous-results", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
+	s.Gateway.HandleFunc("/tools/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParseFileHandler)))
 	s.Gateway.HandleFunc("/rectify", http.HandlerFunc(s.ValidateSessionToken(s.RectifyServicesHandler)))
 	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
 	s.Gateway.HandleFunc("/coordinate", http.HandlerFunc(s.ValidateSessionToken(s.GetCoordinateHandler)))

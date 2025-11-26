@@ -247,6 +247,43 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
+	// Limit upload size to 10MB to prevent memory exhaustion
+	r.ParseMultipartForm(10 << 20)
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving file from request", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, file); err != nil {
+		http.Error(w, "Error reading file content", http.StatusInternalServerError)
+		return
+	}
+
+	content := buf.String()
+
+	domains := []string{"nullferatu.com"}
+	cx := parser.NewContextualizer(true, domains, domains)
+	out := make(map[string][]parser.Match)
+
+	// Run text against all configured regex expressions
+	for k, v := range cx.Expressions {
+		matches := cx.GetMatches(content, k, v)
+		if len(matches) > 0 {
+			out[k] = matches
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		s.Log.Println("Error encoding parse results:", err)
+	}
+}
+
 func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_service_requests", 1)
 	err := r.ParseForm()
