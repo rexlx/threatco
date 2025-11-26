@@ -76,9 +76,21 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
+
 	out := make(map[string][]parser.Match)
 	for k, v := range cx.Expressions {
-		out[k] = cx.GetMatches(pr.Blob, k, v)
+		rawMatches := cx.GetMatches(pr.Blob, k, v)
+		seen := make(map[string]bool)
+		var uniqueMatches []parser.Match
+		for _, m := range rawMatches {
+			if !seen[m.Value] {
+				seen[m.Value] = true
+				uniqueMatches = append(uniqueMatches, m)
+			}
+		}
+		if len(uniqueMatches) > 0 {
+			out[k] = uniqueMatches
+		}
 	}
 	promptRequest := PromptRequest{
 		TransactinID: uuid.New().String(),

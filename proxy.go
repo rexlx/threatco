@@ -271,10 +271,8 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 	if err != nil {
 		fmt.Println("VirusTotalHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
-		// return nil, err
 	}
 
-	// request.Header.Set("Content-Type", "application/json")
 	resp := ep.Do(request)
 	if len(resp) == 0 {
 		fmt.Println("VirusTotalHelper: got a zero length response")
@@ -304,19 +302,24 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 		fmt.Println("VirusTotalHelper: bad vendor response", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
+
+	// FIX: Fallback to the requested value if the vendor ID is missing
+	displayValue := response.Data.ID
+	if displayValue == "" {
+		displayValue = req.Value
+	}
+
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
 		Background: "has-background-warning",
 		Info:       info,
 		From:       req.To,
-		Value:      response.Data.ID,
+		Value:      displayValue, // Use the safer display value
 		Link:       req.TransactionID,
-		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched: true,
+		Matched:    true,
 	}
 	return json.Marshal(sum)
-	// return resp, nil
 }
 
 func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {

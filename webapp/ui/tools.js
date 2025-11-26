@@ -1,3 +1,5 @@
+import { escapeHtml } from './utils.js';
+
 export class ToolsController {
     constructor(containerId, app) {
         this.container = document.getElementById(containerId);
@@ -39,20 +41,30 @@ export class ToolsController {
             </div>
         `;
         this.attachListeners();
+        
+        // Restore previous state if available
+        if (this.results) {
+             this.renderResults(this.results);
+        }
     }
 
     attachListeners() {
         const fileInput = document.getElementById('toolFileInput');
         const fileName = document.getElementById('toolFileName');
         
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                fileName.textContent = fileInput.files[0].name;
-            }
-        });
+        if (fileInput) {
+             fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    fileName.textContent = fileInput.files[0].name;
+                }
+            });
+        }
 
-        document.getElementById('btnExtract').addEventListener('click', () => this.uploadAndParse());
-        document.getElementById('btnAnalyzeSelected').addEventListener('click', () => this.analyzeSelected());
+        const btnExtract = document.getElementById('btnExtract');
+        if (btnExtract) btnExtract.addEventListener('click', () => this.uploadAndParse());
+        
+        const btnAnalyze = document.getElementById('btnAnalyzeSelected');
+        if (btnAnalyze) btnAnalyze.addEventListener('click', () => this.analyzeSelected());
     }
 
     async uploadAndParse() {
@@ -197,14 +209,99 @@ export class ToolsController {
         const blob = Array.from(this.selectedSet).join('\n');
         
         try {
-            await this.app.fetchMatchDontParse(blob);
-            const event = new CustomEvent('req-show-responses');
-            document.dispatchEvent(event);
+            const results = await this.app.fetchMatchDontParse(blob);
+            console.log(results)
+            this.renderAnalysisResults(results);
         } catch (error) {
             console.error(error);
             alert("Analysis failed: " + error.message);
         } finally {
             btn.classList.remove('is-loading');
         }
+    }
+
+    renderAnalysisResults(resultsArray) {
+        this.container.innerHTML = "";
+        
+        if (!resultsArray || resultsArray.length === 0) {
+            this.container.innerHTML = '<div class="notification is-warning">No results found from analysis.</div>';
+            this.addBackButton();
+            return;
+        }
+
+        resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
+
+        const header = document.createElement('h2');
+        header.className = "title is-3 has-text-primary mb-5";
+        header.textContent = "Analysis Results";
+        this.container.appendChild(header);
+
+        for (const result of resultsArray) {
+            const article = document.createElement('article');
+            article.className = 'message is-dark';
+            const msgHeader = document.createElement('div');
+            msgHeader.className = 'message-header';
+            if (typeof result.background === 'string') msgHeader.classList.add(escapeHtml(result.background));
+            msgHeader.innerHTML = `<p>${escapeHtml(result.from)}</p>`;
+            
+            const body = document.createElement('div');
+            body.className = 'message-body has-background-dark-ter';
+            body.innerHTML = `
+                <p class="has-text-white">Match: <span class="has-text-white">${escapeHtml(String(result.value))}</span></p>
+                <p class="has-text-white">Matched: <span class="has-text-white">${escapeHtml(String(result.matched))}</span></p>
+                <p class="has-text-white">ID: <span class="has-text-white">${escapeHtml(String(result.id))}</span></p>
+                <p class="has-text-white">Server ID: <span class="has-text-white">${escapeHtml(String(result.link))}</span></p>
+                <p class="has-text-white">Info: <span class="has-text-white">${escapeHtml(String(result.info))}</span></p>
+                <p class="has-text-white">Score: <span class="has-text-white">${escapeHtml(String(result.threat_level_id))}</span></p>
+                <p class="has-text-white">Attrs: <span class="has-text-white">${escapeHtml(String(result.attr_count))}</span></p>
+            `;
+
+            const footer = document.createElement('footer');
+            footer.className = 'card-footer';
+            
+            const historyButton = document.createElement('a');
+            historyButton.href = '#';
+            historyButton.className = 'card-footer-item has-background-black has-text-info';
+            historyButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>Past Searches</span></span>`;
+            historyButton.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const pastSearches = await this.app.fetchPastSearches(result.value);
+                alert(`Found ${pastSearches.length} past searches. See console.`);
+                console.log(pastSearches);
+            });
+
+            const viewButton = document.createElement('a');
+            viewButton.href = '#';
+            viewButton.className = 'card-footer-item has-background-black has-text-info';
+            viewButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">visibility</i></span><span>View Details</span></span>`;
+            
+            if (!result.link || result.link === "none") viewButton.classList.add('is-disabled');
+            viewButton.addEventListener('click', async (e) => {
+                e.preventDefault();
+                if (!result.link || result.link === "none") return;
+                const customEvent = new CustomEvent('req-open-details', { detail: result.link });
+                document.dispatchEvent(customEvent);
+            });
+
+            footer.appendChild(historyButton);
+            footer.appendChild(viewButton);
+            article.appendChild(msgHeader);
+            article.appendChild(body);
+            article.appendChild(footer);
+            this.container.appendChild(article);
+        }
+
+        this.addBackButton();
+    }
+
+    addBackButton() {
+         const footer = document.createElement('div');
+         footer.className = "mt-5 mb-5";
+         const btn = document.createElement('button');
+         btn.className = "button is-medium is-dark is-fullwidth";
+         btn.innerHTML = `<span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Extractor</span>`;
+         btn.onclick = () => this.render();
+         footer.appendChild(btn);
+         this.container.appendChild(footer);
     }
 }
