@@ -57,9 +57,10 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	allBytes := []byte{'['}
 	first := true
+	ignoreList := []string{"nullferatu.com"}
 	var mu sync.Mutex
 	// defer s.addStat("parser_requests", 1)
-	cx := parser.NewContextualizer(&parser.PrivateChecks{Ipv4: true})
+	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
 	var pr ParserRequest
 	err := json.NewDecoder(r.Body).Decode(&pr)
 	if err != nil {

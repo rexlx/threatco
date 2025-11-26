@@ -73,7 +73,13 @@ document.getElementById("sidebarSearch").addEventListener('click', (e) => {
     showMainView();
 });
 
-// --- THIS WAS MISSING BEFORE ---
+// --- NEW: Logout Button Listener ---
+document.getElementById("logoutButton").addEventListener('click', (e) => {
+    // Navigate to /logout to trigger the handler and follow the redirect
+    window.location.href = '/logout';
+});
+// -----------------------------------
+
 document.getElementById("sidebarRecentActivity").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
@@ -81,7 +87,6 @@ document.getElementById("sidebarRecentActivity").addEventListener('click', (e) =
     document.getElementById('matchBox').classList.remove('is-hidden'); // Re-use matchBox
     responseCtrl.render();
 });
-// ------------------------------
 
 document.getElementById("sidebarServices").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
