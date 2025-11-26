@@ -1259,6 +1259,8 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 
 	// 2. Filter
 	filteredResponses := applyResponseFilters(responses, options, searchID)
+	totalCount := len(filteredResponses)
+	w.Header().Set("X-Total-Count", strconv.Itoa(totalCount))
 
 	if len(filteredResponses) == 0 {
 		if searchID != "" {

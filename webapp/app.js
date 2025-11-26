@@ -134,8 +134,11 @@ export class Application {
 
         try {
             const response = await this._fetch(finalURL, { method: 'GET' });
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            return await response.text();
+            const totalHeader = response.headers.get('X-Total-Count');
+            const total = totalHeader ? parseInt(totalHeader, 10) : 0;
+            const html = await response.text();
+
+            return { html, total };
         } catch (error) {
             this.errors.push(`Error fetching response cache: ${error.message}`);
             return `<p class="has-text-danger">Error fetching response cache: ${error.message}</p>`;
