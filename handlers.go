@@ -77,21 +77,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
 
-	out := make(map[string][]parser.Match)
-	for k, v := range cx.Expressions {
-		rawMatches := cx.GetMatches(pr.Blob, k, v)
-		seen := make(map[string]bool)
-		var uniqueMatches []parser.Match
-		for _, m := range rawMatches {
-			if !seen[m.Value] {
-				seen[m.Value] = true
-				uniqueMatches = append(uniqueMatches, m)
-			}
-		}
-		if len(uniqueMatches) > 0 {
-			out[k] = uniqueMatches
-		}
-	}
+	out := cx.ExtractAll(pr.Blob)
 	promptRequest := PromptRequest{
 		TransactinID: uuid.New().String(),
 		MatchList:    make([]interface{}, 0),
@@ -101,9 +87,9 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
 				if t == k && len(v) > 0 {
-					// if svc.RateLimited {
-					// 	continue
-					// }
+					if svc.RateLimited {
+						continue
+					}
 					for _, value := range v {
 						var proxyReq ProxyRequest
 						if len(svc.RouteMap) > 0 {
@@ -280,15 +266,7 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	domains := []string{"nullferatu.com"}
 	cx := parser.NewContextualizer(true, domains, domains)
-	out := make(map[string][]parser.Match)
-
-	// Run text against all configured regex expressions
-	for k, v := range cx.Expressions {
-		matches := cx.GetMatches(content, k, v)
-		if len(matches) > 0 {
-			out[k] = matches
-		}
-	}
+	out := cx.ExtractAll(content)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {

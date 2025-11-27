@@ -64,57 +64,145 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 	var results []Match
 
 	for _, match := range matches {
-		// Normalize to lowercase for consistent checking/sending
+		// Normalize once
 		cleanMatch := strings.ToLower(match)
 
-		// 1. Check IP Privacy
-		if kind == "ipv4" && c.Checks.IgnorePrivateIPs {
-			if isPrivateIP(match) {
+		// Switch on 'kind' to handle filtering and specific logic
+		switch kind {
+		case "filepath":
+			// Noise Reduction: Skip matches starting with web protocols
+			if strings.HasPrefix(cleanMatch, "http") ||
+				strings.HasPrefix(cleanMatch, "www") ||
+				strings.HasPrefix(cleanMatch, "ftp") {
 				continue
 			}
-		}
 
-		// 2. Check Ignore Lists (Emails)
-		if kind == "email" {
+		case "ipv4":
+			if c.Checks.IgnorePrivateIPs && isPrivateIP(match) {
+				continue
+			}
+
+		case "email":
 			if _, exists := c.Checks.IgnoredEmails[cleanMatch]; exists {
 				continue
 			}
-		}
 
-		// 3. Check Ignore Lists (Domains)
-		if kind == "domain" {
+		case "domain":
 			if c.isDomainIgnored(cleanMatch) {
 				continue
 			}
 
-			// Extract Base Domain
 			baseDomain, err := extractSecondLevelDomain(cleanMatch)
-			if err == nil && baseDomain != "" {
-				// LOGIC FIX: Deduplication
-				// Only add the base_domain if it is DIFFERENT from the match.
-				// Example: "maps.google.com" -> Adds "google.com" (Base)
-				// Example: "google.com"      -> Skips Base (it's the same as the match)
-				if baseDomain != cleanMatch {
-					if !c.isDomainIgnored(baseDomain) {
-						results = append(results, Match{Value: baseDomain, Type: "base_domain"})
-					}
+			if err == nil && baseDomain != "" && baseDomain != cleanMatch {
+				if !c.isDomainIgnored(baseDomain) {
+					results = append(results, Match{Value: baseDomain, Type: "base_domain"})
 				}
 			}
 		}
 
-		// Final Append
-		// We use 'cleanMatch' for domains/emails to ensure we don't send
-		// "Google.com" and "google.com" as two separate items to the API.
+		// Final Append Logic
+		// Determine which value to use based on the type
 		finalValue := match
 		if kind == "domain" || kind == "email" {
 			finalValue = cleanMatch
 		}
 
-		// Safety check to ensure we never send empty strings
 		if finalValue != "" {
 			results = append(results, Match{Value: finalValue, Type: kind})
 		}
 	}
+	return results
+}
+
+type indexRange struct {
+	start int
+	end   int
+}
+
+// ExtractAll handles the loop internally to ensure order of operations
+// and cross-reference checks (like ensuring filepaths aren't inside URLs).
+func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
+	results := make(map[string][]Match)
+
+	// 1. Priority Pass: Find URLs first to build a "Block List"
+	var urlRanges []indexRange
+
+	if urlRegex, ok := c.Expressions["url"]; ok {
+		// Get indices to know WHERE the URLs are
+		indices := urlRegex.FindAllStringIndex(text, -1)
+		for _, idx := range indices {
+			urlRanges = append(urlRanges, indexRange{idx[0], idx[1]})
+			// Add the URL match itself
+			matchVal := text[idx[0]:idx[1]]
+
+			results["url"] = append(results["url"], Match{Value: matchVal, Type: "url"})
+		}
+	}
+
+	// 2. Standard Pass: Run everything else
+	for kind, regex := range c.Expressions {
+		// Skip URL since we did it above
+		if kind == "url" {
+			continue
+		}
+
+		rawMatches := regex.FindAllStringIndex(text, -1)
+
+		// Deduplication map for this specific kind
+		seen := make(map[string]bool)
+
+		for _, idx := range rawMatches {
+			val := text[idx[0]:idx[1]]
+			cleanVal := strings.ToLower(val)
+
+			if seen[cleanVal] {
+				continue
+			}
+
+			// --- FILTERING LOGIC ---
+
+			switch kind {
+			case "filepath":
+				// A. Fast Check: Prefix filtering (Your request)
+				if strings.HasPrefix(cleanVal, "http") ||
+					strings.HasPrefix(cleanVal, "www") ||
+					strings.HasPrefix(cleanVal, "ftp") {
+					continue
+				}
+
+				// B. High Fidelity Check: Overlap filtering
+				// If this filepath sits inside a URL found in step 1, ignore it.
+				isInsideUrl := false
+				for _, r := range urlRanges {
+					if idx[0] >= r.start && idx[1] <= r.end {
+						isInsideUrl = true
+						break
+					}
+				}
+				if isInsideUrl {
+					continue
+				}
+
+			case "ipv4":
+				if c.Checks.IgnorePrivateIPs && isPrivateIP(val) {
+					continue
+				}
+			case "email":
+				if _, exists := c.Checks.IgnoredEmails[cleanVal]; exists {
+					continue
+				}
+			case "domain":
+				if c.isDomainIgnored(cleanVal) {
+					continue
+				}
+			}
+
+			// --- ADD TO OUTPUT ---
+			seen[cleanVal] = true
+			results[kind] = append(results[kind], Match{Value: val, Type: kind})
+		}
+	}
+
 	return results
 }
 

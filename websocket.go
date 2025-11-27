@@ -149,9 +149,8 @@ func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification No
 			}
 		}
 	} else {
-		log.Printf("No active clients found for user: %s", userID)
+		// log.Printf("No active clients found for user: %s", userID)
 		resch <- ResponseItem{
-			Log:    true,
 			Email:  userID,
 			ID:     notification.Info,
 			Vendor: "system",
