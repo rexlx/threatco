@@ -811,7 +811,9 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	user.Admin = u.Admin
-	user.Services = u.Services
+	if len(u.Services) > 0 {
+		user.Services = u.Services
+	}
 	user.Updated = time.Now()
 	err = s.DB.AddUser(user)
 	if err != nil {
