@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -1263,6 +1265,60 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (s *Server) DNSLookupHandler(w http.ResponseWriter, r *http.Request) {
+	targetIP := r.URL.Query().Get("ip")
+	if targetIP == "" {
+		http.Error(w, "IP address required", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Determine who to notify
+	// Try getting email from context first, fall back to session token lookup
+	var email string
+	if val := r.Context().Value("email"); val != nil {
+		email = val.(string)
+	} else {
+		tkn, err := s.GetTokenFromSession(r)
+		if err != nil || tkn == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		tk, err := s.DB.GetTokenByValue(tkn)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		email = tk.Email
+	}
+
+	// 2. Perform Lookup Asynchronously
+	go func(ip, user string) {
+		names, err := net.LookupAddr(ip)
+		var info string
+		isError := false
+
+		if err != nil {
+			info = fmt.Sprintf("DNS lookup failed for %s: %v", ip, err)
+			isError = true
+		} else {
+			// Join names if multiple are returned
+			info = fmt.Sprintf("DNS lookup for %s: %s", ip, strings.Join(names, ", "))
+		}
+
+		notification := Notification{
+			Info:    info,
+			Error:   isError,
+			Created: time.Now(),
+		}
+		// Send notification back to the specific user
+		s.Hub.SendToUser(s.RespCh, user, notification)
+	}(targetIP, email)
+
+	// 3. Respond immediately
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status": "dns lookup started"}`))
+}
+
 // applyResponseFilters applies ID, Vendor, and Matched filters to the dataset.
 func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions, searchID string) []ResponseItem {
 	var filtered []ResponseItem
@@ -1337,7 +1393,6 @@ func paginateResponses(responses []ResponseItem, start, limit int) []ResponseIte
 	return responses[start:end]
 }
 
-// renderResponseTable writes the HTML table to the writer.
 func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	tableHeader := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
             <thead>
@@ -1350,6 +1405,8 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
             </thead>
             <tbody>`
 	tableFooter := `</tbody></table>`
+
+	// Updated row template to accept %s for the extra button
 	rowTmpl := `<tr>
         <td>%v</td>
         <td>%v</td>
@@ -1366,6 +1423,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
                         <span class="icon is-small"><i class="material-icons">delete</i></span>
                     </button>
                 </p>
+                %s 
             </div>
         </td>
     </tr>`
@@ -1375,7 +1433,21 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 
 	for _, v := range responses {
 		displayValue := extractDisplayValue(v.Data)
-		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID)
+
+		// Check if the value is a valid IP address
+		dnsAction := ""
+		if net.ParseIP(displayValue) != nil {
+			// Add a button that triggers the DNS lookup
+			// Using fetch here to trigger the endpoint without navigating away
+			dnsAction = fmt.Sprintf(`<p class="control">
+                    <button class="button is-small is-warning is-light" onclick="fetch('/tools/dnslookup?ip=%s', {method: 'POST'})" title="DNS Lookup">
+                        <span class="icon is-small"><i class="material-icons">dns</i></span>
+                    </button>
+                </p>`, displayValue)
+		}
+
+		// Include dnsAction in the Sprintf call
+		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID, dnsAction)
 		buffer.WriteString(row)
 	}
 
@@ -1406,6 +1478,67 @@ func extractDisplayValue(data []byte) string {
 		}
 	}
 	return "N/A"
+}
+
+func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse Options (reuse existing filter logic)
+	options, err := NewResponseFilterOptions(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 2. Determine time range
+	searchID := r.URL.Query().Get("id")
+	lookbackTime := time.Now().Add(-24 * time.Hour)
+	// If searching by ID or looking at archives, ignore the time limit
+	if r.URL.Query().Get("archived") == "true" || searchID != "" {
+		lookbackTime = time.Time{}
+	}
+
+	s.Memory.RLock()
+	defer s.Memory.RUnlock()
+
+	// 3. Fetch from DB
+	responses, err := s.DB.GetResponses(lookbackTime)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 4. Filter (reuse existing filter logic)
+	filteredResponses := applyResponseFilters(responses, options, searchID)
+
+	// 5. Set Headers for Download
+	filename := fmt.Sprintf("responses_%s.csv", time.Now().Format("20060102-150405"))
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=%s", filename))
+
+	// 6. Write CSV
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	// Write Header
+	if err := writer.Write([]string{"Time", "ID", "Vendor", "Value"}); err != nil {
+		s.Log.Println("Error writing CSV header:", err)
+		return
+	}
+
+	// Write Rows
+	for _, v := range filteredResponses {
+		// reuse extractDisplayValue to get the readable value
+		displayValue := extractDisplayValue(v.Data)
+		row := []string{
+			v.Time.Format(time.RFC3339),
+			v.ID,
+			v.Vendor,
+			displayValue,
+		}
+		if err := writer.Write(row); err != nil {
+			s.Log.Println("Error writing CSV row:", err)
+			return
+		}
+	}
 }
 
 type previousResponseQuery struct {

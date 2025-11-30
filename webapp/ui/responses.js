@@ -22,7 +22,8 @@ export class ResponseController {
                         <input type="checkbox" id="filterArchived"> archived
                     </label>
                 </p>
-                <p class="control"><button class="button is-info" id="applyResponseFilters" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">filter_list</i></span><span>Apply</span></span></button></p>
+                <p class="control"><button class="button is-info" id="applyResponseFilters" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">filter_list</i></span><span>apply</span></span></button></p>
+                <p class="control"><button class="button is-info" id="exportResponsesBtn" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">file_download</i></span><span>export</span></span></button></p>
             </div>
             <hr class="has-background-grey-dark">
             <div id="responseTableContainer"><p class="has-text-info">Fetching initial responses...</p></div>
@@ -57,6 +58,31 @@ export class ResponseController {
             if (archived) options.archived = true;
             
             this.fetch(options);
+        });
+
+        // Attach Listener for Export CSV Button
+        document.getElementById('exportResponsesBtn').addEventListener('click', () => {
+            const rawInput = document.getElementById('filterVendor').value.trim();
+            const matched = document.getElementById('filterMatched').checked;
+            const archived = document.getElementById('filterArchived').checked;
+
+            const params = new URLSearchParams();
+
+            // Reuse logic to determine if input is UUID or Vendor
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (rawInput) {
+                if (uuidPattern.test(rawInput)) {
+                    params.append('id', rawInput);
+                } else {
+                    params.append('vendor', rawInput);
+                }
+            }
+
+            if (matched) params.append('matched', 'true');
+            if (archived) params.append('archived', 'true');
+
+            // Trigger the download by navigating to the URL
+            window.location.href = `/exportresponses?${params.toString()}`;
         });
 
         // Initial Fetch
