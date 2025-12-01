@@ -1266,14 +1266,14 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) DNSLookupHandler(w http.ResponseWriter, r *http.Request) {
-	targetIP := r.URL.Query().Get("ip")
-	if targetIP == "" {
-		http.Error(w, "IP address required", http.StatusBadRequest)
+	// 1. Get the generic 'value' (could be IP or Domain)
+	target := r.URL.Query().Get("value")
+	if target == "" {
+		http.Error(w, "Value required", http.StatusBadRequest)
 		return
 	}
 
-	// 1. Determine who to notify
-	// Try getting email from context first, fall back to session token lookup
+	// 2. Auth Check (Same as before)
 	var email string
 	if val := r.Context().Value("email"); val != nil {
 		email = val.(string)
@@ -1291,30 +1291,42 @@ func (s *Server) DNSLookupHandler(w http.ResponseWriter, r *http.Request) {
 		email = tk.Email
 	}
 
-	// 2. Perform Lookup Asynchronously
-	go func(ip, user string) {
-		names, err := net.LookupAddr(ip)
+	// 3. Perform Lookup Asynchronously based on type
+	go func(q, user string) {
 		var info string
-		isError := false
+		var isError bool
+		var err error
 
-		if err != nil {
-			info = fmt.Sprintf("DNS lookup failed for %s: %v", ip, err)
-			isError = true
+		// Check if it's an IP address
+		if net.ParseIP(q) != nil {
+			// It is an IP -> Perform Reverse Lookup (PTR)
+			var names []string
+			names, err = net.LookupAddr(q)
+			if err == nil {
+				info = fmt.Sprintf("Reverse lookup (IP -> Domain) for %s: %s", q, strings.Join(names, ", "))
+			}
 		} else {
-			// Join names if multiple are returned
-			info = fmt.Sprintf("DNS lookup for %s: %s", ip, strings.Join(names, ", "))
+			// It is likely a Domain -> Perform Forward Lookup (A/AAAA)
+			var ips []string
+			ips, err = net.LookupHost(q)
+			if err == nil {
+				info = fmt.Sprintf("Forward lookup (Domain -> IP) for %s: %s", q, strings.Join(ips, ", "))
+			}
 		}
 
-		notification := Notification{
+		if err != nil {
+			info = fmt.Sprintf("DNS lookup failed for %s: %v", q, err)
+			isError = true
+		}
+
+		// Send notification
+		s.Hub.SendToUser(s.RespCh, user, Notification{
 			Info:    info,
 			Error:   isError,
 			Created: time.Now(),
-		}
-		// Send notification back to the specific user
-		s.Hub.SendToUser(s.RespCh, user, notification)
-	}(targetIP, email)
+		})
+	}(target, email)
 
-	// 3. Respond immediately
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "dns lookup started"}`))
 }
@@ -1393,6 +1405,13 @@ func paginateResponses(responses []ResponseItem, start, limit int) []ResponseIte
 	return responses[start:end]
 }
 
+// Helper to identify potential domains (simple heuristic)
+func isLikelyDomain(s string) bool {
+	// Must contain a dot, no spaces, and not be too long to be a valid domain/hostname
+	return strings.Contains(s, ".") && !strings.Contains(s, " ") && len(s) < 255
+}
+
+// renderResponseTable writes the HTML table to the writer.
 func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	tableHeader := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
             <thead>
@@ -1406,7 +1425,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
             <tbody>`
 	tableFooter := `</tbody></table>`
 
-	// Updated row template to accept %s for the extra button
+	// Updated row template to accept %s for the extra DNS action button
 	rowTmpl := `<tr>
         <td>%v</td>
         <td>%v</td>
@@ -1423,7 +1442,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
                         <span class="icon is-small"><i class="material-icons">delete</i></span>
                     </button>
                 </p>
-                %s 
+                %s
             </div>
         </td>
     </tr>`
@@ -1434,19 +1453,18 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	for _, v := range responses {
 		displayValue := extractDisplayValue(v.Data)
 
-		// Check if the value is a valid IP address
+		// Determine if we should show the DNS lookup button
 		dnsAction := ""
-		if net.ParseIP(displayValue) != nil {
-			// Add a button that triggers the DNS lookup
-			// Using fetch here to trigger the endpoint without navigating away
+		// Check if it is a valid IP OR looks like a domain
+		if net.ParseIP(displayValue) != nil || isLikelyDomain(displayValue) {
 			dnsAction = fmt.Sprintf(`<p class="control">
-                    <button class="button is-small is-warning is-light" onclick="fetch('/tools/dnslookup?ip=%s', {method: 'POST'})" title="DNS Lookup">
+                    <button class="button is-small is-warning is-light" onclick="fetch('/tools/dnslookup?value=%s', {method: 'POST'})" title="DNS Lookup">
                         <span class="icon is-small"><i class="material-icons">dns</i></span>
                     </button>
                 </p>`, displayValue)
 		}
 
-		// Include dnsAction in the Sprintf call
+		// Inject the dnsAction string into the template
 		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID, dnsAction)
 		buffer.WriteString(row)
 	}
@@ -1578,12 +1596,8 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// --- MODIFIED LOGIC ---
-	// Iterate through the responses from the database.
 	for _, v := range responses {
-		// The error "cannot unmarshal array into Go value of type main.ProxyRequest"
-		// indicates the data is a nested array, e.g., [[...], ...].
-		// We need to unmarshal the outer array first.
+
 		var outerSlice []json.RawMessage
 		err := json.Unmarshal(v.Data, &outerSlice)
 		if err != nil {
@@ -1596,12 +1610,9 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		// Now unmarshal the first element of the outer slice, which we expect
-		// to be the inner array containing the ProxyRequest.
 		var innerSlice []json.RawMessage
 		err = json.Unmarshal(outerSlice[0], &innerSlice)
 		if err != nil {
-			// This will catch the error if the first element is not an array.
 			s.Log.Printf("error unmarshaling inner slice for ID %s: %v", v.ID, err)
 			continue
 		}
@@ -1611,7 +1622,6 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 			continue
 		}
 
-		// Finally, unmarshal the first element of the inner slice into the ProxyRequest struct.
 		var originalProxyRequest ProxyRequest
 		err = json.Unmarshal(innerSlice[0], &originalProxyRequest)
 		if err != nil {
@@ -1635,7 +1645,6 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 			})
 		}
 	}
-	// --- END MODIFIED LOGIC ---
 
 	out, err := json.Marshal(matches)
 	if err != nil {
