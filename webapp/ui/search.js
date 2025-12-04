@@ -27,8 +27,6 @@ export class SearchController {
                     <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
                 </div></div></div>
             </form>`;
-        
-        // REMOVED: this.attachFormListeners() call from here
     }
 
     attachFormListeners() {
@@ -77,9 +75,10 @@ export class SearchController {
             if (dontParse) {
                 await this.processMatches(null, { value: searchText }, null, true);
             } else {
+                // UPDATED: Pass 'key' (the type) as the second argument to getMatches
                 const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({ 
                     type: key, 
-                    matches: [...new Set(this.contextualizer.getMatches(searchText, this.contextualizer.expressions[key]))] 
+                    matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))] 
                 }));
                 
                 const promises = [];

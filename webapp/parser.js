@@ -16,12 +16,19 @@ export class Contextualizer {
     this.context = [];
   }
 
-  getMatches(text, regex) {
+  getMatches(text, kind, regex) {
     regex.lastIndex = 0;
     let matches = [];
     let match;
     while (match = regex.exec(text)) {
-      matches.push(match[0]);
+      let val = match[0];
+
+      // Trim trailing slash from the value if it is a URL
+      if (kind === 'url' && val.endsWith('/')) {
+        val = val.slice(0, -1);
+      }
+
+      matches.push(val);
     }
     return matches;
   }

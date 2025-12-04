@@ -1296,7 +1296,9 @@ func (s *Server) DNSLookupHandler(w http.ResponseWriter, r *http.Request) {
 		var info string
 		var isError bool
 		var err error
+		// if strings.Contains(q, "@") {
 
+		// }
 		// Check if it's an IP address
 		if net.ParseIP(q) != nil {
 			// It is an IP -> Perform Reverse Lookup (PTR)
@@ -1407,8 +1409,8 @@ func paginateResponses(responses []ResponseItem, start, limit int) []ResponseIte
 
 // Helper to identify potential domains (simple heuristic)
 func isLikelyDomain(s string) bool {
-	// Must contain a dot, no spaces, and not be too long to be a valid domain/hostname
-	return strings.Contains(s, ".") && !strings.Contains(s, " ") && len(s) < 255
+	// Must contain a dot, no spaces, no '@' symbol (to exclude emails), and be a valid length
+	return strings.Contains(s, ".") && !strings.Contains(s, " ") && !strings.Contains(s, "@") && len(s) < 255
 }
 
 // renderResponseTable writes the HTML table to the writer.

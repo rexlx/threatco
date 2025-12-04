@@ -64,6 +64,11 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 	var results []Match
 
 	for _, match := range matches {
+		// UPDATED: Handle trailing slash for URLs immediately
+		if kind == "url" {
+			match = strings.TrimSuffix(match, "/")
+		}
+
 		// Normalize once
 		cleanMatch := strings.ToLower(match)
 
@@ -119,8 +124,6 @@ type indexRange struct {
 	end   int
 }
 
-// ExtractAll handles the loop internally to ensure order of operations
-// and cross-reference checks (like ensuring filepaths aren't inside URLs).
 func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 	results := make(map[string][]Match)
 
@@ -132,8 +135,9 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 		indices := urlRegex.FindAllStringIndex(text, -1)
 		for _, idx := range indices {
 			urlRanges = append(urlRanges, indexRange{idx[0], idx[1]})
-			// Add the URL match itself
+
 			matchVal := text[idx[0]:idx[1]]
+			matchVal = strings.TrimSuffix(matchVal, "/")
 
 			results["url"] = append(results["url"], Match{Value: matchVal, Type: "url"})
 		}

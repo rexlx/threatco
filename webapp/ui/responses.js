@@ -42,7 +42,14 @@ export class ResponseController {
             const archived = document.getElementById('filterArchived').checked;
 
             // Reset to start 0 on new filter
-            const options = { start: 0, limit: parseInt(limitVal, 10) || 100 };
+            const options = {
+                start: 0,
+                limit: parseInt(limitVal, 10) || 100,
+                matched: matched,     // Passes true or false
+                archived: archived,   // Passes true or false
+                vendor: null,         // Reset vendor
+                id: null              // Reset ID
+            };
 
             // UUID Regex
             const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,9 +61,9 @@ export class ResponseController {
                 }
             }
 
-            if (matched) options.matched = true;
-            if (archived) options.archived = true;
-            
+            // if (matched) options.matched = true;
+            // if (archived) options.archived = true;
+
             this.fetch(options);
         });
 
@@ -92,18 +99,18 @@ export class ResponseController {
     async fetch(options = {}) {
         // Update local state
         this.currentOptions = { ...this.currentOptions, ...options };
-        
+
         const tableContainer = document.getElementById('responseTableContainer');
         if (!tableContainer) return;
-        
+
         tableContainer.innerHTML = '<p class="has-text-info">Fetching...</p><progress class="progress is-small is-info" max="100"></progress>';
-        
+
         // Fetch data
         const { html, total } = await this.app.fetchResponseCache(this.currentOptions);
-        
+
         // Render Table
         tableContainer.innerHTML = html;
-        
+
         // UPDATE TITLE WITH COUNT
         const titleEl = document.getElementById('responseViewTitle');
         if (titleEl) titleEl.textContent = `Responses (${total})`;
@@ -119,11 +126,11 @@ export class ResponseController {
         const { start, limit } = this.currentOptions;
         const currentPage = Math.floor(start / limit) + 1;
         const totalPages = Math.ceil(totalCount / limit);
-        
+
         const list = document.getElementById('paginationList');
         const prevBtn = document.getElementById('prevPageBtn');
         const nextBtn = document.getElementById('nextPageBtn');
-        
+
         list.innerHTML = '';
 
         // Handle Prev/Next Buttons
@@ -157,7 +164,7 @@ export class ResponseController {
             pages.push(totalPages); // Always last page
         }
 
-        const uniquePages = [...new Set(pages)].sort((a,b) => a-b);
+        const uniquePages = [...new Set(pages)].sort((a, b) => a - b);
 
         let lastP = 0;
         uniquePages.forEach(p => {
@@ -172,11 +179,11 @@ export class ResponseController {
             a.className = `pagination-link ${p === currentPage ? 'is-current' : ''}`;
             a.textContent = p;
             a.setAttribute('aria-label', `Goto page ${p}`);
-            
+
             if (p !== currentPage) {
                 a.onclick = () => this.goToPage(p);
             }
-            
+
             li.appendChild(a);
             list.appendChild(li);
             lastP = p;
@@ -203,7 +210,7 @@ export class ResponseController {
         container.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', async (event) => {
                 event.preventDefault();
-                event.stopPropagation(); 
+                event.stopPropagation();
                 const id = btn.getAttribute('data-id');
                 if (!confirm(`Are you sure you want to delete response ${id}?`)) return;
 

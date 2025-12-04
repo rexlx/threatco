@@ -49,14 +49,23 @@
 		<div id="main">
 			<!-- Intro -->
 			<article id="frontend">
+				<ul class="actions small" style="justify-content: center; flex-wrap: wrap; list-style: none; padding: 0;">
+					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('login').scrollIntoView({behavior: 'smooth'}); return false;">Login</a></li>
+					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('users').scrollIntoView({behavior: 'smooth'}); return false;">Users</a></li>
+					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('services').scrollIntoView({behavior: 'smooth'}); return false;">Services</a></li>
+					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('logging').scrollIntoView({behavior: 'smooth'}); return false;">Logging</a></li>
+					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('responses').scrollIntoView({behavior: 'smooth'}); return false;">Responses</a></li>
+					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('stats').scrollIntoView({behavior: 'smooth'}); return false;">Stats</a></li>
+				</ul>
+				<hr />
 				<h2 class="major has-text-green">administration</h2>
 				<p>documentation for live server administration</p>
-				<h3 class="major has-text-green">login</h3>
+				<h3 id="login" class="major has-text-green">login</h3>
 				<span class="image main"><img src="images/home.png" alt="" /></span>
 				<p>to login to the server, enter the server url in the browser, enter your credentials, and click on the
 					login button</p>
 				<p>you will be redirected to services screen as shown above</p>
-				<h3 class="major has-text-green">users</h3>
+				<h3 id="users" class="major has-text-green">users</h3>
 				<span class="image main"><img src="images/users.png" alt="" /></span>
 				<p class="has-text-blue">view and delete users</p>
 				<p>view and delete users in the "users" menu</p>
@@ -73,13 +82,13 @@
 				<p>you can now view the user in the users section</p>
 				<p class="has-text-blue">edit a user</p>
 				<p>re-add a user to change their password. there is no update user function from the perspective of the forntend at this time (although the capability exists)</p>
-				<h3 class="major has-text-green">services</h3>
+				<h3 id="services" class="major has-text-green">services</h3>
 				<p>you can view details about the the configured services here</p>
-				<h3 class="major has-text-green">logging</h3>
+				<h3 id="logging" class="major has-text-green">logging</h3>
 				<p>view logs in the "logs" menu</p>
-				<h3 class="major has-text-green">responses</h3>
+				<h3 id="responses" class="major has-text-green">responses</h3>
 				<p>view all cached responses in the "responses" menu</p>
-				<h3 class="major has-text-green">stats</h3>
+				<h3 id="stats" class="major has-text-green">stats</h3>
 				<p>view application graphs in the "stats" menu</p>
 
 
