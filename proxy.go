@@ -309,15 +309,27 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 		displayValue = req.Value
 	}
 
-	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, response.Data.Attributes.LastAnalysisStats.Harmless, response.Data.Attributes.LastAnalysisStats.Malicious, response.Data.Attributes.LastAnalysisStats.Suspicious, response.Data.Attributes.LastAnalysisStats.Undetected, response.Data.Attributes.LastAnalysisStats.Timeout)
+	// Calculate Match and Background based on stats
+	stats := response.Data.Attributes.LastAnalysisStats
+	matched := stats.Malicious > 0 || stats.Suspicious > 0
+
+	// Default to dark/neutral for safe
+	background := "has-background-primary-dark"
+	if stats.Malicious > 0 {
+		background = "has-background-danger"
+	} else if stats.Suspicious > 0 {
+		background = "has-background-warning"
+	}
+
+	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, stats.Harmless, stats.Malicious, stats.Suspicious, stats.Undetected, stats.Timeout)
 	sum := SummarizedEvent{
 		Timestamp:  time.Now(),
-		Background: "has-background-warning",
+		Background: background,
 		Info:       info,
 		From:       req.To,
-		Value:      displayValue, // Use the safer display value
+		Value:      displayValue,
 		Link:       req.TransactionID,
-		Matched:    true,
+		Matched:    matched, // Use the calculated boolean
 	}
 	return json.Marshal(sum)
 }
