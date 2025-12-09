@@ -12,11 +12,12 @@ export class ToolsController {
         this.container.classList.remove('is-hidden');
         this.container.innerHTML = `
             <div class="box has-background-custom">
-                <h2 class="title is-2 has-text-primary">Tools</h2>
+                <h2 class="title is-2 has-text-info">Tools</h2>
+                
                 <div class="block">
-                    <h4 class="title is-4 has-text-info">IOC Extractor</h4>
-                    <p class="has-text-white mb-4">Upload a file to extract potential Indicators of Compromise (IOCs). Select tags to analyze them.</p>
-                    <div class="file has-name is-fullwidth is-primary mb-4">
+                    <h4 class="title is-4 has-text-white">IOC Extractor</h4>
+                    <p class="has-text-grey-light mb-4">Upload a file to extract potential Indicators of Compromise (IOCs).</p>
+                    <div class="file has-name is-fullwidth is-info mb-4">
                         <label class="file-label">
                             <input class="file-input" type="file" id="toolFileInput">
                             <span class="file-cta">
@@ -26,11 +27,12 @@ export class ToolsController {
                             <span class="file-name" id="toolFileName">No file uploaded</span>
                         </label>
                     </div>
-                    <button class="button is-primary is-outlined is-fullwidth" id="btnExtract">
+                    <button class="button is-info is-outlined is-fullwidth" id="btnExtract">
                         <span class="icon"><i class="material-icons">search</i></span>
                         <span>Extract IOCs</span>
                     </button>
                 </div>
+
                 <div id="toolSearchControls" class="is-hidden mb-4">
                     <button class="button is-info is-fullwidth" id="btnAnalyzeSelected">
                         <span class="icon"><i class="material-icons">bolt</i></span>
@@ -38,11 +40,103 @@ export class ToolsController {
                     </button>
                 </div>
                 <div id="toolResults" class="content has-text-white mt-5"></div>
+
+                <hr class="has-background-grey-darker my-6">
+
+                <div class="block">
+                    <h4 class="title is-4 has-text-white">AES256 Encryptor</h4>
+                    <p class="has-text-grey-light mb-4">Securely encrypt or decrypt data via the server.</p>
+
+                    <div class="tabs is-toggle is-fullwidth is-small mb-4">
+                        <ul>
+                            <li class="is-active" id="tabModeEncrypt">
+                                <a>
+                                    <span class="icon is-small"><i class="material-icons">lock</i></span>
+                                    <span>Encrypt</span>
+                                </a>
+                            </li>
+                            <li id="tabModeDecrypt">
+                                <a>
+                                    <span class="icon is-small"><i class="material-icons">lock_open</i></span>
+                                    <span>Decrypt</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="tabs is-boxed is-small mb-3">
+                        <ul>
+                            <li class="is-active" id="tabTypeString">
+                                <a>
+                                    <span class="icon is-small"><i class="material-icons">text_fields</i></span>
+                                    <span>String / Base64</span>
+                                </a>
+                            </li>
+                            <li id="tabTypeFile">
+                                <a>
+                                    <span class="icon is-small"><i class="material-icons">insert_drive_file</i></span>
+                                    <span>File</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div id="sectionTypeString" class="field">
+                        <div class="control">
+                            <textarea class="textarea has-background-dark has-text-white" id="inputCryptoString" rows="3" placeholder="Enter text to encrypt..."></textarea>
+                        </div>
+                    </div>
+
+                    <div id="sectionTypeFile" class="field is-hidden">
+                        <div class="file has-name is-fullwidth is-info">
+                            <label class="file-label">
+                                <input class="file-input" type="file" id="inputCryptoFile">
+                                <span class="file-cta">
+                                    <span class="file-icon"><i class="material-icons">upload_file</i></span>
+                                    <span class="file-label">Choose file…</span>
+                                </span>
+                                <span class="file-name" id="displayCryptoFileName">No file selected</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="field mt-4">
+                        <label class="label has-text-grey-light">Password</label>
+                        <div class="control has-icons-left">
+                            <input class="input has-background-dark has-text-white" type="password" id="inputCryptoPassword" placeholder="Enter a strong password">
+                            <span class="icon is-small is-left"><i class="material-icons">vpn_key</i></span>
+                        </div>
+                    </div>
+
+                    <button class="button is-info is-fullwidth" id="btnRunCrypto">
+                        <span class="icon"><i class="material-icons">play_arrow</i></span>
+                        <span id="btnRunCryptoLabel">Encrypt Data</span>
+                    </button>
+
+                    <div id="cryptoResultContainer" class="message is-info mt-4 is-hidden">
+                        <div class="message-header">
+                            <p>Result</p>
+                            <button class="delete" aria-label="delete" id="btnCloseCryptoResult"></button>
+                        </div>
+                        <div class="message-body has-background-black-ter">
+                            <div class="field has-addons">
+                                <div class="control is-expanded">
+                                    <textarea class="textarea is-small has-background-black has-text-info" readonly id="outputCryptoResult" rows="3"></textarea>
+                                </div>
+                            </div>
+                             <div class="buttons">
+                                <button class="button is-small is-info is-outlined" id="btnDownloadCryptoFile">
+                                    <span class="icon"><i class="material-icons">download</i></span>
+                                    <span>Download File</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
         this.attachListeners();
         
-        // Restore previous state if available
         if (this.results) {
              this.renderResults(this.results);
         }
@@ -65,6 +159,182 @@ export class ToolsController {
         
         const btnAnalyze = document.getElementById('btnAnalyzeSelected');
         if (btnAnalyze) btnAnalyze.addEventListener('click', () => this.analyzeSelected());
+
+        const tabModeEncrypt = document.getElementById('tabModeEncrypt');
+        const tabModeDecrypt = document.getElementById('tabModeDecrypt');
+        const btnLabel = document.getElementById('btnRunCryptoLabel');
+        const stringInput = document.getElementById('inputCryptoString');
+
+        if (tabModeEncrypt && tabModeDecrypt) {
+            tabModeEncrypt.addEventListener('click', () => {
+                tabModeEncrypt.classList.add('is-active');
+                tabModeDecrypt.classList.remove('is-active');
+                btnLabel.textContent = "Encrypt Data";
+                stringInput.placeholder = "Enter text to encrypt...";
+                this.updateCryptoUI();
+            });
+
+            tabModeDecrypt.addEventListener('click', () => {
+                tabModeDecrypt.classList.add('is-active');
+                tabModeEncrypt.classList.remove('is-active');
+                btnLabel.textContent = "Decrypt Data";
+                stringInput.placeholder = "Paste ciphertext (Base64) to decrypt...";
+                this.updateCryptoUI();
+            });
+        }
+
+        const tabTypeString = document.getElementById('tabTypeString');
+        const tabTypeFile = document.getElementById('tabTypeFile');
+        const sectTypeString = document.getElementById('sectionTypeString');
+        const sectTypeFile = document.getElementById('sectionTypeFile');
+
+        if (tabTypeString && tabTypeFile) {
+            tabTypeString.addEventListener('click', () => {
+                tabTypeString.classList.add('is-active');
+                tabTypeFile.classList.remove('is-active');
+                sectTypeString.classList.remove('is-hidden');
+                sectTypeFile.classList.add('is-hidden');
+            });
+
+            tabTypeFile.addEventListener('click', () => {
+                tabTypeFile.classList.add('is-active');
+                tabTypeString.classList.remove('is-active');
+                sectTypeFile.classList.remove('is-hidden');
+                sectTypeString.classList.add('is-hidden');
+            });
+        }
+
+        const cFileInput = document.getElementById('inputCryptoFile');
+        const cFileName = document.getElementById('displayCryptoFileName');
+        if (cFileInput) {
+            cFileInput.addEventListener('change', () => {
+                if (cFileInput.files.length > 0) cFileName.textContent = cFileInput.files[0].name;
+            });
+        }
+
+        const btnRunCrypto = document.getElementById('btnRunCrypto');
+        if (btnRunCrypto) btnRunCrypto.addEventListener('click', () => this.runCryptoOperation());
+
+        const btnCloseCrypto = document.getElementById('btnCloseCryptoResult');
+        if (btnCloseCrypto) btnCloseCrypto.addEventListener('click', () => {
+            document.getElementById('cryptoResultContainer').classList.add('is-hidden');
+        });
+    }
+
+    updateCryptoUI() {
+        document.getElementById('inputCryptoString').value = "";
+        document.getElementById('inputCryptoFile').value = "";
+        document.getElementById('displayCryptoFileName').textContent = "No file selected";
+        document.getElementById('cryptoResultContainer').classList.add('is-hidden');
+    }
+
+    async runCryptoOperation() {
+        const password = document.getElementById('inputCryptoPassword').value;
+        if (!password) {
+            alert("Please enter a password.");
+            return;
+        }
+
+        const isEncrypt = document.getElementById('tabModeEncrypt').classList.contains('is-active');
+        const isFile = document.getElementById('tabTypeFile').classList.contains('is-active');
+        const btn = document.getElementById('btnRunCrypto');
+        
+        btn.classList.add('is-loading');
+
+        try {
+            const formData = new FormData();
+            formData.append('password', password);
+
+            let mode = isEncrypt ? 'encrypt' : 'decrypt';
+            let endpoint = `/tools/${mode}`;
+            let filename = "result";
+
+            if (isFile) {
+                const fileInput = document.getElementById('inputCryptoFile');
+                if (!fileInput.files.length) throw new Error("Please select a file.");
+                formData.append('file', fileInput.files[0]);
+                filename = fileInput.files[0].name;
+            } else {
+                const text = document.getElementById('inputCryptoString').value;
+                if (!text) throw new Error("Please enter text input.");
+                
+                if (isEncrypt) {
+                    formData.append('text', text);
+                    filename = "encrypted.txt";
+                } else {
+                    try {
+                        const binaryString = atob(text);
+                        const len = binaryString.length;
+                        const bytes = new Uint8Array(len);
+                        for (let i = 0; i < len; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
+                        }
+                        const blob = new Blob([bytes]);
+                        formData.append('file', blob, "pasted_ciphertext.bin");
+                        filename = "decrypted.txt";
+                    } catch (e) {
+                        throw new Error("Invalid Base64 input. Ensure you pasted the full ciphertext.");
+                    }
+                }
+            }
+
+            const response = await this.app._fetch(endpoint, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) throw new Error(await response.text());
+
+            const blob = await response.blob();
+            const resultBuffer = await blob.arrayBuffer();
+            
+            const headerName = response.headers.get('X-Filename');
+            if (headerName) filename = headerName;
+
+            this.showCryptoResult(resultBuffer, filename, isEncrypt);
+
+        } catch (error) {
+            console.error(error);
+            alert("Operation failed: " + error.message);
+        } finally {
+            btn.classList.remove('is-loading');
+        }
+    }
+
+    showCryptoResult(buffer, filename, wasEncrypting) {
+        const container = document.getElementById('cryptoResultContainer');
+        const outputText = document.getElementById('outputCryptoResult');
+        const downloadBtn = document.getElementById('btnDownloadCryptoFile');
+
+        container.classList.remove('is-hidden');
+
+        if (wasEncrypting) {
+            const base64String = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            outputText.value = base64String;
+        } else {
+            try {
+                const text = new TextDecoder("utf-8", {fatal: true}).decode(buffer);
+                if (text.includes('\0')) throw new Error("Binary");
+                outputText.value = text;
+            } catch (e) {
+                outputText.value = "[Binary Data Decrypted] - Download the file to view content.";
+            }
+        }
+
+        const newDownloadBtn = downloadBtn.cloneNode(true);
+        downloadBtn.parentNode.replaceChild(newDownloadBtn, downloadBtn);
+        
+        newDownloadBtn.onclick = () => {
+            const blob = new Blob([buffer], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
     }
 
     async uploadAndParse() {
@@ -210,7 +480,6 @@ export class ToolsController {
         
         try {
             const results = await this.app.fetchMatchDontParse(blob);
-            console.log(results)
             this.renderAnalysisResults(results);
         } catch (error) {
             console.error(error);
@@ -232,7 +501,7 @@ export class ToolsController {
         resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
 
         const header = document.createElement('h2');
-        header.className = "title is-3 has-text-primary mb-5";
+        header.className = "title is-3 has-text-info mb-5";
         header.textContent = "Analysis Results";
         this.container.appendChild(header);
 

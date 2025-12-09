@@ -3,6 +3,10 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -1784,10 +1788,122 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(response)
 }
 
-// func (s *Server) GetResponsesHandler(w http.ResponseWriter, r *http.Request) {
+func deriveKey(password string, salt []byte) []byte {
+	key := sha256.Sum256(append([]byte(password), salt...))
+	for i := 0; i < 10000; i++ {
+		key = sha256.Sum256(key[:])
+	}
+	return key[:]
+}
 
-// 	fmt.Fprint(w, out)
-// }
+func (s *Server) ToolsEncryptHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(10 << 20)
+	password := r.FormValue("password")
+	if password == "" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+	var data []byte
+	var filename string
+	file, header, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		buf := bytes.NewBuffer(nil)
+		io.Copy(buf, file)
+		data = buf.Bytes()
+		filename = header.Filename + ".enc"
+	} else {
+		text := r.FormValue("text")
+		if text == "" {
+			http.Error(w, "No text or file provided", http.StatusBadRequest)
+			return
+		}
+		data = []byte(text)
+		filename = "encrypted.txt"
+	}
+	salt := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		http.Error(w, "Crypto error", http.StatusInternalServerError)
+		return
+	}
+	key := deriveKey(password, salt)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		http.Error(w, "Cipher error", http.StatusInternalServerError)
+		return
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		http.Error(w, "GCM error", http.StatusInternalServerError)
+		return
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		http.Error(w, "Nonce error", http.StatusInternalServerError)
+		return
+	}
+	ciphertext := gcm.Seal(nil, nonce, data, nil)
+	var result bytes.Buffer
+	result.Write(salt)
+	result.Write(nonce)
+	result.Write(ciphertext)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("X-Filename", filename)
+	w.Write(result.Bytes())
+}
+
+func (s *Server) ToolsDecryptHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(10 << 20)
+	password := r.FormValue("password")
+	if password == "" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+	var data []byte
+	var outName string
+	file, header, err := r.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		buf := bytes.NewBuffer(nil)
+		io.Copy(buf, file)
+		data = buf.Bytes()
+		outName = header.Filename
+		if len(outName) > 4 && outName[len(outName)-4:] == ".enc" {
+			outName = outName[:len(outName)-4]
+		} else {
+			outName = "decrypted_" + outName
+		}
+	} else {
+		http.Error(w, "Please upload the encrypted file", http.StatusBadRequest)
+		return
+	}
+	if len(data) < 28 {
+		http.Error(w, "Invalid data: too short", http.StatusBadRequest)
+		return
+	}
+	salt := data[:16]
+	nonce := data[16:28]
+	ciphertext := data[28:]
+	key := deriveKey(password, salt)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		http.Error(w, "Cipher error", http.StatusInternalServerError)
+		return
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		http.Error(w, "GCM error", http.StatusInternalServerError)
+		return
+	}
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		http.Error(w, "Decryption failed (Wrong password?)", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("X-Filename", outName)
+	w.Write(plaintext)
+}
 
 type NewUserRequest struct {
 	Email    string `json:"email"`
