@@ -10,7 +10,25 @@ import (
 	"sync"
 )
 
-const LlmToolsBasicPrompt = `You are an intel analyst. Your task is to analyze the indicators of compromise (IOCs) provided in the input and further enrich them and to categorize them by how significant the threat is. There may be duplicate values of different types (urls and domains): %v`
+const BasicPrompt = `You are a dynamic json-to-html engine. the indicators of compromise provided below come from multiple third party vendors. Your task is to generate a comprehensive HTML report that consolidates all the provided indicators of compromise (IOCs) into a single, well-structured format.
+The report should include the following sections:
+
+1. Executive Summary: A brief overview of the key findings and highlights from the provided IOCs.
+2. IOC Details: A detailed section for each IOC, including:
+   - Type of IOC (e.g., IP address, domain, file hash)
+   - Source vendor
+   - Description or context provided by the vendor
+   - Any relevant timestamps or additional metadata
+3. Visualizations: Where applicable, include charts or graphs to illustrate trends or patterns observed in the IOCs.
+4. Recommendations: Based on the analysis of the IOCs, provide actionable recommendations for mitigation and response.
+---
+%v`
+
+type promptType string
+
+const (
+	LlmToolsBasicPrompt promptType = BasicPrompt
+)
 
 type LlmToolsLlmMClient interface {
 	CallPrompt(ctx context.Context, prompt string) (string, error)
@@ -27,19 +45,19 @@ type LlmToolsPromptRequest struct {
 	TransactinID string        `json:"transaction_id"`
 }
 
-func (p *LlmToolsPromptRequest) BuildPrompt() (string, error) {
+func (p *LlmToolsPromptRequest) BuildPrompt(ptype promptType) (string, error) {
 	out, err := json.Marshal(p.MatchList)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(LlmToolsBasicPrompt, string(out)), nil
+	return fmt.Sprintf(string(ptype), string(out)), nil
 }
 
-func (p *LlmToolsPromptRequest) BuildJSONPrompt() ([]byte, error) {
+func (p *LlmToolsPromptRequest) BuildJSONPrompt(ptype promptType) ([]byte, error) {
 	var out struct {
 		Prompt string `json:"prompt"`
 	}
-	prompt, err := p.BuildPrompt()
+	prompt, err := p.BuildPrompt(ptype)
 	if err != nil {
 		return nil, err
 	}

@@ -36,7 +36,7 @@ func main() {
 		logger = log.New(file, "", log.LstdFlags)
 		// logger = log.New(os.Stdout, "", log.LstdFlags| log.Lshortfile)
 	}
-	s := NewServer("1", ":8080", *dbMode, *dbLocation, logger)
+	s := NewServer("", ":8080", *dbMode, *dbLocation, logger)
 
 	s.InitializeFromConfig(&c, true)
 	PassStore(NewUploadStore(&c))
@@ -50,7 +50,7 @@ func main() {
 				s.UpdateCharts()
 				go s.updateCache()
 			case <-healthTicker.C:
-				s.LogInfo("Performing health check")
+				// fmt.Println("Performing health check")
 				go s.SimpleServiceCheck()
 			case <-sigs:
 				s.Log.Println("Shutting down")

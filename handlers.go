@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rexlx/threatco/optional"
 	"github.com/rexlx/threatco/parser"
 	"github.com/rexlx/threatco/vendors"
 )
@@ -175,7 +176,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(allBytes)
 	var logIt bool
-	fullPrompt, _ := promptRequest.BuildJSONPrompt()
+	fullPrompt, _ := promptRequest.BuildJSONPrompt(optional.LlmToolsBasicPrompt)
 	email, ok := r.Context().Value("email").(string)
 	if !ok {
 		logIt = true
@@ -1453,7 +1454,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	buffer.WriteString(tableHeader)
 
 	for _, v := range responses {
-		displayValue := extractDisplayValue(v.Data)
+		displayValue, matched := extractDisplayValue(v.Data)
 
 		// Determine if we should show the DNS lookup button
 		dnsAction := ""
@@ -1466,8 +1467,13 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
                 </p>`, displayValue)
 		}
 
+		displayHtml := displayValue
+		if matched {
+			displayHtml = fmt.Sprintf(`<span class="has-text-warning has-text-weight-bold">%s</span>`, displayValue)
+		}
+
 		// Inject the dnsAction string into the template
-		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayValue, v.ID, v.ID, dnsAction)
+		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayHtml, v.ID, v.ID, dnsAction)
 		buffer.WriteString(row)
 	}
 
@@ -1478,26 +1484,33 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 
 // extractDisplayValue attempts to find a meaningful value to display in the table.
 // It handles nested JSON arrays (e.g., [[{...}]]).
-func extractDisplayValue(data []byte) string {
+func extractDisplayValue(data []byte) (string, bool) {
 	var rawParts []json.RawMessage
-	var proxyReq ProxyRequest
+	var evt SummarizedEvent
+	matched := containsMatch(data)
 
 	if err := json.Unmarshal(data, &rawParts); err == nil && len(rawParts) > 0 {
 		// Check if first element is ITSELF an array (nested)
 		var nestedParts []json.RawMessage
 		if err := json.Unmarshal(rawParts[0], &nestedParts); err == nil && len(nestedParts) > 0 {
 			// It is nested, unmarshal the inner element
-			if err := json.Unmarshal(nestedParts[0], &proxyReq); err == nil {
-				return proxyReq.Value
+			if err := json.Unmarshal(nestedParts[0], &evt); err == nil {
+				return evt.Value, matched
 			}
 		} else {
 			// It is not nested, unmarshal the top level element
-			if err := json.Unmarshal(rawParts[0], &proxyReq); err == nil {
-				return proxyReq.Value
+			if err := json.Unmarshal(rawParts[0], &evt); err == nil {
+				return evt.Value, matched
 			}
 		}
 	}
-	return "N/A"
+
+	// Fallback: try as single object if array unmarshal failed
+	if err := json.Unmarshal(data, &evt); err == nil && evt.Value != "" {
+		return evt.Value, matched
+	}
+
+	return "N/A", matched
 }
 
 func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request) {
@@ -1547,7 +1560,7 @@ func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request
 	// Write Rows
 	for _, v := range filteredResponses {
 		// reuse extractDisplayValue to get the readable value
-		displayValue := extractDisplayValue(v.Data)
+		displayValue, _ := extractDisplayValue(v.Data)
 		row := []string{
 			v.Time.Format(time.RFC3339),
 			v.ID,
