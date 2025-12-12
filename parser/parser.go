@@ -65,6 +65,7 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 
 	for _, match := range matches {
 		if kind == "url" {
+			match = strings.TrimRight(match, "/.,;:")
 			match = strings.TrimSuffix(match, "/")
 		}
 
@@ -130,10 +131,8 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 			urlRanges = append(urlRanges, indexRange{idx[0], idx[1]})
 
 			matchVal := text[idx[0]:idx[1]]
-
+			matchVal = strings.TrimRight(matchVal, "/.,;:")
 			matchVal = strings.TrimSuffix(matchVal, "/")
-			// FIX: Added trimming for the trailing period
-			matchVal = strings.TrimSuffix(matchVal, ".")
 
 			results["url"] = append(results["url"], Match{Value: matchVal, Type: "url"})
 		}

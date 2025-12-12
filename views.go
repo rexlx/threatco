@@ -9,11 +9,11 @@ import (
 
 func (s *Server) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 	// need to format with details.fqdn
-	fmt.Fprintf(w, views.LoginView)
+	fmt.Fprint(w, views.LoginView)
 }
 
 func (s *Server) LogViewHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, views.LogView)
+	fmt.Fprint(w, views.LogView)
 }
 
 func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +65,7 @@ func (s *Server) ChartViewHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ViewResponsesHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, views.ResponsesListView)
+	fmt.Fprint(w, views.ResponsesListView)
 }
 
 func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {

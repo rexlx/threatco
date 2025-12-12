@@ -42,6 +42,7 @@ func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now()
 	// fmt.Println("NewUser", email, admin)
 	uid := uuid.New()
 	thisCopy := make([]ServiceType, len(services))
@@ -54,8 +55,8 @@ func NewUser(email string, admin bool, services []ServiceType) (*User, error) {
 		ID:       uid.String(),
 		Email:    email,
 		Key:      key,
-		Created:  time.Now(),
-		Updated:  time.Now(),
+		Created:  now,
+		Updated:  now,
 		Selected: make(map[string]int),
 		Services: thisCopy,
 		Admin:    admin,
