@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -724,6 +726,14 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	})
 
+}
+
+func CalculateSHA256(r io.Reader) (string, error) {
+	hash := sha256.New()
+	if _, err := io.Copy(hash, r); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 type Webhook struct {

@@ -12,9 +12,17 @@ export class ToolsController {
         this.container.classList.remove('is-hidden');
         this.container.innerHTML = `
             <div class="box has-background-custom">
+                <div class="tabs is-toggle is-fullwidth is-small mb-5" style="position: sticky; top: 0; z-index: 20; background-color: inherit; padding-top: 10px; border-bottom: 2px solid #2c2c2c;"> 
+                    <ul>
+                        <li><a id="nav-ioc"><span class="icon"><i class="material-icons">search</i></span><span>IOC Extractor</span></a></li>
+                        <li><a id="nav-aes"><span class="icon"><i class="material-icons">lock</i></span><span>AES Encryptor</span></a></li>
+                        <li><a id="nav-checksum"><span class="icon"><i class="material-icons">fingerprint</i></span><span>Checksum</span></a></li>
+                    </ul>
+                </div>
+
                 <h2 class="title is-2 has-text-info">Tools</h2>
                 
-                <div class="block">
+                <div id="tool-ioc" class="block" style="scroll-margin-top: 80px;">
                     <h4 class="title is-4 has-text-white">IOC Extractor</h4>
                     <p class="has-text-grey-light mb-4">Upload a file to extract potential Indicators of Compromise (IOCs).</p>
                     <div class="file has-name is-fullwidth is-info mb-4">
@@ -43,7 +51,7 @@ export class ToolsController {
 
                 <hr class="has-background-grey-darker my-6">
 
-                <div class="block">
+                <div id="tool-aes" class="block" style="scroll-margin-top: 80px;">
                     <h4 class="title is-4 has-text-white">AES256 Encryptor</h4>
                     <p class="has-text-grey-light mb-4">Securely encrypt or decrypt data via the server.</p>
 
@@ -108,7 +116,7 @@ export class ToolsController {
                         </div>
                     </div>
 
-                    <button class="button is-info is-fullwidth" id="btnRunCrypto">
+                    <button class="button is-info is-fullwidth is-outlined" id="btnRunCrypto">
                         <span class="icon"><i class="material-icons">play_arrow</i></span>
                         <span id="btnRunCryptoLabel">Encrypt Data</span>
                     </button>
@@ -133,6 +141,44 @@ export class ToolsController {
                         </div>
                     </div>
                 </div>
+
+                <hr class="has-background-grey-darker my-6">
+
+                <div id="tool-checksum" class="block" style="scroll-margin-top: 80px;">
+                    <h4 class="title is-4 has-text-white">File Checksum Generator</h4>
+                    <p class="has-text-grey-light mb-4">Calculate the SHA-256 hash of a file using the server.</p>
+                    
+                    <div class="file has-name is-fullwidth is-info mb-4">
+                        <label class="file-label">
+                            <input class="file-input" type="file" id="inputChecksumFile">
+                            <span class="file-cta">
+                                <span class="file-icon"><i class="material-icons">insert_drive_file</i></span>
+                                <span class="file-label">Choose a file…</span>
+                            </span>
+                            <span class="file-name" id="displayChecksumFileName">No file selected</span>
+                        </label>
+                    </div>
+
+                    <button class="button is-info is-outlined is-fullwidth" id="btnRunChecksum">
+                        <span class="icon"><i class="material-icons">fingerprint</i></span>
+                        <span>Calculate SHA-256 Checksum</span>
+                    </button>
+
+                    <div id="checksumResultContainer" class="message is-success mt-4 is-hidden">
+                        <div class="message-header">
+                            <p>SHA-256 Result</p>
+                            <button class="delete" aria-label="delete" id="btnCloseChecksumResult"></button>
+                        </div>
+                        <div class="message-body has-background-black-ter">
+                            <div class="field has-addons">
+                                <div class="control is-expanded">
+                                    <textarea class="textarea is-small has-background-black has-text-danger" readonly id="outputChecksumResult" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         `;
         this.attachListeners();
@@ -143,6 +189,15 @@ export class ToolsController {
     }
 
     attachListeners() {
+        const scrollTo = (id) => {
+            const el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        };
+        
+        document.getElementById('nav-ioc').onclick = () => scrollTo('tool-ioc');
+        document.getElementById('nav-aes').onclick = () => scrollTo('tool-aes');
+        document.getElementById('nav-checksum').onclick = () => scrollTo('tool-checksum');
+
         const fileInput = document.getElementById('toolFileInput');
         const fileName = document.getElementById('toolFileName');
         
@@ -218,6 +273,25 @@ export class ToolsController {
         const btnCloseCrypto = document.getElementById('btnCloseCryptoResult');
         if (btnCloseCrypto) btnCloseCrypto.addEventListener('click', () => {
             document.getElementById('cryptoResultContainer').classList.add('is-hidden');
+        });
+
+        const csumFileInput = document.getElementById('inputChecksumFile');
+        const csumFileName = document.getElementById('displayChecksumFileName');
+        if (csumFileInput) {
+            csumFileInput.addEventListener('change', () => {
+                if (csumFileInput.files.length > 0) {
+                    csumFileName.textContent = csumFileInput.files[0].name;
+                    document.getElementById('checksumResultContainer').classList.add('is-hidden'); 
+                }
+            });
+        }
+        
+        const btnRunChecksum = document.getElementById('btnRunChecksum');
+        if (btnRunChecksum) btnRunChecksum.addEventListener('click', () => this.calculateChecksum());
+
+        const btnCloseChecksum = document.getElementById('btnCloseChecksumResult');
+        if (btnCloseChecksum) btnCloseChecksum.addEventListener('click', () => {
+             document.getElementById('checksumResultContainer').classList.add('is-hidden');
         });
     }
 
@@ -572,5 +646,49 @@ export class ToolsController {
          btn.onclick = () => this.render();
          footer.appendChild(btn);
          this.container.appendChild(footer);
+    }
+    
+    async calculateChecksum() {
+        const fileInput = document.getElementById('inputChecksumFile');
+        const file = fileInput.files[0];
+        const btn = document.getElementById('btnRunChecksum');
+        const container = document.getElementById('checksumResultContainer');
+        const outputText = document.getElementById('outputChecksumResult');
+
+        container.classList.add('is-hidden');
+        outputText.value = '';
+
+        if (!file) {
+            alert("Please select a file first.");
+            return;
+        }
+        
+        btn.classList.add('is-loading');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await this.app._fetch('/tools/checksum', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                 const errorText = await response.text();
+                 throw new Error(`Server failed to calculate checksum: ${errorText}`);
+            }
+
+            const checksum = await response.text();
+            
+            outputText.value = checksum;
+            container.classList.remove('is-hidden');
+
+        } catch (error) {
+            console.error('Checksum calculation failed:', error);
+            alert("Checksum calculation failed: " + error.message);
+        } finally {
+            btn.classList.remove('is-loading');
+        }
     }
 }

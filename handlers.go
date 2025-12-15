@@ -1905,6 +1905,33 @@ func (s *Server) ToolsDecryptHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(plaintext)
 }
 
+func (s *Server) ToolsChecksumHandler(w http.ResponseWriter, r *http.Request) {
+	// 10MB is used for other tool handlers, maintaining consistency.
+	r.ParseMultipartForm(10 << 20)
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		if err.Error() == "http: no such file" {
+			http.Error(w, "File upload missing.", http.StatusBadRequest)
+			return
+		}
+		fmt.Printf("Error retrieving file from form: %v", err)
+		http.Error(w, "Error retrieving file from form", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	checksum, err := CalculateSHA256(file)
+	if err != nil {
+		fmt.Printf("Error calculating SHA-256: %v", err)
+		http.Error(w, "Error calculating file checksum", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(checksum))
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
