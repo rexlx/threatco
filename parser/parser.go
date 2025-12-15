@@ -54,7 +54,7 @@ func NewContextualizer(ignoreIPs bool, ignoreDomains []string, ignoreEmails []st
 			"url":      regexp.MustCompile(`((https?|ftp):\/\/[^\s/$.?#].[^\s]*)`),
 			"domain":   regexp.MustCompile(`([a-zA-Z0-9.-]+\.[a-zA-Z]{2,3})`),
 			"filepath": regexp.MustCompile(`([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)`),
-			"filename": regexp.MustCompile(`^[\w\-. ]+\.[a-zA-Z]{2,4}$`),
+			"filename": regexp.MustCompile(`^[\w\-.]+\.[a-zA-Z]{2,4}$`),
 		},
 	}
 }
