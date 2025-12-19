@@ -100,6 +100,55 @@ func MergeJSONData(existingData, newData []byte) ([]byte, error) {
 	return json.Marshal(objects)
 }
 
+func XMergeJSONData(existingData, newData []byte) ([]byte, error) {
+	// 1. Prepare inputs
+	trimmedNew := bytes.TrimSpace(newData)
+	trimmedExisting := bytes.TrimSpace(existingData)
+
+	// 2. If no new data, return existing (but ensure it's an array if not empty)
+	if len(trimmedNew) == 0 {
+		if len(trimmedExisting) == 0 {
+			return []byte("[]"), nil
+		}
+		return trimmedExisting, nil
+	}
+
+	// 3. Build the result buffer
+	var buf bytes.Buffer
+	buf.Grow(len(trimmedExisting) + len(trimmedNew) + 2)
+
+	buf.WriteByte('[')
+
+	// 4. Handle Existing Data (The "Head" of the list)
+	if len(trimmedExisting) > 0 {
+		// Check if existing is a valid array like "[...]"
+		if len(trimmedExisting) >= 2 && trimmedExisting[0] == '[' && trimmedExisting[len(trimmedExisting)-1] == ']' {
+			// It's an array. Write everything INSIDE the brackets.
+			// Exclude the first '[' and last ']'
+			buf.Write(trimmedExisting[1 : len(trimmedExisting)-1])
+		} else {
+			// It's a raw object or garbage. Treat it as a single item.
+			buf.Write(trimmedExisting)
+		}
+		// We are about to add new data, so we need a comma
+		buf.WriteByte(',')
+	}
+
+	// 5. Handle New Data (The "Tail" of the list)
+	// Check if new data is a valid array like "[...]" that needs flattening
+	if len(trimmedNew) >= 2 && trimmedNew[0] == '[' && trimmedNew[len(trimmedNew)-1] == ']' {
+		// Flatten: Write content inside brackets
+		buf.Write(trimmedNew[1 : len(trimmedNew)-1])
+	} else {
+		// Append raw object
+		buf.Write(trimmedNew)
+	}
+
+	buf.WriteByte(']')
+
+	return buf.Bytes(), nil
+}
+
 func Sign(username, key, time, uri string) string {
 	p := username + time + uri
 	h := hmac.New(sha1.New, []byte(key))
@@ -549,7 +598,8 @@ func GetDBHost() string {
 func createLineChart(seriesName string, data []Coord) *charts.Line {
 	line := charts.NewLine()
 	line.SetGlobalOptions(
-		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeMacarons, BackgroundColor: "#333"}),
+		// CHANGED: Removed BackgroundColor to allow CSS styling to pass through
+		charts.WithInitializationOpts(opts.Initialization{Theme: types.ThemeMacarons}),
 		charts.WithTitleOpts(opts.Title{
 			Title: seriesName,
 		}),
@@ -580,7 +630,6 @@ func createLineChart(seriesName string, data []Coord) *charts.Line {
 	}
 
 	// Set the X-axis and add the series data to the chart.
-	// The AddSeries function can accept a slice of concrete types like []opts.LineData.
 	line.SetXAxis(xAxis).
 		AddSeries(seriesName, items, charts.WithLineChartOpts(opts.LineChart{Smooth: opts.Bool(true)}))
 

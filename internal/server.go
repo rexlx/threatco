@@ -374,15 +374,27 @@ func (s *Server) GetLogs() []LogItem {
 
 func (s *Server) ProcessTransientResponses() {
 	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
 	for {
 		select {
 		case resp := <-s.RespCh:
+			start := time.Now()
 			s.Memory.Lock()
 			r, ok := s.Cache.Responses[resp.ID]
 			if !ok {
 				initialData, err := MergeJSONData(nil, resp.Data)
 				if err != nil {
 					s.Log.Printf("ERROR: could not initialize JSON array for ID %s: %v", resp.ID, err)
+					dur := time.Since(start)
+					ms := float64(dur.Microseconds()) / float64(time.Millisecond)
+					_, ok := s.Cache.Coordinates["response_processing_time_ms"]
+					if !ok {
+						s.Cache.Coordinates["response_processing_time_ms"] = make([]Coord, 0)
+					}
+					if len(s.Cache.Coordinates["response_processing_time_ms"]) > 250 {
+						s.Cache.Coordinates["response_processing_time_ms"] = s.Cache.Coordinates["response_processing_time_ms"][1:]
+					}
+					s.Cache.Coordinates["response_processing_time_ms"] = append(s.Cache.Coordinates["response_processing_time_ms"], Coord{Value: ms, Time: time.Now().Unix()})
 					s.Memory.Unlock()
 					continue
 				}
@@ -402,6 +414,16 @@ func (s *Server) ProcessTransientResponses() {
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
 			s.Details.Stats["vendor_responses"]++
 			newestResponse, ok := s.Cache.Responses[resp.ID]
+			dur := time.Since(start)
+			ms := float64(dur.Microseconds()) / float64(time.Millisecond)
+			_, ok = s.Cache.Coordinates["response_processing_time_ms"]
+			if !ok {
+				s.Cache.Coordinates["response_processing_time_ms"] = make([]Coord, 0)
+			}
+			if len(s.Cache.Coordinates["response_processing_time_ms"]) > 250 {
+				s.Cache.Coordinates["response_processing_time_ms"] = s.Cache.Coordinates["response_processing_time_ms"][1:]
+			}
+			s.Cache.Coordinates["response_processing_time_ms"] = append(s.Cache.Coordinates["response_processing_time_ms"], Coord{Value: ms, Time: time.Now().Unix()})
 			s.Memory.Unlock()
 			if ok {
 				resp = newestResponse
@@ -680,11 +702,9 @@ func (s *Server) UpdateCharts() {
 	var buf bytes.Buffer
 	for k, v := range s.Cache.Coordinates {
 		chart := createLineChart(k, v)
-		err := chart.Render(&buf)
-		if err != nil {
-			s.Log.Printf("could not render chart: %v", err)
-			continue
-		}
+		snippet := chart.RenderSnippet()
+		buf.Write([]byte(snippet.Element))
+		buf.Write([]byte(snippet.Script))
 	}
 	s.Cache.Charts = buf.Bytes()
 }

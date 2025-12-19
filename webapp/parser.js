@@ -9,7 +9,7 @@ export class Contextualizer {
         "ipv6": /([a-fA-F\d]{4}(:[a-fA-F\d]{4}){7})/g,
         "email": /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
         "url": /((https?|ftp):\/\/[^\s/$.?#].[^\s]*)/g,
-        "domain": /([a-zA-Z0-9.-]+\.[a-zA-Z]{2,3})/g,
+        "domain": /([a-zA-Z0-9.-]+\.[a-zA-Z]{2,3})\b/g,
         "filepath": /([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)/g,
         "filename": /^(?!(\d{1,3}\.){2}\d{1,3}\.[\d]{2,4}$)[\w\-. ]+\.[\w]{2,4}$/g,
     };

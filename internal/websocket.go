@@ -138,24 +138,24 @@ func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification No
 			default:
 				// Assume client is dead or stuck, so we unregister and close the connection.
 				log.Printf("Client send channel full for user %s. Closing connection.", userID)
-				resch <- ResponseItem{
-					Log:    true,
-					Email:  userID,
-					ID:     notification.Info,
-					Vendor: "system",
-					Time:   notification.Created,
-				}
+				// resch <- ResponseItem{
+				// 	Log:    true,
+				// 	Email:  userID,
+				// 	ID:     notification.Info,
+				// 	Vendor: "system",
+				// 	Time:   notification.Created,
+				// }
 				go func(c *Client) { h.unregister <- c }(client)
 			}
 		}
 	} else {
-		// log.Printf("No active clients found for user: %s", userID)
-		resch <- ResponseItem{
-			Email:  userID,
-			ID:     notification.Info,
-			Vendor: "system",
-			Time:   notification.Created,
-		}
+		log.Printf("No active clients found for user: %s", userID)
+		// resch <- ResponseItem{
+		// 	Email:  userID,
+		// 	ID:     notification.Info,
+		// 	Vendor: "system",
+		// 	Time:   notification.Created,
+		// }
 	}
 }
 

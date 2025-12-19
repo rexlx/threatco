@@ -59,11 +59,15 @@ func (s *Server) AddServicesHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ChartViewHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
-	out := string(s.Cache.Charts)
 
-	fmt.Fprint(w, out)
+	out := fmt.Sprintf(`
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 2rem; width: 100%%; padding: 2rem 0;">
+            %s
+        </div>`,
+		s.Cache.Charts)
+
+	fmt.Fprintf(w, views.BaseView, out)
 }
-
 func (s *Server) ViewResponsesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, views.ResponsesListView)
 }
