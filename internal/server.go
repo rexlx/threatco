@@ -378,57 +378,52 @@ func (s *Server) ProcessTransientResponses() {
 	for {
 		select {
 		case resp := <-s.RespCh:
-			start := time.Now()
-			s.Memory.Lock()
-			r, ok := s.Cache.Responses[resp.ID]
-			if !ok {
-				initialData, err := MergeJSONData(nil, resp.Data)
-				if err != nil {
-					s.Log.Printf("ERROR: could not initialize JSON array for ID %s: %v", resp.ID, err)
-					dur := time.Since(start)
-					ms := float64(dur.Microseconds()) / float64(time.Millisecond)
-					_, ok := s.Cache.Coordinates["response_processing_time_ms"]
-					if !ok {
-						s.Cache.Coordinates["response_processing_time_ms"] = make([]Coord, 0)
-					}
-					if len(s.Cache.Coordinates["response_processing_time_ms"]) > 250 {
-						s.Cache.Coordinates["response_processing_time_ms"] = s.Cache.Coordinates["response_processing_time_ms"][1:]
-					}
-					s.Cache.Coordinates["response_processing_time_ms"] = append(s.Cache.Coordinates["response_processing_time_ms"], Coord{Value: ms, Time: time.Now().Unix()})
-					s.Memory.Unlock()
-					continue
-				}
-				resp.Data = initialData
-				s.Cache.Responses[resp.ID] = resp
-			} else {
-				r.Time = resp.Time
-				mergedData, err := MergeJSONData(r.Data, resp.Data)
-				if err != nil {
-					s.Log.Printf("ERROR: could not merge JSON for ID %s: %v", r.ID, err)
-					fmt.Printf("ERROR: could not merge JSON for ID %s: %v", r.ID, err)
-				} else {
-					r.Data = mergedData
-				}
-				s.Cache.Responses[resp.ID] = r
+			// start := time.Now()
+			s.Memory.RLock()
+			r, exists := s.Cache.Responses[resp.ID]
+			var oldData []byte
+			if exists {
+				oldData = r.Data
 			}
+			s.Memory.RUnlock()
+			var finalData []byte
+			var err error
+
+			if !exists {
+				finalData, err = MergeJSONData(nil, resp.Data)
+			} else {
+				finalData, err = MergeJSONData(oldData, resp.Data)
+			}
+
+			if err != nil {
+				s.Log.Printf("ERROR: could not merge JSON for ID %s: %v", resp.ID, err)
+				continue
+			}
+			resp.Data = finalData
+			// Preserve the original timestamp if we are merging into an existing record
+			if exists {
+				resp.Time = r.Time
+			}
+
+			// dur := time.Since(start)
+			// ms := float64(dur.Microseconds()) / float64(time.Millisecond)
+			// _, ok := s.Cache.Coordinates["response_processing_time_ms"]
+			// if !ok {
+			// 	s.Cache.Coordinates["response_processing_time_ms"] = make([]Coord, 0)
+			// }
+			// if len(s.Cache.Coordinates["response_processing_time_ms"]) > 250 {
+			// 	s.Cache.Coordinates["response_processing_time_ms"] = s.Cache.Coordinates["response_processing_time_ms"][1:]
+			// }
+			// s.Cache.Coordinates["response_processing_time_ms"] = append(s.Cache.Coordinates["response_processing_time_ms"], Coord{Value: ms, Time: time.Now().Unix()})
+			s.Memory.Lock()
+			s.Cache.Responses[resp.ID] = resp
+
+			// Update stats
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
 			s.Details.Stats["vendor_responses"]++
-			newestResponse, ok := s.Cache.Responses[resp.ID]
-			dur := time.Since(start)
-			ms := float64(dur.Microseconds()) / float64(time.Millisecond)
-			_, ok = s.Cache.Coordinates["response_processing_time_ms"]
-			if !ok {
-				s.Cache.Coordinates["response_processing_time_ms"] = make([]Coord, 0)
-			}
-			if len(s.Cache.Coordinates["response_processing_time_ms"]) > 250 {
-				s.Cache.Coordinates["response_processing_time_ms"] = s.Cache.Coordinates["response_processing_time_ms"][1:]
-			}
-			s.Cache.Coordinates["response_processing_time_ms"] = append(s.Cache.Coordinates["response_processing_time_ms"], Coord{Value: ms, Time: time.Now().Unix()})
 			s.Memory.Unlock()
-			if ok {
-				resp = newestResponse
-			}
-			err := s.DB.StoreResponse(false, resp.ID, resp.Data, resp.Vendor)
+
+			err = s.DB.StoreResponse(false, resp.ID, resp.Data, resp.Vendor)
 			if err != nil {
 				s.Log.Printf("ERROR: could not store response ID %s: %v", resp.ID, err)
 			}
@@ -455,7 +450,6 @@ func (s *Server) ProcessTransientResponses() {
 		}
 	}
 }
-
 func (t *Token) CreateToken(userID string, ttl time.Duration) (*Token, error) {
 	tk := &Token{
 		UserID:    userID,
