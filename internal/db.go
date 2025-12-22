@@ -16,6 +16,7 @@ import (
 )
 
 type Database interface {
+	CleanResponses(t time.Duration) error
 	Backup(w io.Writer) error // <-- CHANGED THIS
 	Restore(filePath string) error
 	GetUserByEmail(email string) (User, error)
@@ -63,6 +64,11 @@ func (db *BboltDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
 		})
 	})
 	return responses, err
+}
+
+func (db *BboltDB) CleanResponses(t time.Duration) error {
+	fmt.Println("not implemented: BboltDB CleanResponses")
+	return nil
 }
 
 func (db *BboltDB) GetUserByEmail(email string) (User, error) {
@@ -271,7 +277,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 		return nil, err
 	}
 	fmt.Println("PostgresDB created, cleaning old responses")
-	err = p.CleanResponses()
+	err = p.CleanResponsesAtStart(time.Hour * 24) // clean responses older than 24 hours
 	if err != nil {
 		return nil, err
 	}
@@ -356,6 +362,12 @@ func (db *PostgresDB) Backup(w io.Writer) error {
 	return nil
 }
 
+func (db *PostgresDB) CleanResponsesAtStart(t time.Duration) error {
+	var expiration time.Time = time.Now().Add(-t)
+	_, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE created < $1", expiration)
+	return err
+}
+
 // Restore executes psql using the pool's connection string.
 // !! WARNING: This is a destructive operation.
 func (db *PostgresDB) Restore(filePath string) error {
@@ -401,8 +413,8 @@ func (db *PostgresDB) Restore(filePath string) error {
 	return nil
 }
 
-func (db *PostgresDB) CleanResponses() error {
-	var expiration time.Time = time.Now().Add(-time.Hour * 24)
+func (db *PostgresDB) CleanResponses(t time.Duration) error {
+	var expiration time.Time = time.Now().Add(t)
 	_, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE created < $1", expiration)
 	return err
 }

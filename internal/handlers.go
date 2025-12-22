@@ -566,6 +566,26 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(resp)
 }
 
+func (s *Server) RexsTestHandler(w http.ResponseWriter, r *http.Request) {
+	sum := SummarizedEvent{
+		Matched: true,
+		Info:    "This is a test event from Rex's Test Handler",
+		Value:   "testvalue"}
+	out, err := json.Marshal(sum)
+	if err != nil {
+		s.Log.Println("RexsTestHandler error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.RespCh <- ResponseItem{
+		ID:     uuid.New().String(),
+		Vendor: "rexs_test_handler",
+		Data:   out,
+		Time:   time.Now(),
+	}
+	w.Write(out)
+}
+
 func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 	// defer s.addStat("event_requests", 1)
 	pathPrefix := "/events/"
@@ -1336,6 +1356,78 @@ func (s *Server) DNSLookupHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "dns lookup started"}`))
+}
+
+func (s *Server) DNSLookupHandler2(w http.ResponseWriter, r *http.Request) {
+	// 1. Get the generic 'value' (could be IP or Domain)
+	target := r.URL.Query().Get("value")
+	if target == "" {
+		http.Error(w, "Value required", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Auth Check (Same as before)
+	var email string
+	if val := r.Context().Value("email"); val != nil {
+		email = val.(string)
+	} else {
+		tkn, err := s.GetTokenFromSession(r)
+		if err != nil || tkn == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		tk, err := s.DB.GetTokenByValue(tkn)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		email = tk.Email
+	}
+
+	// 3. Perform Lookup Asynchronously based on type
+
+	var info string
+	var isError bool
+	var err error
+	// if strings.Contains(q, "@") {
+
+	// }
+	// Check if it's an IP address
+	if net.ParseIP(target) != nil {
+		// It is an IP -> Perform Reverse Lookup (PTR)
+		var names []string
+		names, err = net.LookupAddr(target)
+		if err == nil {
+			info = fmt.Sprintf("Reverse lookup (IP -> Domain) for %s: %s", target, strings.Join(names, ", "))
+		}
+	} else {
+		// It is likely a Domain -> Perform Forward Lookup (A/AAAA)
+		var ips []string
+		ips, err = net.LookupHost(target)
+		if err == nil {
+			info = fmt.Sprintf("Forward lookup (Domain -> IP) for %s: %s", target, strings.Join(ips, ", "))
+		}
+	}
+
+	if err != nil {
+		info = fmt.Sprintf("DNS lookup failed for %s: %v", target, err)
+		isError = true
+	}
+	tmp := make(map[string]any)
+	tmp["from"] = email
+	tmp["info"] = info
+	tmp["error"] = isError
+	tmp["created"] = time.Now()
+
+	out, err := json.Marshal(tmp)
+	if err != nil {
+		s.Log.Println("DNSLookupHandler2 marshal error:", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(out)
 }
 
 // applyResponseFilters applies ID, Vendor, and Matched filters to the dataset.

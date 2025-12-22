@@ -439,6 +439,7 @@ func (s *Server) ProcessTransientResponses() {
 				s.LogInfo(info)
 			}
 		case <-ticker.C:
+			go s.DB.CleanResponses(s.Cache.ResponseExpiry)
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {
 				if time.Since(v.Time) > s.Cache.ResponseExpiry {
@@ -640,6 +641,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
 	s.Gateway.HandleFunc("/tools/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParseFileHandler)))
 	s.Gateway.HandleFunc("/tools/dnslookup", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler)))
+	s.Gateway.HandleFunc("/tools/dnslookup2", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler2)))
 	s.Gateway.HandleFunc("/tools/encrypt", http.HandlerFunc(s.ValidateSessionToken(s.ToolsEncryptHandler)))
 	s.Gateway.HandleFunc("/tools/decrypt", http.HandlerFunc(s.ValidateSessionToken(s.ToolsDecryptHandler)))
 	s.Gateway.HandleFunc("/tools/checksum", http.HandlerFunc(s.ValidateSessionToken(s.ToolsChecksumHandler)))
@@ -651,6 +653,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
 	s.Gateway.HandleFunc("/misp-workflow", http.HandlerFunc(s.ValidateSessionToken(s.TriggerMispWorkflowHandler)))
 	s.Gateway.HandleFunc("/updatekey", http.HandlerFunc(s.ValidateSessionToken(s.NewApiKeyGeneratorHandler)))
+	s.Gateway.HandleFunc("/rextest", http.HandlerFunc(s.ValidateSessionToken(s.RexsTestHandler)))
 	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
 	s.Gateway.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*StaticPath))))
 	s.Gateway.Handle("/kb/", http.StripPrefix("/kb/", http.FileServer(http.Dir(*KnowledgeBase))))

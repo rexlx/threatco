@@ -41,6 +41,7 @@ func (m *MockDB) GetResponse(id string) ([]byte, error)             { return nil
 func (m *MockDB) GetResponses(t time.Time) ([]ResponseItem, error)  { return nil, nil }
 func (m *MockDB) DeleteResponse(id string) error                    { return nil }
 func (m *MockDB) TestAndRecconect() error                           { return nil }
+func (m *MockDB) CleanResponses(t time.Duration) error              { return nil }
 
 func setupTestServer() *Server {
 	return &Server{

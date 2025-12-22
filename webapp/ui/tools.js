@@ -17,6 +17,7 @@ export class ToolsController {
                         <li><a id="nav-ioc"><span class="icon"><i class="material-icons">search</i></span><span>IOC Extractor</span></a></li>
                         <li><a id="nav-aes"><span class="icon"><i class="material-icons">lock</i></span><span>AES Encryptor</span></a></li>
                         <li><a id="nav-checksum"><span class="icon"><i class="material-icons">fingerprint</i></span><span>Checksum</span></a></li>
+                        <li><a id="nav-dns"><span class="icon"><i class="material-icons">dns</i></span><span>DNS Lookup</span></a></li>
                     </ul>
                 </div>
 
@@ -179,6 +180,26 @@ export class ToolsController {
                     </div>
                 </div>
 
+                <hr class="has-background-grey-darker my-6">
+
+                <div id="tool-dns" class="block" style="scroll-margin-top: 80px;">
+                    <h4 class="title is-4 has-text-white">DNS Lookup</h4>
+                    <p class="has-text-grey-light mb-4">Perform a server-side DNS forward (domain to IP) or reverse (IP to domain) lookup.</p>
+                    
+                    <div class="field has-addons">
+                        <div class="control is-expanded">
+                            <input class="input has-background-dark has-text-white" type="text" id="inputDnsValue" placeholder="Enter Domain (e.g. example.com) or IP (e.g. 1.1.1.1)">
+                        </div>
+                        <div class="control">
+                            <button class="button is-info is-outlined" id="btnRunDns">
+                                <span class="icon"><i class="material-icons">search</i></span>
+                                <span>Lookup</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="has-text-grey-light mt-2" id="dnsLookupResult"></div>
+                </div>
+
             </div>
         `;
         this.attachListeners();
@@ -197,6 +218,7 @@ export class ToolsController {
         document.getElementById('nav-ioc').onclick = () => scrollTo('tool-ioc');
         document.getElementById('nav-aes').onclick = () => scrollTo('tool-aes');
         document.getElementById('nav-checksum').onclick = () => scrollTo('tool-checksum');
+        document.getElementById('nav-dns').onclick = () => scrollTo('tool-dns');
 
         const fileInput = document.getElementById('toolFileInput');
         const fileName = document.getElementById('toolFileName');
@@ -293,6 +315,9 @@ export class ToolsController {
         if (btnCloseChecksum) btnCloseChecksum.addEventListener('click', () => {
              document.getElementById('checksumResultContainer').classList.add('is-hidden');
         });
+
+        const btnRunDns = document.getElementById('btnRunDns');
+        if (btnRunDns) btnRunDns.addEventListener('click', () => this.runDnsLookup());
     }
 
     updateCryptoUI() {
@@ -687,6 +712,41 @@ export class ToolsController {
         } catch (error) {
             console.error('Checksum calculation failed:', error);
             alert("Checksum calculation failed: " + error.message);
+        } finally {
+            btn.classList.remove('is-loading');
+        }
+    }
+
+    async runDnsLookup() {
+        const input = document.getElementById('inputDnsValue');
+        const value = input.value.trim();
+        const btn = document.getElementById('btnRunDns');
+        const resultDiv = document.getElementById('dnsLookupResult');
+
+        if (!value) {
+            alert("Please enter a domain or IP.");
+            return;
+        }
+
+        btn.classList.add('is-loading');
+
+        try {
+            const encodedValue = encodeURIComponent(value);
+            const response = await this.app._fetch(`/tools/dnslookup2?value=${encodedValue}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                 const errorText = await response.text();
+                 throw new Error(errorText || "Request failed");
+            }
+            let result = await response.json();
+            resultDiv.innerHTML = `<p class="has-text-grey-light">${escapeHtml(result.info)}</p>`;
+
+
+        } catch (error) {
+            console.error('DNS lookup failed:', error);
+            alert("DNS lookup failed: " + error.message);
         } finally {
             btn.classList.remove('is-loading');
         }
