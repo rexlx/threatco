@@ -213,6 +213,18 @@ export class Application {
         }
     }
 
+    async getUptime() {
+        let thisURL = `/getuptime`;
+        try {
+            let response = await this._fetch(thisURL, { method: 'GET' });
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            return await response.json();
+        } catch (err) {
+            this.errors.push("Error fetching uptime: " + err.message);
+            return null;
+        }
+    }
+
 
     async setHistory() {
         if (this.resultHistory.length > 50) {

@@ -1223,6 +1223,18 @@ func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 	return opts, nil
 }
 
+func (s *Server) GetRuntimeHandler(w http.ResponseWriter, r *http.Request) {
+	uptime := time.Since(s.Details.StartTime)
+	out := map[string]string{
+		"uptime":     uptime.String(),
+		"start_time": s.Details.StartTime.Format(time.RFC3339),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 // GetResponseCacheHandler handles requests for viewing cached responses.
 // It now supports filtering by vendor and pagination using 'start' and 'limit' query parameters.
 // Example URL: /responses?vendor=some_vendor&start=0&limit=50

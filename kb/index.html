@@ -1,335 +1,337 @@
-<!DOCTYPE HTML>
-<!--
-	Dimension by HTML5 UP
-	html5up.net | @ajlkn
-	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
--->
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-	<title>knowledge</title>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-	<link rel="stylesheet" href="assets/css/main.css" />
-	<noscript>
-		<link rel="stylesheet" href="assets/css/noscript.css" />
-	</noscript>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threatco Knowledge Center</title>
+    <style>
+        /* 1. Define the fonts available in your static directory */
+        @font-face {
+            font-family: 'IBMPlexMono';
+            src: url('/static/fonts/IBMPlexMono-Regular.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        @font-face {
+            font-family: 'IBMPlexSans';
+            src: url('/static/fonts/IBMPlexSans-Regular.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --border-color: #000000;
+            --code-bg: #f4f4f4;
+            --accent-color: #0000ff; /* Neon Blue for Light Mode */
+            --accent-glow: 0 0 2px #0000ff;
+        }
+
+        body.dark-mode {
+            --bg-color: #0a0a0a;
+            --text-color: #e0e0e0;
+            --border-color: #333333;
+            --code-bg: #1a1a1a;
+            --accent-color: #00ff41; /* Neon Green for Dark Mode */
+            --accent-glow: 0 0 8px rgba(0, 255, 65, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            /* 2. Use the local font here */
+            font-family: 'IBMPlexMono', 'Courier New', monospace; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header & Nav */
+        header {
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 10px -5px var(--accent-color);
+        }
+
+        h1 { margin: 0; text-transform: uppercase; letter-spacing: 2px; }
+        
+        nav {
+            margin-bottom: 50px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            transition: 0.2s;
+        }
+
+        nav a:hover {
+            border-color: var(--accent-color);
+            box-shadow: var(--accent-glow);
+            color: var(--accent-color);
+        }
+
+        /* Content Sections */
+        section {
+            margin-bottom: 60px;
+            border-left: 1px solid var(--border-color);
+            padding-left: 30px;
+            position: relative;
+        }
+
+        section:hover {
+            border-left: 2px solid var(--accent-color);
+            box-shadow: -4px 0 15px -5px var(--accent-glow);
+        }
+
+        h2 {
+            margin-top: 0;
+            text-transform: uppercase;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 10px;
+            display: inline-block;
+        }
+
+        h3 {
+            margin-top: 30px;
+            color: var(--accent-color);
+            text-transform: lowercase;
+        }
+
+        /* Elements */
+        pre {
+            background: var(--code-bg);
+            padding: 15px;
+            overflow-x: auto;
+            border-left: 4px solid var(--border-color);
+            font-family: 'IBMPlexMono', monospace;
+        }
+
+        code {
+            background: var(--code-bg);
+            padding: 2px 5px;
+            font-family: 'IBMPlexMono', monospace;
+        }
+
+        ul { list-style-type: square; }
+
+        /* Images / Screenshots */
+        img.screenshot {
+            display: block;
+            margin: 30px auto;
+            max-width: 100%;
+            width: 700px;
+            height: auto;
+            border: 1px solid var(--border-color);
+            padding: 5px;
+            background-color: var(--bg-color);
+        }
+        
+        section:hover img.screenshot {
+            border-color: var(--accent-color);
+            box-shadow: var(--accent-glow);
+        }
+
+        /* Toggle Button */
+        #theme-toggle {
+            background: none;
+            border: 1px solid var(--text-color);
+            color: var(--text-color);
+            padding: 5px 15px;
+            cursor: pointer;
+            font-family: 'IBMPlexMono', monospace;
+            text-transform: uppercase;
+        }
+
+        #theme-toggle:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            box-shadow: var(--accent-glow);
+        }
+    </style>
 </head>
+<body class="dark-mode">
 
-<body class="is-preload">
+<div class="container">
+    <header>
+        <div>
+            <h1>Threatco</h1>
+            <small>Knowledge Center</small>
+        </div>
+        <button id="theme-toggle">Toggle Theme</button>
+    </header>
 
-	<!-- Wrapper -->
-	<div id="wrapper">
+    <nav>
+        <a href="#frontend">Frontend</a>
+        <a href="#extension">Extension</a>
+        <a href="#server">Server</a>
+        <a href="#api">API</a>
+        <a href="#deploy">Deploy</a>
+        <a href="#deps">Dependencies</a>
+    </nav>
 
-		<!-- Header -->
-		<header id="header">
-			<div class="logo">
-				<span class="icon fa-compass"></span>
-			</div>
-			<div class="content">
-				<div class="inner">
-					<h1 class="has-text-blue">Knowledge Center</h1>
-					<p>Documentation for the threatco server and insights extension.</p>
-				</div>
-			</div>
-			<nav>
-				<ul>
-					<li><a href="#frontend">frontend</a></li>
-					<li><a href="#extension">extension</a></li>
-					<li><a href="#server">server</a></li>
-					<li><a href="#api">api</a></li>
-					<li><a href="#deploy">deploy</a></li>
-					<li><a href="#deps">dependencies</a></li>
-					<!--<li><a href="#elements">Elements</a></li>-->
-				</ul>
-			</nav>
-		</header>
+    <section id="frontend">
+        <h2>Frontend Administration</h2>
+        <p>Documentation for live server administration.</p>
 
-		<!-- Main -->
-		<div id="main">
-			<!-- Intro -->
-			<article id="frontend">
-				<ul class="actions small" style="justify-content: center; flex-wrap: wrap; list-style: none; padding: 0;">
-					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('login').scrollIntoView({behavior: 'smooth'}); return false;">Login</a></li>
-					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('users').scrollIntoView({behavior: 'smooth'}); return false;">Users</a></li>
-					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('services').scrollIntoView({behavior: 'smooth'}); return false;">Services</a></li>
-					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('logging').scrollIntoView({behavior: 'smooth'}); return false;">Logging</a></li>
-					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('responses').scrollIntoView({behavior: 'smooth'}); return false;">Responses</a></li>
-					<li><a href="#" class="has-text-white" style="text-decoration: underline; border-bottom: none;" onclick="document.getElementById('stats').scrollIntoView({behavior: 'smooth'}); return false;">Stats</a></li>
-				</ul>
-				<hr />
-				<h2 class="major has-text-green">administration</h2>
-				<p>documentation for live server administration</p>
-				<h3 id="login" class="major has-text-green">login</h3>
-				<span class="image main"><img src="images/home.png" alt="" /></span>
-				<p>to login to the server, enter the server url in the browser, enter your credentials, and click on the
-					login button</p>
-				<p>you will be redirected to services screen as shown above</p>
-				<h3 id="users" class="major has-text-green">users</h3>
-				<span class="image main"><img src="images/users.png" alt="" /></span>
-				<p class="has-text-blue">view and delete users</p>
-				<p>view and delete users in the "users" menu</p>
-				<span class="image main"><img src="images/adduser.png" alt="" /></span>
-				<p class="has-text-blue">add a user</p>
-				<p>add a user by clicking on the "add user" link in the navigation bar</p>
-				<ol class="has-text-white">
-					<li>click on the "add user" link in the navigation bar</li>
-					<li>fill in the form with the user's details</li>
-					<li>click on the "add user" button. a prompt will appear informing you of a one time key appearing
-						on screen</li>
-					<li>click ok and copy the one time key and give it to the user</li>
-				</ol>
-				<p>you can now view the user in the users section</p>
-				<p class="has-text-blue">edit a user</p>
-				<p>re-add a user to change their password. there is no update user function from the perspective of the forntend at this time (although the capability exists)</p>
-				<h3 id="services" class="major has-text-green">services</h3>
-				<p>you can view details about the the configured services here</p>
-				<h3 id="logging" class="major has-text-green">logging</h3>
-				<p>view logs in the "logs" menu</p>
-				<h3 id="responses" class="major has-text-green">responses</h3>
-				<p>view all cached responses in the "responses" menu</p>
-				<h3 id="stats" class="major has-text-green">stats</h3>
-				<p>view application graphs in the "stats" menu</p>
+        <h3>Login</h3>
+        <p>Enter the server URL in your browser, input credentials, and log in to view the dashboard.</p>
+        <img src="images/home.png" alt="Login Screen" class="screenshot">
+        
+        <h3>Users</h3>
+        <p><strong>View/Delete:</strong> Manage users via the "Users" menu.</p>
+        <img src="images/users.png" alt="User Management" class="screenshot">
 
+        <p><strong>Add User:</strong></p>
+        <ol>
+            <li>Click "Add User" in nav bar.</li>
+            <li>Fill in details.</li>
+            <li>Click "Add". Copy the one-time key provided.</li>
+        </ol>
+        <img src="images/adduser.png" alt="Add User Screen" class="screenshot">
+        
+        <p><strong>Edit User:</strong> To change a password, currently you must delete and re-add the user.</p>
 
-			</article>
+        <h3>Services & Stats</h3>
+        <p>View details about configured services in the "Services" tab, and view logs/graphs in the "Logs" and "Stats" menus respectively.</p>
+    </section>
 
-			<!-- Work -->
-			<article id="api">
-				<h2 class="major has-text-green">API</h2>
-				<!-- <span class="image main"><img src="images/pic02.jpg" alt="" /></span> -->
-				<p>API documentation for the threatco server and insights extension.
-				<p>Authorization headers are required to make API calls and are generated by your admin.</p>
-				<pre class="has-text-gray">Authorization: user@place.com:key_here</pre>
-				<h3 class="major has-text-green">Endpoints</h3>
-				<h4 class="has-text-blue">GET /logs</h4>
-				<p>returns a list of all logs ordered by when they occured</p>
-				<pre
-					class="has-text-gray">[{"time":"2025-01-30T07:15:11.800719266-06:00","data":"Server started at :8081","error":false}]</pre>
-				<h4 class="has-text-blue">GET /events/:id</h4>
-				<p>returns the actual third party response that was cached</p>
-				<h4 class="has-text-blue">POST /parse</h4>
-				</p> returns a list of summarized repsonses </p>
-				<pre
-					class="has-text-gray">[{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}]</pre>
-				<p>requiries:
-				<pre class="has-text-gray">{"blob": "text to parse"}</pre>
-				</p>
-				<h4 class="has-text-blue">POST /pipe</h4>
-				<p>returns a summarized repsonse from the specified vendor</p>
-				<pre
-					class="has-text-gray">{"timestamp":"0001-01-01T00:00:00Z","matched":true,"error":false,"background":"has-background-primary-dark","from":"deepfry","id":"1","attr_count":0,"link":"4f82d899-9572-4aa0-a584-04fe0f30168b","threat_level_id":"1","value":"8.8.8.8","info":"that IP looks nosey!"}</pre>
-				<p>requiries:
-				<pre class="has-text-gray">{"value": "8.8.8.8", "to": "deepfry", "type": "ipv4"}</pre>
-				</p>
-				<p><em class="has-text-blue">optional fields:</em>
-					"route": "ip_address". specifices an additional url element to add to the base url for that vendor
-					if the API requests calls for it.
-				</p>
-				<h4 class="has-text-blue">GET /getservices</h4>
-				<p>returns a list of all services available</p>
-				<pre class="has-text-gray">[{"upload_service": false,"expires": 0,"secret": "","selected": false,"insecure": false,"name": "misp-dev","url": "https://192.168.86.91:443","rate_limited": false,"max_requests": 0,"refill_rate": 0,"auth_type": "","key": "","kind": "misp","type": ["md5","sha1","sha256","sha512","ipv4","ipv6","email","url","domain","filepath","filename"],"route_map": null,"description": ""}]</pre>
-			</article>
+    <section id="extension">
+        <h2>Insights Extension</h2>
+        
+        <h3>Menu</h3>
+        <p><strong>Services:</strong> Enable/Disable server-side services. Syncs per user.</p>
+        <p><strong>Profile:</strong> Configure server URL and API email/key.</p>
+        <img src="images/menu960.png" alt="Extension Menu" class="screenshot">
 
-			<!-- About -->
-			<article id="extension">
-				<h2 class="major has-text-green">extension</h2>
-				<p>documentation for using the insights extension</p>
-				<h3 class="major has-text-green">menu</h3>
-				<span class="image main"><img src="images/menu960.png" alt="" /></span>
-				<p>The services option allows the user to enable and disable the services provided by the server.
-					changes made are synced to the server per user</p>
-				<p>The profile option allows the user to configure the server url and email / key.</p>
-				<h3 class="major has-text-green">search</h3>
-				<span class="image main"><img src="images/search960.png" alt="" /></span>
-				<p>the search field accepts blobs of text and will parse "indicators" from the provided data. each
-					indicator match is categorized and sent to respective services configured on the server.</p>
-				<p>a history of 24 results are kept in a first in first out queue</p>
-				<p>a user can get exact responses with "goto" and an ID that matches a response that has not expired.
-					though this can be achieved with the "view" button seen on each result</p>
-			</article>
+        <h3>Search</h3>
+        <p>Accepts text blobs, parses indicators, and sends matches to enabled services. Keeps a history of 24 results (FIFO).</p>
+        <img src="images/search960.png" alt="Extension Search" class="screenshot">
+    </section>
 
-			<article id="server">
-				<h2 class="major has-text-green">server</h2>
-				<p>documentation for configuring and using the threatco server</p>
-				<h3 class="major has-text-green">configuration</h3>
-				<p>the server configuration is located in the data/config.json file. the following options are
-					available:</p>
-				<ul class="has-text-white">
-					<li>server_id: a unique identifier for the server</li>
-					<li>first_user_mode: if true, the server will only allow one user to be created</li>
-					<li>bind_address: the address the server will bind to</li>
-					<li>fqdn: the fully qualified domain name of the server</li>
-					<li>services: a list of services the server will use</li>
-					<li>http_port: the port the server will listen on for http</li>
-					<li>https_port: the port the server will listen on for https</li>
-					<li>http_too: if true, the server will listen on both http and https</li>
-					<li>tls_cert: the path to the tls certificate</li>
-					<li>tls_key: the path to the tls key</li>
-					<li>cert_auth: if true, the server will require client certificates</li>
-					<li>db_location: the path to the database file</li>
-					<li>session_token_ttl: the time in minutes a session token will last</li>
-					<li>response_cache_expiry: the time in minutes a response will last in the cache</li>
-					<li>stat_cache_tick_rate: the time in minutes the server will update the stats</li>
-				</ul>
-				<h3 class="major has-text-green">logging</h3>
-				<p>the server logs to stdout and stderr. some logs are also duplicated on the frontend and served over
-					the api. There is no way to control log level currently</p>
-			</article>
+    <section id="api">
+        <h2>API</h2>
+        <p>Authorization required via header: <code>Authorization: user@place.com:key_here</code></p>
 
-			<!-- Contact -->
-			<article id="deps">
-				<h2 class="major has-text-green">dependencies</h2>
-				<h3 class="major has-text-green">server</h3>
-				<p class="has-text-blue">server configuration</p>
-				<p>by default, the system will use data/config.json. please view the options available for configuration
-				</p>
-				<p class="has-text-blue">frontend</p>
-				<p>the frontend is written in html, css, and javascript. it uses the following dependencies served
-					statically from the server (no CDN):</p>
-				<ul class="has-text-white">
-					<li>htmx</li>
-					<li>IBMPlex fonts</li>
-					<li>bulma css</li>
-				</ul>
-				<p class="has-text-blue">software dependencies</p>
-				<p>the server is written in go and uses the following dependencies:</p>
-				<ul class="has-text-white">
-					<li>github.com/alexedwards/scs/v2 v2.8.0</li>
-					<li>github.com/go-echarts/go-echarts/v2 v2.4.1</li>
-					<li>github.com/google/uuid v1.6.0</li>
-					<li>go.etcd.io/bbolt v1.3.11</li>
-					<li>golang.org/x/crypto v0.31.0</li>
-					<li>github.com/jackc/pgx/v5</li>
-				</ul>
-				<p class="has-text-blue">database</p>
-				<p>the server requires a database connection, and supports two modes:
-				<ul class="has-text-white">
-					<li>embded with bbolt</li>
-					<li>postgres</li>
-				</ul>
-				</p>
-				<p>the database type can be configured with a command line parameter or by config. likewise, the database connection string will need to be either the remote DSN or local file path for an embedded DB</p>
-				<h3 class="major has-text-green">extension</h3>
-				<p class="has-text-blue">client configuration</p>
-				<p>the client configuration is located in the profile section of the menu</p>
-				<p class="has-text-blue">services</p>
-				<p>third party services are developed and configured server side. the user saves their preferred
-					services in the services menu</p>
-				<p class="has-text-blue">software dependencies</p>
-				<p>the extension is written in javascript and uses the following dependencies served statically from
-					chrome (no CDN):</p>
-				<ul class="has-text-white">
-					<li>IntelOneMono fonts</li>
-					<li>bulma css</li>
-				</ul>
-				<h3 class="major has-text-green">knowledge base</h3>
-				<p>A fully responsive site template designed by <a href="https://html5up.net">HTML5 UP</a> and
-					released<br />
-					for free under the <a href="https://html5up.net/license">Creative Commons</a> license.</p>
-				<h3 class="major has-text-green">source code</h3>
-				<p>the source code for the <a href="https://github.com/rexlx/threatco ">threatco server</a></p>
-				<p>the source code for the <a href="https://github.com/rexlx/insights ">insights extension</a></p>
+        <h3>Endpoints</h3>
+        
+        <p><strong>GET /logs</strong> - Returns a list of logs.</p>
+        <pre>[{"time":"2025-01-30...","data":"Server started...","error":false}]</pre>
 
-			</article>
-			<article id="deploy">
-				<h2 class="major has-text-green">deployment</h2>
-				<p>documentation for installing threatco. see dependencies to ensure smooth installation</p>
-				<h3 class="major has-text-green">system requirements</h3>
-				<p class="has-text-blue">operating system</p>
-				<p>the server has been tested on linux, mac, and windows. Linux is the recomended OS</p>
-				<p class="has-text-blue">hardware</p>
-				<p>The memory and cpu requirments will scale up with users and usage. for deployments handling less than
-					100 rps, any deployment will likely suffice. if you want to handle thousands of requests a second
-					with little or no network latency, I recommend:</p>
-				<ul class="has-text-white">
-					<li>6 cores</li>
-					<li>8GB of ram</li>
-					<li>128+ GiB storage</li>
-				</ul>
-				<p class="has-text-blue">software</p>
-				<p>the server requires go 1.23 or higher and git</p>
-				<h3 class="major has-text-green">basic install</h3>
-				<p>clone the repository</p>
-				<pre class="has-text-gray">git clone https://github.com/rexlx/threatco.git</pre>
-				<p>cd into the directory</p>
-				<pre class="has-text-gray">cd threatco</pre>
-				<p>build the server</p>
-				<pre class="has-text-gray">go build .</pre>
-				<p>view the config and consider options</p>
-				<pre class="has-text-gray">./threatco -h;vim data/config.json</pre>
-				<p>run the server</p>
-				<pre
-					class="has-text-gray">./threatco -static "./static" -config data/config.json -db "user=postgres password=tacointhealley host=192.168.86.120 dbname=threatco" -kb ./kb/</pre>
-				<p>the servers default flags are written for docker, which is why so many have to be supplied when
-					running bare metal.</p>
-				<p>they can be overwritten in server.go to run with less flags</p>
-				<p class="has-text-blue">server options</p>
-				<ul class="has-text-white">
-					<li>-static: the path to the static files for the server frontend</li>
-					<li>-config: the path to the config file</li>
-					<li>-db: the database connection string OR embedded db file location</li>
-					<li>-kb: the path to the knowledge base. without this flag the server wont host the knowledge base</li>
-					<li>-delete (optional): delete the config file after reading it</li>
-					<li>-firstuse (optional): leaves api route for creating users unprotected</li>
-					<li>-fqdn (optional): set the url of the server</li>
-				</ul>
-				<h3 class="major has-text-green">docker / podman</h3>
-				<p>build the image</p>
-				<pre class="has-text-gray">docker build -t threatco .</pre>
-				<p>run the image</p>
-				<pre class="has-text-gray">docker run -d -p 8081:8081 threatco</pre>
-				<p>there is also a docker-compose.yml for docker-compose</p>
-			</article>
-			<!-- <article id="deps">
-				<h2 class="major has-text-green">Contact</h2>
-				<form method="post" action="#">
-					<div class="fields">
-						<div class="field half">
-							<label for="name">Name</label>
-							<input type="text" name="name" id="name" />
-						</div>
-						<div class="field half">
-							<label for="email">Email</label>
-							<input type="text" name="email" id="email" />
-						</div>
-						<div class="field">
-							<label for="message">Message</label>
-							<textarea name="message" id="message" rows="4"></textarea>
-						</div>
-					</div>
-					<ul class="actions">
-						<li><input type="submit" value="Send Message" class="primary" /></li>
-						<li><input type="reset" value="Reset" /></li>
-					</ul>
-				</form>
-				<ul class="icons">
-					<li><a href="#" class="icon brands fa-twitter"><span class="label">Twitter</span></a></li>
-					<li><a href="#" class="icon brands fa-facebook-f"><span class="label">Facebook</span></a></li>
-					<li><a href="#" class="icon brands fa-instagram"><span class="label">Instagram</span></a></li>
-					<li><a href="#" class="icon brands fa-github"><span class="label">GitHub</span></a></li>
-				</ul>
-			</article> -->
+        <p><strong>GET /events/:id</strong> - Returns actual cached third-party response.</p>
 
-		</div>
+        <p><strong>POST /parse</strong> - Returns summarized responses from text.</p>
+        <pre>Request: {"blob": "text to parse"}
+Response: [{"matched":true, "value":"8.8.8.8", "info":"IP found"}]</pre>
 
-		<!-- Footer -->
-		<footer id="footer">
-			<a href="/services">back to server</a>
-		</footer>
+        <p><strong>POST /pipe</strong> - Returns summarized response from specific vendor.</p>
+        <pre>Request: {"value": "8.8.8.8", "to": "deepfry", "type": "ipv4"}
+Optional: "route": "ip_address"</pre>
 
-	</div>
+        <p><strong>GET /getservices</strong> - Returns available services list.</p>
+    </section>
 
-	<!-- BG -->
-	<div id="bg"></div>
+    <section id="server">
+        <h2>Server Configuration</h2>
+        <p>Configuration located in <code>data/config.json</code>:</p>
+        <ul>
+            <li><code>server_id</code>: Unique identifier.</li>
+            <li><code>first_user_mode</code>: If true, allows only one user creation.</li>
+            <li><code>bind_address</code> & <code>fqdn</code>: Network settings.</li>
+            <li><code>services</code>: List of services used.</li>
+            <li><code>http_port</code> / <code>https_port</code>: Listening ports.</li>
+            <li><code>tls_cert</code> / <code>tls_key</code>: SSL paths.</li>
+            <li><code>db_location</code>: Path to database file or connection string.</li>
+            <li><code>session_token_ttl</code>: Session duration (minutes).</li>
+        </ul>
+    </section>
 
-	<!-- Scripts -->
-	<script src="assets/js/jquery.min.js"></script>
-	<script src="assets/js/browser.min.js"></script>
-	<script src="assets/js/breakpoints.min.js"></script>
-	<script src="assets/js/util.js"></script>
-	<script src="assets/js/main.js"></script>
+    <section id="deploy">
+        <h2>Deployment</h2>
+        
+        <h3>Requirements</h3>
+        <p><strong>OS:</strong> Linux recommended (tested on Mac/Windows).</p>
+        <p><strong>Hardware (High Load):</strong> 6 cores, 8GB RAM, 128GB Storage.</p>
+        <p><strong>Software:</strong> Go 1.23+, Git.</p>
+
+        <h3>Basic Install</h3>
+        <pre>git clone https://github.com/rexlx/threatco.git
+cd threatco
+go build .
+./threatco -config data/config.json -kb ./kb/</pre>
+
+        <h3>Docker</h3>
+        <pre>docker build -t threatco .
+docker run -d -p 8081:8081 threatco</pre>
+    </section>
+
+    <section id="deps">
+        <h2>Dependencies</h2>
+        <h3>Software</h3>
+        <ul>
+            <li>github.com/alexedwards/scs/v2</li>
+            <li>github.com/go-echarts/go-echarts/v2</li>
+            <li>github.com/google/uuid</li>
+            <li>go.etcd.io/bbolt (Embedded DB)</li>
+            <li>github.com/jackc/pgx/v5 (Postgres DB)</li>
+            <li>golang.org/x/crypto</li>
+        </ul>
+        <h3>Frontend</h3>
+        <ul>
+            <li>HTMX</li>
+            <li>Bulma CSS</li>
+            <li>IBMPlex Fonts</li>
+        </ul>
+    </section>
+
+    <footer>
+        <p><a href="/services" style="color: var(--text-color);">← Back to App</a></p>
+    </footer>
+</div>
+
+<script>
+    const toggleButton = document.getElementById('theme-toggle');
+    const body = document.body;
+
+    // Check for saved preference
+    if (localStorage.getItem('theme') === 'light') {
+        body.classList.remove('dark-mode');
+    }
+
+    toggleButton.addEventListener('click', () => {
+        body.classList.toggle('dark-mode');
+        // Save preference
+        if (body.classList.contains('dark-mode')) {
+            localStorage.setItem('theme', 'dark');
+        } else {
+            localStorage.setItem('theme', 'light');
+        }
+    });
+</script>
 
 </body>
-
 </html>

@@ -73,6 +73,7 @@ func main() {
 		Handler: finalHandler,
 	}
 	go s.ProcessTransientResponses()
-	s.LogInfo(fmt.Sprintf("Server started at %s", s.Details.Address))
+	s.Details.StartTime = time.Now()
+	s.LogInfo(fmt.Sprintf("(%v)\tServer started at %s with ID %s", s.Details.Address, s.Details.StartTime, s.ID))
 	log.Fatal(svr.ListenAndServe())
 }

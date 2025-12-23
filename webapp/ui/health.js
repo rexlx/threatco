@@ -11,8 +11,11 @@ export class HealthController {
         this.container.classList.remove('is-hidden');
         this.container.innerHTML = '<p class="has-text-info">Checking health...</p><progress class="progress is-small is-primary" max="100"></progress>';
         
-        // 2. Fetch Data
-        const stats = await this.app.getServerStats();
+        // 2. Fetch Data (Updated to fetch uptime)
+        const [stats, uptimeData] = await Promise.all([
+            this.app.getServerStats(),
+            this.app.getUptime()
+        ]);
         
         // 3. Handle Empty/Error State
         if (!stats) {
@@ -26,6 +29,14 @@ export class HealthController {
         title.className = 'title has-text-info';
         title.textContent = 'Health Check';
         this.container.appendChild(title);
+
+        // NEW: Display Uptime
+        if (uptimeData && uptimeData.uptime) {
+            const subtitle = document.createElement('p');
+            subtitle.className = 'subtitle is-6 has-text-grey-light mb-5';
+            subtitle.innerHTML = `<strong>Server Uptime:</strong> ${escapeHtml(uptimeData.uptime)} <span class="tag is-dark ml-2">${escapeHtml(uptimeData.start_time)}</span>`;
+            this.container.appendChild(subtitle);
+        }
 
         // 5. Configuration
         const DEGRADED_THRESHOLD = 0.2; // 20% failure rate
