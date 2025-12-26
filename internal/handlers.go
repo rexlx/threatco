@@ -1967,7 +1967,7 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 		"3",           // Threat Level
 		"",            // Extends UUID
 	)
-
+	newEvent.OrgCID = "2"
 	// 3. Send Event to MISP
 	eventID, _, err := s.CreateMispEvent(*newEvent)
 	if err != nil {
@@ -2018,6 +2018,103 @@ func (s *Server) TriggerMispWorkflowHandler(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// New Struct for Batch Requests
+type MispBatchRequest struct {
+	EventInfo  string `json:"event_info"`
+	TagName    string `json:"tag_name"`
+	Attributes []struct {
+		Value string `json:"value"`
+		Type  string `json:"type"`
+	} `json:"attributes"`
+}
+
+func (s *Server) TriggerMispBatchWorkflowHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.addStat("misp_batch_requests", 1)
+
+	// 1. Decode Payload
+	var req MispBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 2. Create the Event Object
+	// Defaulting to Distribution: Org(0), Threat: Low(3), Analysis: Initial(0)
+	// Make sure to use the pointers we fixed earlier!
+	newEvent := vendors.NewEvent(
+		"2",           // OrgID (Change per your config)
+		"0",           // Distribution
+		req.EventInfo, // Info
+		"0",           // Analysis
+		"3",           // Threat Level
+		"",            // Extends UUID
+	)
+	newEvent.OrgCID = "2"
+	// 3. Attach All Attributes to the Event Object
+	// MISP allows creating attributes nested inside the Event creation call
+	for _, attr := range req.Attributes {
+		finalType := GetMispType(attr.Type)
+		category := GetMispCategory(finalType)
+
+		newAttr := vendors.Attribute{
+			Type:         finalType,
+			Value:        attr.Value,
+			Category:     category,
+			ToIDS:        true,
+			UUID:         uuid.New().String(),
+			Distribution: "0",
+			Comment:      "Imported via ThreatCo Case Management",
+		}
+		newEvent.Attribute = append(newEvent.Attribute, newAttr)
+	}
+
+	// 4. Attach Tag (optional)
+	// Note: Tags inside the Event creation payload must be done via the Tag object list
+	// or applied after creation. Applying after is safer for simple string tags.
+
+	// 5. Create Event (with attributes)
+	eventID, _, err := s.CreateMispEvent(*newEvent)
+	if err != nil {
+		s.LogError(fmt.Errorf("misp batch failed: %w", err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 6. Apply Tag if needed (Post-Creation)
+	parts := strings.Split(eventID, "|")
+	if len(parts) >= 2 && req.TagName != "" {
+		// parts[1] is usually the numeric ID needed for tagging
+		_ = s.AddMispTag(parts[1], req.TagName)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":   "success",
+		"event_id": eventID,
+		"message":  fmt.Sprintf("Created event with %d attributes", len(req.Attributes)),
+	})
+}
+
+func (s *Server) SearchCasesHandler(w http.ResponseWriter, r *http.Request) {
+	// Get 'q' from query string
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		// If empty, just return all open cases (or you could return empty)
+		// Let's redirect to GetCases behavior for consistency if query is empty
+		s.GetCasesHandler(w, r)
+		return
+	}
+
+	cases, err := s.DB.SearchCases(query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cases)
 }
 
 func deriveKey(password string, salt []byte) []byte {

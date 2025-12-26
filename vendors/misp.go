@@ -43,8 +43,8 @@ type MispEvent struct {
 	ExtendsUUID        string      `json:"extends_uuid"`
 	EventCreatorEmail  string      `json:"event_creator_email"`
 	Protected          bool        `json:"protected"`
-	Org                Org         `json:"Org"`
-	Orgc               Orgc        `json:"Orgc"`
+	Org                *Org        `json:"Org,omitempty"`
+	Orgc               *Orgc       `json:"Orgc,omitempty"`
 	Attribute          []Attribute `json:"Attribute"`
 }
 
@@ -87,6 +87,7 @@ func NewEvent(org, dist, info, analysis, threat, xuuid string) *MispEvent {
 		Attribute:     attrs,
 		UUID:          id.String(),
 		OrgID:         org,
+		OrgCID:        org,
 		Distribution:  dist,
 		Info:          info,
 		Analysis:      analysis,

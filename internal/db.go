@@ -37,6 +37,7 @@ type Database interface {
 	GetCase(id string) (Case, error)
 	UpdateCase(c Case) error
 	DeleteCase(id string) error
+	SearchCases(query string) ([]Case, error)
 }
 
 type BboltDB struct {
@@ -101,6 +102,11 @@ func (db *BboltDB) GetCase(id string) (Case, error) {
 func (db *BboltDB) CreateCase(c Case) error {
 	fmt.Println("not implemented: BboltDB CreateCase")
 	return nil
+}
+
+func (db *BboltDB) SearchCases(query string) ([]Case, error) {
+	fmt.Println("not implemented: BboltDB SearchCases")
+	return nil, nil
 }
 
 func (db *BboltDB) UpdateCase(c Case) error {
@@ -712,4 +718,32 @@ func (db *PostgresDB) UpdateCase(c Case) error {
 func (db *PostgresDB) DeleteCase(id string) error {
 	_, err := db.Pool.Exec(context.Background(), "DELETE FROM cases WHERE id = $1", id)
 	return err
+}
+
+func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
+	// Search Name, Description, or cast the JSONB iocs column to text for searching
+	sql := `
+        SELECT * FROM cases 
+        WHERE status = 'Open' 
+        AND (name ILIKE $1 OR description ILIKE $1 OR iocs::text ILIKE $1)
+        ORDER BY created_at DESC
+    `
+	// Add wildcards for "contains" search
+	likeQuery := "%" + query + "%"
+
+	rows, err := db.Pool.Query(context.Background(), sql, likeQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cases []Case
+	for rows.Next() {
+		var c Case
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments); err != nil {
+			return nil, err
+		}
+		cases = append(cases, c)
+	}
+	return cases, nil
 }

@@ -47,6 +47,7 @@ func (m *MockDB) GetCases() ([]Case, error)                         { return nil
 func (m *MockDB) GetCase(id string) (Case, error)                   { return Case{}, nil }
 func (m *MockDB) UpdateCase(c Case) error                           { return nil }
 func (m *MockDB) DeleteCase(id string) error                        { return nil }
+func (m *MockDB) SearchCases(query string) ([]Case, error)          { return nil, nil }
 
 func setupTestServer() *Server {
 	return &Server{

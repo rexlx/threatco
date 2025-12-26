@@ -10,17 +10,30 @@ export class CaseController {
     async render() {
         this.container.classList.remove('is-hidden');
         this.container.innerHTML = `
-            <div class="level">
-                <div class="level-left">
+            <div class="columns is-vcentered mb-5">
+                <div class="column is-narrow">
                     <h1 class="title has-text-info">Case Management</h1>
                 </div>
-                <div class="level-right">
+                <div class="column">
+                    <div class="field has-addons is-justify-content-center">
+                        <div class="control is-expanded" style="max-width: 600px;">
+                            <input class="input" type="text" id="caseSearchInput" placeholder="Search for IOCs, Case Names, or Descriptions...">
+                        </div>
+                        <div class="control">
+                            <button class="button is-info" id="btnSearchCases">
+                                <span class="icon"><i class="material-icons">search</i></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-narrow">
                     <button class="button is-success" id="btnNewCase">
                         <span class="icon"><i class="material-icons">add</i></span>
                         <span>New Case</span>
                     </button>
                 </div>
             </div>
+            
             <div id="caseListContainer" class="columns is-multiline"></div>
             
             <div class="modal" id="newCaseModal">
@@ -53,6 +66,7 @@ export class CaseController {
     }
 
     attachMainListeners() {
+        // --- Create Case Modal Logic ---
         const modal = document.getElementById('newCaseModal');
         const closeModal = () => modal.classList.remove('is-active');
 
@@ -60,6 +74,18 @@ export class CaseController {
         document.getElementById('btnCancelCase').onclick = closeModal;
         modal.querySelector('.delete').onclick = closeModal;
 
+        // --- Search Logic ---
+        const runSearch = async () => {
+            const query = document.getElementById('caseSearchInput').value.trim();
+            if (!query) return this.loadCases();
+            await this.searchCases(query);
+        };
+        document.getElementById('btnSearchCases').onclick = runSearch;
+        document.getElementById('caseSearchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') runSearch();
+        });
+
+        // --- Save Case Logic ---
         document.getElementById('btnSaveCase').onclick = async () => {
             const name = document.getElementById('newCaseName').value;
             const desc = document.getElementById('newCaseDesc').value;
@@ -79,60 +105,79 @@ export class CaseController {
         };
     }
 
+    async searchCases(query) {
+        const container = document.getElementById('caseListContainer');
+        container.innerHTML = '<div class="loader"></div>';
+        try {
+            const res = await this.app._fetch(`/cases/search?q=${encodeURIComponent(query)}`);
+            const cases = await res.json();
+            this.renderCaseList(cases);
+        } catch (e) {
+            container.innerHTML = `<p class="has-text-danger">Search failed: ${e.message}</p>`;
+        }
+    }
+
     async loadCases() {
         const container = document.getElementById('caseListContainer');
         container.innerHTML = '<div class="loader"></div>';
         try {
             const res = await this.app._fetch('/cases/list');
             const cases = await res.json();
-            container.innerHTML = '';
-
-            if (cases.length === 0) {
-                container.innerHTML = '<div class="column is-full"><p class="has-text-grey">No open cases found.</p></div>';
-                return;
-            }
-
-            cases.forEach(c => {
-                const col = document.createElement('div');
-                col.className = 'column is-one-third';
-                const card = document.createElement('div');
-                card.className = 'card has-background-dark';
-                card.style.cursor = 'pointer';
-                card.onclick = () => this.openCase(c);
-
-                const statusColor = c.status === 'Open' ? 'is-success' : 'is-danger';
-
-                card.innerHTML = `
-                    <div class="card-content">
-                        <div class="media">
-                            <div class="media-content">
-                                <p class="title is-4 has-text-white">${escapeHtml(c.name)}</p>
-                                <p class="subtitle is-6 has-text-grey-light">by ${escapeHtml(c.created_by)}</p>
-                            </div>
-                            <div class="media-right">
-                                <span class="tag ${statusColor}">${escapeHtml(c.status)}</span>
-                            </div>
-                        </div>
-                        <div class="content has-text-light">
-                            ${escapeHtml(c.description || 'No description')}
-                            <br>
-                            <small class="has-text-grey">${new Date(c.created_at).toLocaleString()}</small>
-                            <br>
-                            <span class="tag is-dark mt-2">${c.iocs ? c.iocs.length : 0} IOCs</span>
-                        </div>
-                    </div>
-                `;
-                col.appendChild(card);
-                container.appendChild(col);
-            });
+            this.renderCaseList(cases);
         } catch (e) {
             container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
         }
     }
 
+    renderCaseList(cases) {
+        const container = document.getElementById('caseListContainer');
+        container.innerHTML = '';
+
+        if (!cases || cases.length === 0) {
+            container.innerHTML = '<div class="column is-full"><p class="has-text-grey has-text-centered is-size-5">No cases found.</p></div>';
+            return;
+        }
+
+        cases.forEach(c => {
+            const col = document.createElement('div');
+            col.className = 'column is-one-third';
+            const card = document.createElement('div');
+            card.className = 'card has-background-dark';
+            card.style.cursor = 'pointer';
+            card.style.height = '100%';
+            card.onclick = () => this.openCase(c);
+
+            const statusColor = c.status === 'Open' ? 'is-success' : 'is-danger';
+
+            card.innerHTML = `
+                <div class="card-content">
+                    <div class="media">
+                        <div class="media-content" style="overflow: hidden;">
+                            <p class="title is-4 has-text-white is-truncated" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</p>
+                            <p class="subtitle is-6 has-text-grey-light">by ${escapeHtml(c.created_by)}</p>
+                        </div>
+                        <div class="media-right">
+                            <span class="tag ${statusColor}">${escapeHtml(c.status)}</span>
+                        </div>
+                    </div>
+                    <div class="content has-text-light">
+                        <div style="height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                            ${escapeHtml(c.description || 'No description')}
+                        </div>
+                        <br>
+                        <small class="has-text-grey">${new Date(c.created_at).toLocaleString()}</small>
+                        <br>
+                        <span class="tag is-dark mt-2">${c.iocs ? c.iocs.length : 0} IOCs</span>
+                    </div>
+                </div>
+            `;
+            col.appendChild(card);
+            container.appendChild(col);
+        });
+    }
+
     openCase(c) {
         this.currentCase = c;
-        // Re-render container with details view
         this.container.innerHTML = `
             <div class="mb-4">
                 <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
@@ -140,20 +185,18 @@ export class CaseController {
             <div class="box has-background-custom">
                 <div class="level">
                     <div class="level-left">
-                        <div>
+                        <div style="max-width: 600px;">
                             <h2 class="title is-3 has-text-white">${escapeHtml(c.name)}</h2>
                             <p class="subtitle is-6 has-text-grey-light">Created by ${escapeHtml(c.created_by)} on ${new Date(c.created_at).toLocaleString()}</p>
                         </div>
                     </div>
                     <div class="level-right">
-                         <div class="field has-addons">
-                            <div class="control">
-                                <button class="button is-danger" id="btnDeleteCase">
-                                    <span class="icon"><i class="material-icons">delete</i></span>
-                                    <span>Delete Case</span>
-                                </button>
-                            </div>
-                         </div>
+                         <div class="buttons">
+                            <button class="button is-danger" id="btnDeleteCase">
+                                <span class="icon"><i class="material-icons">delete</i></span>
+                                <span>Delete Case</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <hr class="has-background-grey-dark">
@@ -161,7 +204,8 @@ export class CaseController {
                 <div class="columns">
                     <div class="column is-two-thirds">
                          <h4 class="title is-5 has-text-info">IOCs</h4>
-                         <div class="field has-addons">
+                         
+                         <div class="field has-addons mb-3">
                             <div class="control is-expanded">
                                 <input class="input is-small" type="text" id="inputAddIOC" placeholder="Add IP, Domain, Hash...">
                             </div>
@@ -169,8 +213,35 @@ export class CaseController {
                                 <button class="button is-info is-small" id="btnAddIOC">Add</button>
                             </div>
                          </div>
-                         <div class="tags are-medium" id="iocList">
-                             ${(c.iocs || []).map(ioc => `<span class="tag is-dark">${escapeHtml(ioc)}<button class="delete is-small delete-ioc" data-val="${escapeHtml(ioc)}"></button></span>`).join('')}
+
+                         <div class="level is-mobile has-background-black-ter p-2" style="border-radius:4px; margin-bottom: 0.5rem;">
+                            <div class="level-left">
+                                <label class="checkbox has-text-grey-light ml-2">
+                                    <input type="checkbox" id="checkAllIOCs"> Select All
+                                </label>
+                            </div>
+                            <div class="level-right">
+                                <button class="button is-small is-warning is-light" id="btnOpenMispModal">
+                                    <span class="icon is-small"><i class="material-icons">cloud_upload</i></span>
+                                    <span>Send Selected to MISP</span>
+                                </button>
+                            </div>
+                         </div>
+
+                         <div class="box has-background-dark p-2" id="iocListContainer" style="max-height: 400px; overflow-y: auto;">
+                            ${(c.iocs || []).map(ioc => `
+                                <div class="level is-mobile mb-1 p-1" style="border-bottom: 1px solid #333;">
+                                    <div class="level-left">
+                                        <label class="checkbox mr-2">
+                                            <input type="checkbox" class="ioc-checkbox" value="${escapeHtml(ioc)}">
+                                        </label>
+                                        <span class="has-text-light is-family-monospace">${escapeHtml(ioc)}</span>
+                                    </div>
+                                    <div class="level-right">
+                                        <button class="delete is-small delete-ioc" data-val="${escapeHtml(ioc)}"></button>
+                                    </div>
+                                </div>
+                            `).join('')}
                          </div>
 
                          <h4 class="title is-5 has-text-info mt-5">Comments</h4>
@@ -193,47 +264,94 @@ export class CaseController {
                             <div class="media-content">
                                 <div class="field">
                                     <p class="control">
-                                        <textarea class="textarea has-background-dark has-text-white" id="inputComment" placeholder="Add a comment..."></textarea>
+                                        <textarea class="textarea has-background-dark has-text-white" id="inputComment" rows="2" placeholder="Add a comment..."></textarea>
                                     </p>
                                 </div>
                                 <div class="field">
                                     <p class="control">
-                                        <button class="button is-info" id="btnPostComment">Post comment</button>
+                                        <button class="button is-info is-small" id="btnPostComment">Post comment</button>
                                     </p>
                                 </div>
                             </div>
                          </article>
                     </div>
+
                     <div class="column">
-                         <h4 class="title is-5 has-text-warning">Actions</h4>
-                         <p class="has-text-grey-light is-size-7">More analysis tools coming soon...</p>
+                         <div class="notification is-dark">
+                             <h4 class="title is-5 has-text-warning">Case Info</h4>
+                             <p class="has-text-grey-light block">${escapeHtml(c.description)}</p>
+                             <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
+                             <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
+                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="modal" id="mispModal">
+                <div class="modal-background"></div>
+                <div class="modal-card">
+                    <header class="modal-card-head has-background-warning">
+                        <p class="modal-card-title has-text-black">Send to MISP</p>
+                        <button class="delete" aria-label="close"></button>
+                    </header>
+                    <section class="modal-card-body has-background-dark has-text-light">
+                        <div class="notification is-warning is-light mb-4">
+                            You are about to send <strong id="mispCountDisplay">0</strong> IOCs to MISP.
+                        </div>
+                        
+                        <div class="field">
+                            <label class="label has-text-light">Event Title / Info</label>
+                            <div class="control">
+                                <input class="input has-background-black-ter has-text-white" type="text" id="mispEventTitle">
+                            </div>
+                            <p class="help has-text-grey">This will be the title of the MISP Event.</p>
+                        </div>
+
+                        <div class="field">
+                            <label class="label has-text-light">Tags</label>
+                            <div class="control">
+                                <input class="input has-background-black-ter has-text-white" type="text" id="mispTags" value="Application:Threatco, tlp:amber">
+                            </div>
+                            <p class="help has-text-grey">Comma separated tags (e.g. "phishing, apt28").</p>
+                        </div>
+
+                        <label class="label has-text-light">Selected IOCs Preview</label>
+                        <div class="box has-background-black-ter p-2" id="mispPreviewList" style="max-height: 150px; overflow-y: auto; border: 1px solid #444;"></div>
+                    </section>
+                    <footer class="modal-card-foot has-background-black-ter" style="border-top: 1px solid #444;">
+                        <button class="button is-warning" id="btnConfirmMisp">
+                            <span class="icon"><i class="material-icons">cloud_upload</i></span>
+                            <span>Send Events</span>
+                        </button>
+                        <button class="button is-dark" id="btnCancelMisp">Cancel</button>
+                    </footer>
                 </div>
             </div>
         `;
 
+        this.attachDetailListeners(c);
+    }
+
+    attachDetailListeners(c) {
         document.getElementById('btnBackList').onclick = () => this.render();
 
+        // --- MISP Modal Handlers (Close) ---
+        const mispModal = document.getElementById('mispModal');
+        const closeMisp = () => mispModal.classList.remove('is-active');
+        document.getElementById('btnCancelMisp').onclick = closeMisp;
+        mispModal.querySelector('.delete').onclick = closeMisp;
+
+        // DELETE CASE
         document.getElementById('btnDeleteCase').onclick = async () => {
-            if (!confirm("Are you sure you want to permanently delete this case? This cannot be undone.")) {
-                return;
-            }
-
+            if (!confirm("Are you sure you want to permanently delete this case?")) return;
             try {
-                const res = await this.app._fetch('/cases/delete', {
-                    method: 'POST',
-                    body: JSON.stringify({ id: this.currentCase.id })
-                });
-
+                const res = await this.app._fetch('/cases/delete', { method: 'POST', body: JSON.stringify({ id: c.id }) });
                 if (!res.ok) throw new Error(await res.text());
-
-                // Go back to the list view after deletion
                 this.render();
-            } catch (e) {
-                alert("Delete failed: " + e.message);
-            }
+            } catch (e) { alert("Delete failed: " + e.message); }
         };
 
+        // ADD IOC
         document.getElementById('btnAddIOC').onclick = () => {
             const val = document.getElementById('inputAddIOC').value.trim();
             if (!val) return;
@@ -242,11 +360,15 @@ export class CaseController {
                 this.currentCase.iocs.push(val);
                 this.updateCase();
             }
-            document.getElementById('inputAddIOC').value = "";
         };
 
-        // Event delegation for delete IOC buttons
-        document.getElementById('iocList').onclick = (e) => {
+        // TOGGLE ALL CHECKBOXES
+        document.getElementById('checkAllIOCs').onchange = (e) => {
+            document.querySelectorAll('.ioc-checkbox').forEach(cb => cb.checked = e.target.checked);
+        };
+
+        // DELETE IOC
+        document.getElementById('iocListContainer').onclick = (e) => {
             if (e.target.classList.contains('delete-ioc')) {
                 const val = e.target.dataset.val;
                 this.currentCase.iocs = this.currentCase.iocs.filter(i => i !== val);
@@ -254,21 +376,90 @@ export class CaseController {
             }
         };
 
+        // POST COMMENT
         document.getElementById('btnPostComment').onclick = async () => {
             const text = document.getElementById('inputComment').value.trim();
             if (!text) return;
-
-            // Optimistic update
-            const comment = {
-                user: this.app.user.email, // Assume current user
-                text: text,
-                created_at: new Date().toISOString()
-            };
-
+            const comment = { user: this.app.user.email, text: text, created_at: new Date().toISOString() };
             if (!this.currentCase.comments) this.currentCase.comments = [];
             this.currentCase.comments.push(comment);
             await this.updateCase();
         };
+
+        // OPEN MISP MODAL
+        document.getElementById('btnOpenMispModal').onclick = () => {
+            const selected = Array.from(document.querySelectorAll('.ioc-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return alert("No IOCs selected.");
+
+            // Populate Modal
+            document.getElementById('mispCountDisplay').textContent = selected.length;
+            document.getElementById('mispEventTitle').value = `Case: ${this.currentCase.name}`;
+            document.getElementById('mispPreviewList').innerHTML = selected.map(s => `<span class="tag is-dark m-1">${escapeHtml(s)}</span>`).join('');
+
+            // Show Modal
+            document.getElementById('mispModal').classList.add('is-active');
+
+            // Wire up the CONFIRM button inside the modal
+            const confirmBtn = document.getElementById('btnConfirmMisp');
+            // Remove old listeners to prevent double-firing if opened multiple times
+            const newBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+
+            newBtn.onclick = () => this.sendToMisp(selected);
+        };
+    }
+
+
+    async sendToMisp(selectedIOCs) {
+        const title = document.getElementById('mispEventTitle').value;
+        const tagsVal = document.getElementById('mispTags').value;
+        const btn = document.getElementById('btnConfirmMisp');
+
+        if (!title) return alert("Event Title is required.");
+
+        btn.classList.add('is-loading');
+
+        // 1. Prepare Attributes List
+        const attributes = selectedIOCs.map(ioc => {
+            // Heuristic for type detection
+            let type = "other";
+            if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ioc)) type = "ip-src";
+            else if (/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/.test(ioc)) type = "domain";
+            else if (ioc.length === 32) type = "md5";
+            else if (ioc.length === 64) type = "sha256";
+
+            return { value: ioc, type: type };
+        });
+
+        // 2. Construct Payload
+        const payload = {
+            event_info: title,
+            tag_name: tagsVal,
+            attributes: attributes
+        };
+
+        try {
+            // 3. Send Batch Request
+            // Note: We use _fetch directly here since sendMispEvent in app.js 
+            // is likely hardcoded to the old single-item endpoint.
+            const res = await this.app._fetch('/misp/workflow/batch', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error(await res.text());
+
+            const json = await res.json();
+            alert(`Success! Created MISP Event: ${json.message}`);
+
+            document.getElementById('mispModal').classList.remove('is-active');
+
+        } catch (e) {
+            console.error(e);
+            alert("Failed to send batch to MISP: " + e.message);
+        } finally {
+            btn.classList.remove('is-loading');
+        }
     }
 
     async updateCase() {
