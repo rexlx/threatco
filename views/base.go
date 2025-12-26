@@ -33,7 +33,6 @@ var BaseView string = `<!DOCTYPE html>
                             <a class="navbar-item has-background-custom has-text-primary" href="/users">users</a>
                             <a class="navbar-item has-background-custom has-text-primary" href="/view-logs">logs</a>
                             <a class="navbar-item has-background-custom has-text-primary" href="/charts">stats</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/responses">responses</a>
                         </div>
                         <button class="scroll-button right" id="scroll-right">›</button>
                     </div>

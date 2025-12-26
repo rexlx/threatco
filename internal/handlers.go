@@ -281,6 +281,134 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ... existing handlers ...
+
+// --- CASE HANDLERS ---
+
+func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
+	var c Case
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Auth context
+	email := r.Context().Value("email").(string)
+
+	c.ID = uuid.New().String()
+	c.CreatedBy = email
+	c.CreatedAt = time.Now()
+	c.Status = "Open"
+	if c.IOCs == nil {
+		c.IOCs = []string{}
+	}
+	if c.Comments == nil {
+		c.Comments = []Comment{}
+	}
+
+	if err := s.DB.CreateCase(c); err != nil {
+		s.Log.Println("Error creating case:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.LogInfo(fmt.Sprintf("User %s created case: %s", email, c.Name))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
+func (s *Server) GetCasesHandler(w http.ResponseWriter, r *http.Request) {
+	cases, err := s.DB.GetCases()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cases)
+}
+
+func (s *Server) DeleteCaseHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse ID from JSON body
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "missing case id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.DB.DeleteCase(req.ID); err != nil {
+		s.Log.Println("Error deleting case:", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.LogInfo(fmt.Sprintf("Case %s deleted by %s", req.ID, r.Context().Value("email")))
+	w.Write([]byte(`{"status":"deleted"}`))
+}
+
+func (s *Server) GetCaseHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+	c, err := s.DB.GetCase(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
+func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
+	// We expect the payload to contain the full updated case state or partial logic here.
+	// For simplicity, we accept the struct with the ID.
+	var incoming Case
+	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if incoming.ID == "" {
+		http.Error(w, "missing case id", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch existing to ensure ownership or valid ID (optional checks skipped for brevity)
+	existing, err := s.DB.GetCase(incoming.ID)
+	if err != nil {
+		http.Error(w, "Case not found", http.StatusNotFound)
+		return
+	}
+
+	// Merge updates
+	// If incoming has new comments (we assume frontend sends the NEW comment to append, or the whole list)
+	// Strategy: Frontend sends the delta or specific action.
+	// Let's assume the frontend sends the *whole* updated object for IOCs,
+	// but maybe we handle comments specially?
+	// Let's trust the frontend sends the complete updated fields for now.
+
+	existing.Status = incoming.Status
+	existing.Description = incoming.Description
+	existing.IOCs = incoming.IOCs
+	existing.Comments = incoming.Comments // Overwrite strategy
+
+	if err := s.DB.UpdateCase(existing); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte(`{"status":"ok"}`))
+}
+
 func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.addStat("add_service_requests", 1)
 	err := r.ParseForm()

@@ -7,6 +7,7 @@ import { ServiceController } from "./ui/services.js";
 import { HealthController } from "./ui/health.js";
 import { ResponseController } from "./ui/responses.js";
 import { ToolsController } from "./ui/tools.js";
+import { CaseController } from './ui/cases.js';
 
 const application = new Application();
 const contextualizer = new Contextualizer();
@@ -18,6 +19,7 @@ const serviceCtrl = new ServiceController('servicesView', application);
 const healthCtrl = new HealthController('healthStatusContainer', application);
 const responseCtrl = new ResponseController('matchBox', application);
 const toolsCtrl = new ToolsController('toolsContainer', application);
+const caseCtrl = new CaseController('casesView', application);
 
 const mainSection = document.getElementById("mainSection");
 const serviceView = document.getElementById("servicesView");
@@ -38,7 +40,12 @@ async function main() {
 }
 
 function hideAll() {
-    [mainSection, serviceView, profileView].forEach(el => el.classList.add('is-hidden'));
+    const casesView = document.getElementById('casesView');
+    
+    [mainSection, serviceView, profileView, casesView].forEach(el => { 
+        if(el) el.classList.add('is-hidden'); 
+    });
+    
     document.getElementById('healthStatusContainer').classList.add('is-hidden');
     document.getElementById('matchBox').classList.add('is-hidden');
     if (toolsContainer) toolsContainer.classList.add('is-hidden');
@@ -74,6 +81,16 @@ document.getElementById("sidebarSearch").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     showMainView();
 });
+
+const sidebarCases = document.getElementById("sidebarCases");
+if (sidebarCases) {
+    sidebarCases.addEventListener('click', (e) => {
+        setActiveSidebar(e.currentTarget);
+        hideAll();
+        // The CaseController handles un-hiding its own container in .render()
+        caseCtrl.render();
+    });
+}
 
 document.getElementById("sidebarRecentActivity").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);

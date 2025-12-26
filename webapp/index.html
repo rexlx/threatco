@@ -30,7 +30,6 @@
                         <a class="navbar-item has-background-custom has-text-primary" href="/users">users</a>
                         <a class="navbar-item has-background-custom has-text-primary" href="/view-logs">logs</a>
                         <a class="navbar-item has-background-custom has-text-primary" href="/charts">stats</a>
-                        <a class="navbar-item has-background-custom has-text-primary" href="/responses">responses</a>
                     </div>
                     <button class="scroll-button right" id="scroll-right">›</button>
                 </div>
@@ -60,6 +59,9 @@
                         <li><a id="sidebarRecentActivity"><span class="icon-text"><span class="icon"><i
                                             class="material-icons">history</i></span><span>Responses</span></span></a>
                         </li>
+                        <li><a id="sidebarCases"><span class="icon-text"><span class="icon"><i
+                                            class="material-icons">work_outline</i></span><span>Cases</span></span></a>
+                        </li>
                         <li><a id="sidebarHealth"><span class="icon-text"><span class="icon"><i
                                             class="material-icons">health_and_safety</i></span><span>Health</span></span></a>
                         </li>
@@ -83,7 +85,7 @@
             </div>
         </div>
     </section>
-
+    <section class="section has-background-custom is-hidden" id="casesView"></section>
     <section class="section has-background-custom is-hidden" id="servicesView">
         <div class="container">
             <div class="block">

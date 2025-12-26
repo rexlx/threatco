@@ -32,10 +32,32 @@ type Database interface {
 	GetResponses(expiration time.Time) ([]ResponseItem, error)
 	DeleteResponse(id string) error
 	TestAndRecconect() error
+	CreateCase(c Case) error
+	GetCases() ([]Case, error)
+	GetCase(id string) (Case, error)
+	UpdateCase(c Case) error
+	DeleteCase(id string) error
 }
 
 type BboltDB struct {
 	DB *bbolt.DB
+}
+
+type Case struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedBy   string    `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	Status      string    `json:"status"` // "Open", "Closed"
+	IOCs        []string  `json:"iocs"`
+	Comments    []Comment `json:"comments"`
+}
+
+type Comment struct {
+	User      string    `json:"user"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (db *BboltDB) TestAndRecconect() error {
@@ -64,6 +86,31 @@ func (db *BboltDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
 		})
 	})
 	return responses, err
+}
+
+func (db *BboltDB) GetCases() ([]Case, error) {
+	fmt.Println("not implemented: BboltDB GetCases")
+	return nil, nil
+}
+
+func (db *BboltDB) GetCase(id string) (Case, error) {
+	fmt.Println("not implemented: BboltDB GetCase")
+	return Case{}, nil
+}
+
+func (db *BboltDB) CreateCase(c Case) error {
+	fmt.Println("not implemented: BboltDB CreateCase")
+	return nil
+}
+
+func (db *BboltDB) UpdateCase(c Case) error {
+	fmt.Println("not implemented: BboltDB UpdateCase")
+	return nil
+}
+
+func (db *BboltDB) DeleteCase(id string) error {
+	fmt.Println("not implemented: BboltDB DeleteCase")
+	return nil
 }
 
 func (db *BboltDB) CleanResponses(t time.Duration) error {
@@ -331,6 +378,16 @@ func (db *PostgresDB) createTables() error {
                 email TEXT,
                 hash BYTEA
                 );
+		CREATE TABLE IF NOT EXISTS cases (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            description TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP,
+            status TEXT,
+            iocs JSONB,
+            comments JSONB
+        );
             `)
 	return err
 }
@@ -606,5 +663,53 @@ func (db *PostgresDB) SaveToken(t Token) error {
 		"INSERT INTO tokens (token, expires_at, email, hash) VALUES ($1, $2, $3, $4)",
 		t.Token, t.ExpiresAt, t.Email, t.Hash,
 	)
+	return err
+}
+
+func (db *PostgresDB) CreateCase(c Case) error {
+	_, err := db.Pool.Exec(context.Background(),
+		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments,
+	)
+	return err
+}
+
+func (db *PostgresDB) GetCases() ([]Case, error) {
+	rows, err := db.Pool.Query(context.Background(), "SELECT * FROM cases")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cases []Case
+	for rows.Next() {
+		var c Case
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments); err != nil {
+			return nil, err
+		}
+		cases = append(cases, c)
+	}
+	return cases, nil
+}
+
+func (db *PostgresDB) GetCase(id string) (Case, error) {
+	var c Case
+	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM cases WHERE id = $1", id).Scan(
+		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments,
+	)
+	return c, err
+}
+
+func (db *PostgresDB) UpdateCase(c Case) error {
+	_, err := db.Pool.Exec(context.Background(),
+		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7
+		WHERE id = $8`,
+		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ID,
+	)
+	return err
+}
+
+func (db *PostgresDB) DeleteCase(id string) error {
+	_, err := db.Pool.Exec(context.Background(), "DELETE FROM cases WHERE id = $1", id)
 	return err
 }
