@@ -9,30 +9,35 @@ export class TransformerTool {
             <h4 class="title is-4 has-text-white">Text Transformer</h4>
             <p class="has-text-grey-light mb-4">Decode, encode, and defang text artifacts.</p>
 
-            <div class="columns">
-                <div class="column">
-                    <label class="label has-text-grey-light">Input</label>
-                    <textarea class="textarea has-background-dark has-text-white" id="inputDecoder" rows="6" placeholder="Paste text here..."></textarea>
-                </div>
-                <div class="column is-narrow is-flex is-flex-direction-column is-justify-content-center">
-                     <div class="buttons is-centered">
-                        <button class="button is-small is-info is-light is-fullwidth mb-1" data-op="b64_decode">Base64 Decode &rarr;</button>
-                        <button class="button is-small is-info is-light is-fullwidth mb-1" data-op="b64_encode">Base64 Encode &rarr;</button>
-                        <button class="button is-small is-warning is-light is-fullwidth mb-1" data-op="url_decode">URL Decode &rarr;</button>
-                        <button class="button is-small is-warning is-light is-fullwidth mb-1" data-op="url_encode">URL Encode &rarr;</button>
-                        <button class="button is-small is-danger is-light is-fullwidth mb-1" data-op="defang">Defang &rarr;</button>
-                        <button class="button is-small is-success is-light is-fullwidth mb-0" data-op="refang">Refang &rarr;</button>
-                    </div>
-                </div>
-                <div class="column">
-                    <label class="label has-text-grey-light">Output</label>
-                    <textarea class="textarea has-background-black has-text-info" id="outputDecoder" rows="6" readonly placeholder="Result..."></textarea>
-                    <button class="button is-small is-dark is-fullwidth mt-2" id="btnCopyDecoder">
-                        <span class="icon is-small"><i class="material-icons">content_copy</i></span>
-                        <span>Copy Output</span>
-                    </button>
+            <div class="field">
+                <label class="label has-text-grey-light">Input</label>
+                <div class="control">
+                    <textarea class="textarea has-background-dark has-text-white" id="inputDecoder" rows="5" placeholder="Paste text here..."></textarea>
                 </div>
             </div>
+
+            <div class="field py-2">
+                 <div class="buttons is-centered">
+                    <button class="button is-small is-info is-light" data-op="b64_decode">Base64 Decode</button>
+                    <button class="button is-small is-info is-light" data-op="b64_encode">Base64 Encode</button>
+                    <button class="button is-small is-warning is-light" data-op="url_decode">URL Decode</button>
+                    <button class="button is-small is-warning is-light" data-op="url_encode">URL Encode</button>
+                    <button class="button is-small is-danger is-light" data-op="defang">Defang</button>
+                    <button class="button is-small is-success is-light" data-op="refang">Refang</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label has-text-grey-light">Output</label>
+                <div class="control">
+                    <textarea class="textarea has-background-black has-text-info" id="outputDecoder" rows="5" readonly placeholder="Result..."></textarea>
+                </div>
+            </div>
+            
+            <button class="button is-small is-dark is-fullwidth mt-2" id="btnCopyDecoder">
+                <span class="icon is-small"><i class="material-icons">content_copy</i></span>
+                <span>Copy Output</span>
+            </button>
         </div>`;
     }
 
