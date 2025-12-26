@@ -94,9 +94,9 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
 				if t == k && len(v) > 0 {
-					if svc.RateLimited {
-						continue
-					}
+					// if svc.RateLimited {
+					// 	continue
+					// }
 					for _, value := range v {
 						var proxyReq ProxyRequest
 						if len(svc.RouteMap) > 0 {
