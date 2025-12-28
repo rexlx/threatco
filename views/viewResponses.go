@@ -30,5 +30,5 @@ var ResponseRow = `<tr>
 	<td>%v</td>
 	<td>%v</td>
 	<td>%v</td>
-	<td><button class="button is-danger" onclick="deleteResponse('%s')">delete</button></td>
+	<td><button class="button is-danger delete-response-btn" data-id="%s">delete</button></td>
 </tr>`

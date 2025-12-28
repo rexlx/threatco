@@ -31,11 +31,11 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	users := ""
 	for _, u := range _users {
 		if user.Admin || u.Email == email {
-			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')">Delete</button>`, u.Email)
-			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined" onclick="generateNewKey('%s')">New API Key</button>`, u.Email)
+			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined delete-user-btn" data-email="%s">Delete</button>`, u.Email)
+			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined generate-key-btn" data-email="%s">New API Key</button>`, u.Email)
 		} else {
-			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined" onclick="deleteUser('%s')" disabled>Delete</button>`, u.Email)
-			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined" onclick="generateNewKey('%s')" disabled>New API Key</button>`, u.Email)
+			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined delete-user-btn" data-email="%s" disabled>Delete</button>`, u.Email)
+			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined generate-key-btn" data-email="%s" disabled>New API Key</button>`, u.Email)
 		}
 
 		svcs := []string{}

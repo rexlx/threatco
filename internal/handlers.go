@@ -10,6 +10,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -1014,6 +1015,8 @@ func (s *Server) ArchiveResponseHandler(w http.ResponseWriter, r *http.Request) 
 func (s *Server) UploadFileHandler(w http.ResponseWriter, r *http.Request) {
 	var fileData bytes.Buffer
 	var UploadResponse SummarizedEvent
+	const MaxUploadSize = 50 * 1024 * 1024
+	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadSize)
 	// Copy the request body (file data) to the buffer
 	_, err := io.Copy(&fileData, r.Body)
 	if err != nil {
@@ -1694,13 +1697,14 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 
 		// Determine if we should show the DNS lookup button
 		dnsAction := ""
-		// Check if it is a valid IP OR looks like a domain
 		if net.ParseIP(displayValue) != nil || isLikelyDomain(displayValue) {
+			// FIX: Use data-value attribute and html.EscapeString
+			// We give it a specific class 'dns-lookup-btn' to hook into with JS later
 			dnsAction = fmt.Sprintf(`<p class="control">
-                    <button class="button is-small is-warning is-light" onclick="fetch('/tools/dnslookup?value=%s', {method: 'POST'})" title="DNS Lookup">
+                    <button class="button is-small is-warning is-light dns-lookup-btn" data-value="%s" title="DNS Lookup">
                         <span class="icon is-small"><i class="material-icons">dns</i></span>
                     </button>
-                </p>`, displayValue)
+                </p>`, html.EscapeString(displayValue))
 		}
 
 		displayHtml := displayValue

@@ -8,6 +8,7 @@ import (
 )
 
 type Configuration struct {
+	Cors                []string      `json:"cors"`
 	DatabaseType        string        `json:"database_type"`
 	BindAddress         string        `json:"bind_address"`
 	ServerID            string        `json:"server_id"`

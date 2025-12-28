@@ -119,7 +119,7 @@ function generateNewKey(email) {
     });
 }
 
-function logout() {
+function thislogout() {
     fetch('/logout', {
         method: 'GET'
     })
@@ -382,9 +382,11 @@ const dropDownMenuLink = document.getElementById('dropDownMenuLink');
 const itemsPerPage = 50; // Reduce items per page for smoother loading
 let startIndex = 50; // server sends 0-50 on load, we want 50-100 next
 
-dropDownMenuLink.addEventListener('click', () => {
-    dropDownMenu.classList.toggle('is-active')
-})
+if (dropDownMenuLink && dropDownMenu) {
+    dropDownMenuLink.addEventListener('click', () => {
+        dropDownMenu.classList.toggle('is-active');
+    });
+}
 
 function isValid32ByteBase64Key(key) {
     // Accept 43 (no padding) or 44 (with '=') characters
@@ -402,3 +404,25 @@ function isValid32ByteBase64Key(key) {
         return false; // Invalid Base64 string
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    document.body.addEventListener('click', (e) => {
+        if (e.target.closest('.logout-btn')) {
+            console.log("Logout button clicked");
+            // We use a direct POST request to /logout
+            fetch('/logout', { method: 'POST' })
+                .then(() => {
+                    // Force redirect to root (Login page)
+                    window.location.href = '/';
+                })
+                .catch(err => {
+                    console.error("Logout failed", err);
+                    // Fallback: Redirect anyway, session might be dead
+                    window.location.href = '/';
+                });
+            return;
+        }
+       
+    });
+});

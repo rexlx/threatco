@@ -67,7 +67,7 @@ func main() {
 	}()
 
 	sessionHandler := s.Session.LoadAndSave(s.Gateway)
-	finalHandler := internal.CORSMiddleware(sessionHandler)
+	finalHandler := s.CORSMiddleware(sessionHandler)
 	svr := &http.Server{
 		Addr:    s.Details.Address,
 		Handler: finalHandler,

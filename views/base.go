@@ -11,6 +11,7 @@ var BaseView string = `<!DOCTYPE html>
     <link rel="stylesheet" href="/static/s.css">
     <script src="/static/htmx.min.js"></script>
     <script src="/static/echarts.min.js"></script>
+    <script src="/static/js/functions.js"></script>
 </head>
 
 <body>
@@ -39,8 +40,9 @@ var BaseView string = `<!DOCTYPE html>
                 </div>
                 <div class="navbar-end">
                     <div class="navbar-item">
-                        <button class="button is-warning is-outlined" onclick="logout()">logout</button>
-                        <button class="button is-warning is-outlined" onclick="killServer()">kill server</button>
+                        <button class="button is-warning is-outlined logout-btn">
+                            log out
+                        </button>
                     </div>
                 </div>
             </div>

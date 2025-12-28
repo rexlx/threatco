@@ -235,24 +235,54 @@
 
     <section id="api">
         <h2>API</h2>
-        <p>Authorization required via header: <code>Authorization: user@place.com:key_here</code></p>
+        <p>Authorization required via header: <code>Authorization: user@place.com:key_here</code> or a valid Session Cookie.</p>
 
-        <h3>Endpoints</h3>
-        
-        <p><strong>GET /logs</strong> - Returns a list of logs.</p>
-        <pre>[{"time":"2025-01-30...","data":"Server started...","error":false}]</pre>
+        <h3>Core & User Management</h3>
+        <p><strong>GET /getuptime</strong> - Returns server uptime details.</p>
+        <p><strong>GET /user</strong> - Returns details for the authenticated user.</p>
+        <p><strong>GET /getservices</strong> - Returns available services configuration.</p>
+        <p><strong>POST /adduser</strong> - Create a new user (Admin only).</p>
+        <pre>Request: {"email": "user@example.com", "password": "password", "admin": "true"}</pre>
 
-        <p><strong>GET /events/:id</strong> - Returns actual cached third-party response.</p>
+        <h3>Data & Analysis</h3>
+        <p><strong>POST /parse</strong> - Extracts IOCs (indicators of compromise) from a text blob.</p>
+        <pre>Request: {"blob": "Suspicious IP 1.2.3.4 found...", "username": "email@place.com"}
+Response: JSON Array of matches</pre>
 
-        <p><strong>POST /parse</strong> - Returns summarized responses from text.</p>
-        <pre>Request: {"blob": "text to parse"}
-Response: [{"matched":true, "value":"8.8.8.8", "info":"IP found"}]</pre>
+        <p><strong>POST /pipe</strong> - Proxy a request to a specific vendor service.</p>
+        <pre>Request: {"value": "8.8.8.8", "to": "virustotal", "type": "ipv4", "username": "email@place.com"}</pre>
 
-        <p><strong>POST /pipe</strong> - Returns summarized response from specific vendor.</p>
-        <pre>Request: {"value": "8.8.8.8", "to": "deepfry", "type": "ipv4"}
-Optional: "route": "ip_address"</pre>
+        <p><strong>GET /logs</strong> - Returns system logs.</p>
+        <pre>Query Params: ?start=0&end=50</pre>
 
-        <p><strong>GET /getservices</strong> - Returns available services list.</p>
+        <p><strong>GET /events/:id</strong> - Retrieve a specific raw cached response by its ID.</p>
+
+
+        <h3>Case Management</h3>
+        <p><strong>GET /cases/list</strong> - List all open cases.</p>
+        <p><strong>POST /cases/create</strong> - Create a new investigation case.</p>
+        <pre>Request: {"name": "Incident 101", "description": "Phishing analysis"}</pre>
+        <p><strong>GET /cases/get</strong> - Retrieve full details of a specific case.</p>
+        <pre>Query Param: ?id=CASE_UUID</pre>
+        <p><strong>POST /cases/update</strong> - Update case details.</p>
+        <p><strong>POST /cases/delete</strong> - Delete a case.</p>
+
+        <h3>Tools</h3>
+        <p><strong>POST /tools/dnslookup2</strong> - Perform a synchronous DNS/Reverse lookup.</p>
+        <pre>Query Param: ?value=8.8.8.8</pre>
+        <p><strong>POST /tools/checksum</strong> - Calculate SHA256 of an uploaded file.</p>
+        <p><strong>POST /tools/encrypt</strong> - Encrypt a file or text string.</p>
+        <p><strong>POST /tools/decrypt</strong> - Decrypt a file.</p>
+        <p><strong>POST /tools/parse</strong> - Parse an uploaded file for indicators.</p>
+
+        <h3>Integrations</h3>
+        <p><strong>POST /misp-workflow</strong> - Create a MISP event from a single attribute.</p>
+        <pre>Request: {"event_info": "ThreatCo Alert", "attribute_value": "1.1.1.1", "attribute_type": "ip-dst"}</pre>
+        <p><strong>POST /misp/workflow/batch</strong> - Batch create a MISP event with multiple attributes.</p>
+        <pre>Request: {
+  "event_info": "Batch Import",
+  "attributes": [{"value": "1.1.1.1", "type": "ip-dst"}]
+}</pre>
     </section>
 
     <section id="server">

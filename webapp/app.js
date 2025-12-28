@@ -504,3 +504,108 @@ function sanitizeService(service) {
         description: String(service.description || '').replace(/[<>&"'`;]/g, '')
     };
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    document.body.addEventListener('click', (e) => {
+        // ---------------------------------------------------------
+        // 1. DNS Lookup Handler (The new code)
+        // ---------------------------------------------------------
+        const dnsBtn = e.target.closest('.dns-lookup-btn');
+        if (dnsBtn) {
+            const value = dnsBtn.getAttribute('data-value');
+            if (!value) return;
+
+            // Visual feedback
+            dnsBtn.classList.add('is-loading');
+
+            // Secure fetch
+            fetch('/tools/dnslookup?value=' + encodeURIComponent(value), {
+                method: 'POST'
+            })
+            .then(response => {
+                dnsBtn.classList.remove('is-loading');
+                if (response.ok) {
+                    console.log("DNS Lookup requested for:", value);
+                    // Optional: Add a toast notification here
+                } else {
+                    console.error("DNS Lookup failed");
+                    alert("DNS Lookup failed to start.");
+                }
+            })
+            .catch(err => {
+                dnsBtn.classList.remove('is-loading');
+                console.error("Error requesting DNS lookup:", err);
+            });
+            return;
+        }
+
+        // ---------------------------------------------------------
+        // 2. Response Deletion
+        // ---------------------------------------------------------
+        const delResponseBtn = e.target.closest('.delete-response-btn');
+        if (delResponseBtn) {
+            const id = delResponseBtn.dataset.id;
+            if (confirm('Are you sure you want to delete this response?')) {
+                // Check if a global function exists (legacy support), otherwise fetch
+                if (typeof deleteResponse === 'function') {
+                    deleteResponse(id); 
+                } else {
+                    fetch('/deleteresponse', {
+                        method: 'POST',
+                        body: JSON.stringify({ id: id, archived: false })
+                    }).then(() => location.reload()); 
+                }
+            }
+            return;
+        }
+
+        // ---------------------------------------------------------
+        // 3. User Management (Delete User)
+        // ---------------------------------------------------------
+        const delUserBtn = e.target.closest('.delete-user-btn');
+        if (delUserBtn) {
+            const email = delUserBtn.dataset.email;
+            if (confirm(`Delete user ${email}?`)) {
+                 fetch('/deleteuser?email=' + encodeURIComponent(email), { method: 'POST' })
+                 .then(() => window.location.reload());
+            }
+            return;
+        }
+
+        // ---------------------------------------------------------
+        // 4. User Management (Rotate API Key)
+        // ---------------------------------------------------------
+        const keyBtn = e.target.closest('.generate-key-btn');
+        if (keyBtn) {
+            const email = keyBtn.dataset.email;
+            if (confirm(`Rotate API key for ${email}?`)) {
+                fetch('/generatekey', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: email })
+                })
+                .then(r => r.json())
+                .then(data => alert('New Key: ' + data.key));
+            }
+            return;
+        }
+
+        // ---------------------------------------------------------
+        // 5. Service Modals (Open/Close)
+        // ---------------------------------------------------------
+        const modalBtn = e.target.closest('.open-modal');
+        if (modalBtn) {
+            const modalId = modalBtn.dataset.modalId;
+            const modal = document.getElementById(modalId);
+            if (modal) modal.classList.add('is-active');
+            return;
+        }
+
+        const closeModal = e.target.closest('.modal-close, .delete, .modal-background');
+        if (closeModal) {
+            const modal = closeModal.closest('.modal');
+            if (modal) modal.classList.remove('is-active');
+            return;
+        }
+    });
+});

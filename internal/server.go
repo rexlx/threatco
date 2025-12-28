@@ -67,6 +67,7 @@ type Server struct {
 }
 
 type Details struct {
+	CorsOrigins       []string           `json:"cors_origins"`
 	PreviousKey       *cipher.AEAD       `json:"-"`
 	Key               *cipher.AEAD       `json:"-"`
 	FirstUserMode     bool               `json:"first_user_mode"`
@@ -595,6 +596,16 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 	s.Details.SupportedServices = cfg.Services
 	s.Details.FQDN = cfg.FQDN
+	if len(cfg.Cors) == 0 {
+		// Fallback: If no origins defined, default to the FQDN and localhost
+		s.Details.CorsOrigins = []string{
+			cfg.FQDN,
+			"http://localhost:8080",
+			"http://127.0.0.1:8080",
+		}
+	} else {
+		s.Details.CorsOrigins = cfg.Cors
+	}
 	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
 	// s.ID = cfg.ServerID
@@ -623,11 +634,11 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
 	// s.Gateway.HandleFunc("/add", http.HandlerFunc(s.ValidateToken(s.AddAttributeHandler)))
 	s.Gateway.HandleFunc("/ws", http.HandlerFunc(s.ValidateSessionToken(s.ServeWs)))
-	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateToken(s.AddServiceHandler)))
-	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateToken(s.RawResponseHandler)))
+	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateSessionToken(s.AddServiceHandler)))
+	s.Gateway.Handle("/raw", http.HandlerFunc(s.ValidateSessionToken(s.RawResponseHandler)))
 	s.Gateway.HandleFunc("/create-user", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
-	s.Gateway.HandleFunc("/login", s.LoginHandler)
+	s.Gateway.Handle("/login", s.RateLimit(http.HandlerFunc(s.LoginHandler)))
 	s.Gateway.HandleFunc("/services", http.HandlerFunc(s.ValidateSessionToken(s.ViewServicesHandler)))
 	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
