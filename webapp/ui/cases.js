@@ -5,6 +5,10 @@ export class CaseController {
         this.container = document.getElementById(containerId);
         this.app = app;
         this.currentCase = null;
+        
+        // Pagination State
+        this.currentPage = 1;
+        this.itemsPerPage = 50;
     }
 
     async render() {
@@ -31,6 +35,34 @@ export class CaseController {
                         <span class="icon"><i class="material-icons">add</i></span>
                         <span>New Case</span>
                     </button>
+                </div>
+            </div>
+
+            <div class="level mb-4">
+                <div class="level-left">
+                    <div class="level-item">
+                        <span class="has-text-grey-light mr-2">Show</span>
+                        <div class="select is-small is-dark">
+                            <select id="itemsPerPageSelect">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <span class="has-text-grey-light ml-2">per page</span>
+                    </div>
+                </div>
+                <div class="level-right">
+                    <div class="level-item">
+                        <button class="button is-small is-dark" id="btnPrevPage" disabled>
+                            <span class="icon"><i class="material-icons">chevron_left</i></span>
+                        </button>
+                        <span class="mx-3 has-text-grey-light" id="pageIndicator">Page 1</span>
+                        <button class="button is-small is-dark" id="btnNextPage">
+                            <span class="icon"><i class="material-icons">chevron_right</i></span>
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -77,13 +109,35 @@ export class CaseController {
         // --- Search Logic ---
         const runSearch = async () => {
             const query = document.getElementById('caseSearchInput').value.trim();
-            if (!query) return this.loadCases();
+            if (!query) {
+                this.currentPage = 1; // Reset to page 1 on clear
+                return this.loadCases();
+            }
             await this.searchCases(query);
         };
         document.getElementById('btnSearchCases').onclick = runSearch;
         document.getElementById('caseSearchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') runSearch();
         });
+
+        // --- Pagination Logic ---
+        document.getElementById('itemsPerPageSelect').onchange = (e) => {
+            this.itemsPerPage = parseInt(e.target.value);
+            this.currentPage = 1; // Reset to page 1 when changing limit
+            this.loadCases();
+        };
+
+        document.getElementById('btnPrevPage').onclick = () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.loadCases();
+            }
+        };
+
+        document.getElementById('btnNextPage').onclick = () => {
+            this.currentPage++;
+            this.loadCases();
+        };
 
         // --- Save Case Logic ---
         document.getElementById('btnSaveCase').onclick = async () => {
@@ -98,6 +152,7 @@ export class CaseController {
                 });
                 if (!res.ok) throw new Error(await res.text());
                 closeModal();
+                this.currentPage = 1; // Go to first page to see new case
                 await this.loadCases();
             } catch (e) {
                 alert("Error creating case: " + e.message);
@@ -108,6 +163,10 @@ export class CaseController {
     async searchCases(query) {
         const container = document.getElementById('caseListContainer');
         container.innerHTML = '<div class="loader"></div>';
+        
+        // Hide pagination controls during search (unless you implement search pagination too)
+        this.updatePaginationControls(0, true); 
+
         try {
             const res = await this.app._fetch(`/cases/search?q=${encodeURIComponent(query)}`);
             const cases = await res.json();
@@ -120,13 +179,43 @@ export class CaseController {
     async loadCases() {
         const container = document.getElementById('caseListContainer');
         container.innerHTML = '<div class="loader"></div>';
+        
         try {
-            const res = await this.app._fetch('/cases/list');
+            // Pass the parameters to the backend
+            const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}`);
             const cases = await res.json();
+            
             this.renderCaseList(cases);
+            this.updatePaginationControls(cases.length);
+
         } catch (e) {
             container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
         }
+    }
+
+    updatePaginationControls(resultCount, isSearch = false) {
+        const prevBtn = document.getElementById('btnPrevPage');
+        const nextBtn = document.getElementById('btnNextPage');
+        const indicator = document.getElementById('pageIndicator');
+        const select = document.getElementById('itemsPerPageSelect');
+
+        if (isSearch) {
+             // Disable pagination during search for now
+             prevBtn.disabled = true;
+             nextBtn.disabled = true;
+             select.disabled = true;
+             indicator.textContent = "Search Results";
+             return;
+        }
+
+        select.disabled = false;
+        indicator.textContent = `Page ${this.currentPage}`;
+        
+        // Disable Prev if on page 1
+        prevBtn.disabled = (this.currentPage <= 1);
+
+        // Disable Next if we received fewer items than the limit (means we reached the end)
+        nextBtn.disabled = (resultCount < this.itemsPerPage);
     }
 
     renderCaseList(cases) {
@@ -147,11 +236,10 @@ export class CaseController {
                 desc = desc.substring(0, 250) + '...';
             }
 
-            // Create a Box acting as a List Item row
             const box = document.createElement('div');
-            box.className = 'box has-background-black has-text-light mb-3';
+            box.className = 'box has-background-dark has-text-light mb-3';
             box.style.cursor = 'pointer';
-            box.style.borderLeft = c.status === 'Open' ? '4px solid #1750a0ff' : '4px solid #700319ff';
+            box.style.borderLeft = c.status === 'Open' ? '4px solid #48c774' : '4px solid #f14668';
             box.onclick = () => this.openCase(c);
 
             box.innerHTML = `
@@ -174,7 +262,7 @@ export class CaseController {
                     <div class="media-right has-text-right">
                         <small class="has-text-grey is-size-7">${new Date(c.created_at).toLocaleDateString()}</small>
                         <br>
-                        <span class="tag is-black is-rounded mt-1">${c.iocs ? c.iocs.length : 0} IOCs</span>
+                        <span class="tag is-black is-rounded mt-1">${c.ioc_count !== undefined ? c.ioc_count : (c.iocs ? c.iocs.length : 0)} IOCs</span>
                     </div>
                 </article>
             `;
@@ -182,6 +270,7 @@ export class CaseController {
         });
     }
 
+    // openCase(c) ... (Same as previous, omitted for brevity but should be included in full file)
     openCase(c) {
         this.currentCase = c;
         const isClosed = c.status === 'Closed';
@@ -343,7 +432,8 @@ export class CaseController {
 
         this.attachDetailListeners(c);
     }
-
+    
+    // attachDetailListeners(c) ... (Same as previous)
     attachDetailListeners(c) {
         document.getElementById('btnBackList').onclick = () => this.render();
 
@@ -427,8 +517,7 @@ export class CaseController {
             newBtn.onclick = () => this.sendToMisp(selected);
         };
     }
-
-
+    
     async sendToMisp(selectedIOCs) {
         const title = document.getElementById('mispEventTitle').value;
         const tagsVal = document.getElementById('mispTags').value;
@@ -438,19 +527,15 @@ export class CaseController {
 
         btn.classList.add('is-loading');
 
-        // 1. Prepare Attributes List
         const attributes = selectedIOCs.map(ioc => {
-            // Heuristic for type detection
             let type = "other";
             if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ioc)) type = "ip-src";
             else if (/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/.test(ioc)) type = "domain";
             else if (ioc.length === 32) type = "md5";
             else if (ioc.length === 64) type = "sha256";
-
             return { value: ioc, type: type };
         });
 
-        // 2. Construct Payload
         const payload = {
             event_info: title,
             tag_name: tagsVal,
@@ -458,21 +543,14 @@ export class CaseController {
         };
 
         try {
-            // 3. Send Batch Request
-            // Note: We use _fetch directly here since sendMispEvent in app.js 
-            // is likely hardcoded to the old single-item endpoint.
             const res = await this.app._fetch('/misp/workflow/batch', {
                 method: 'POST',
                 body: JSON.stringify(payload)
             });
-
             if (!res.ok) throw new Error(await res.text());
-
             const json = await res.json();
             alert(`Success! Created MISP Event: ${json.message}`);
-
             document.getElementById('mispModal').classList.remove('is-active');
-
         } catch (e) {
             console.error(e);
             alert("Failed to send batch to MISP: " + e.message);
@@ -488,7 +566,7 @@ export class CaseController {
                 body: JSON.stringify(this.currentCase)
             });
             if (!res.ok) throw new Error(await res.text());
-            this.openCase(this.currentCase); // Re-render details
+            this.openCase(this.currentCase); 
         } catch (e) {
             alert("Update failed: " + e.message);
         }

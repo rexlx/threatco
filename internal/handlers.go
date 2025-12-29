@@ -320,11 +320,31 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetCasesHandler(w http.ResponseWriter, r *http.Request) {
-	cases, err := s.DB.GetCases()
+	// 1. Parse 'limit' (default to 50)
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
+
+	// 2. Parse 'page' (default to 1) to calculate offset
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if val, err := strconv.Atoi(p); err == nil && val > 0 {
+			page = val
+		}
+	}
+	offset := (page - 1) * limit
+
+	// 3. Call DB with pagination
+	cases, err := s.DB.GetCases(limit, offset)
 	if err != nil {
+		s.Log.Println("Error getting cases:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(cases)
 }

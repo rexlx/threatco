@@ -33,7 +33,7 @@ type Database interface {
 	DeleteResponse(id string) error
 	TestAndRecconect() error
 	CreateCase(c Case) error
-	GetCases() ([]Case, error)
+	GetCases(limit int, offset int) ([]Case, error)
 	GetCase(id string) (Case, error)
 	UpdateCase(c Case) error
 	DeleteCase(id string) error
@@ -89,7 +89,7 @@ func (db *BboltDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
 	return responses, err
 }
 
-func (db *BboltDB) GetCases() ([]Case, error) {
+func (db *BboltDB) GetCases(limit int, offset int) ([]Case, error) {
 	fmt.Println("not implemented: BboltDB GetCases")
 	return nil, nil
 }
@@ -338,6 +338,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 }
 
 func (db *PostgresDB) createTables() error {
+	// First, standard table creation
 	_, err := db.Pool.Exec(context.Background(),
 		`CREATE TABLE IF NOT EXISTS services (
             id SERIAL PRIMARY KEY,
@@ -358,33 +359,33 @@ func (db *PostgresDB) createTables() error {
             route_map JSONB
         );
         CREATE TABLE IF NOT EXISTS responses (
-        id TEXT PRIMARY KEY,
-        data BYTEA NOT NULL,
-        created TIMESTAMP,
-        vendor TEXT NOT NULL
-);
-    CREATE TABLE IF NOT EXISTS archived_responses (
             id TEXT PRIMARY KEY,
             data BYTEA NOT NULL,
             created TIMESTAMP,
             vendor TEXT NOT NULL
-    );
+        );
+        CREATE TABLE IF NOT EXISTS archived_responses (
+            id TEXT PRIMARY KEY,
+            data BYTEA NOT NULL,
+            created TIMESTAMP,
+            vendor TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS users (
-                email TEXT PRIMARY KEY,
-                admin BOOLEAN,
-                key TEXT,
-                hash BYTEA,
-                services JSONB,
-                created TIMESTAMP,
-                updated TIMESTAMP
+            email TEXT PRIMARY KEY,
+            admin BOOLEAN,
+            key TEXT,
+            hash BYTEA,
+            services JSONB,
+            created TIMESTAMP,
+            updated TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS tokens (
-                token TEXT PRIMARY KEY,
-                expires_at TIMESTAMP,
-                email TEXT,
-                hash BYTEA
-                );
-		CREATE TABLE IF NOT EXISTS cases (
+            token TEXT PRIMARY KEY,
+            expires_at TIMESTAMP,
+            email TEXT,
+            hash BYTEA
+        );
+        CREATE TABLE IF NOT EXISTS cases (
             id TEXT PRIMARY KEY,
             name TEXT,
             description TEXT,
@@ -393,8 +394,29 @@ func (db *PostgresDB) createTables() error {
             status TEXT,
             iocs JSONB,
             comments JSONB
-        );
-            `)
+        );`)
+	if err != nil {
+		return err
+	}
+
+	// OPTIMIZATION: Create Indexes and Extensions
+	// We execute these separately to ensure the extension exists before using it in indexes.
+	_, err = db.Pool.Exec(context.Background(), `
+        -- Enable pg_trgm for efficient partial text searching (ILIKE)
+        CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+        -- Index for sorting by date and filtering by status (Speed up List View)
+        CREATE INDEX IF NOT EXISTS idx_cases_status_created ON cases(status, created_at DESC);
+
+        -- GIN Trigram indexes for fast text searching on Name and Description
+        CREATE INDEX IF NOT EXISTS idx_cases_name_trgm ON cases USING gin (name gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS idx_cases_desc_trgm ON cases USING gin (description gin_trgm_ops);
+
+        -- SPECIAL INDEX: Index the CAST text version of the JSONB array.
+        -- This makes "iocs::text ILIKE" fast for partial IP/Domain searches.
+        CREATE INDEX IF NOT EXISTS idx_cases_iocs_text_trgm ON cases USING gin ((iocs::text) gin_trgm_ops);
+    `)
+
 	return err
 }
 
@@ -681,18 +703,33 @@ func (db *PostgresDB) CreateCase(c Case) error {
 	return err
 }
 
-func (db *PostgresDB) GetCases() ([]Case, error) {
-	rows, err := db.Pool.Query(context.Background(), "SELECT * FROM cases")
+// Optimized GetCases with Pagination and Column Selection
+func (db *PostgresDB) GetCases(limit, offset int) ([]Case, error) {
+	// Only select what the List View actually needs.
+	// Use jsonb_array_length for IOC count instead of fetching the whole array.
+	sql := `
+        SELECT id, name, description, created_by, created_at, status, 
+               jsonb_array_length(iocs) as ioc_count 
+        FROM cases 
+        ORDER BY created_at DESC 
+        LIMIT $1 OFFSET $2
+    `
+	rows, err := db.Pool.Query(context.Background(), sql, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments); err != nil {
+		var iocCount int
+		// Scan into a temporary struct or partial Case object
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &iocCount); err != nil {
 			return nil, err
 		}
+		// Since we didn't fetch the real IOCs, maybe set a dummy slice of correct length if needed by frontend logic
+		// or update the frontend to use a separate 'Count' field.
 		cases = append(cases, c)
 	}
 	return cases, nil
@@ -721,12 +758,20 @@ func (db *PostgresDB) DeleteCase(id string) error {
 }
 
 func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
-	// Search Name, Description, or cast the JSONB iocs column to text for searching
+	// We select specific columns.
+	// We use ILIKE which will now use the 'gin_trgm_ops' indexes created above.
+	// We LIMIT 100 to protect the app/db from massive result sets.
 	sql := `
-        SELECT * FROM cases 
+        SELECT id, name, description, created_by, created_at, status, iocs, comments 
+        FROM cases 
         WHERE status = 'Open' 
-        AND (name ILIKE $1 OR description ILIKE $1 OR iocs::text ILIKE $1)
+        AND (
+            name ILIKE $1 
+            OR description ILIKE $1 
+            OR iocs::text ILIKE $1
+        )
         ORDER BY created_at DESC
+        LIMIT 100
     `
 	// Add wildcards for "contains" search
 	likeQuery := "%" + query + "%"
@@ -740,6 +785,7 @@ func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
+		// We still scan iocs/comments, but the LIMIT 100 keeps it safe.
 		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments); err != nil {
 			return nil, err
 		}

@@ -43,7 +43,7 @@ func (m *MockDB) DeleteResponse(id string) error                    { return nil
 func (m *MockDB) TestAndRecconect() error                           { return nil }
 func (m *MockDB) CleanResponses(t time.Duration) error              { return nil }
 func (m *MockDB) CreateCase(c Case) error                           { return nil }
-func (m *MockDB) GetCases() ([]Case, error)                         { return nil, nil }
+func (m *MockDB) GetCases(limit, offset int) ([]Case, error)        { return nil, nil }
 func (m *MockDB) GetCase(id string) (Case, error)                   { return Case{}, nil }
 func (m *MockDB) UpdateCase(c Case) error                           { return nil }
 func (m *MockDB) DeleteCase(id string) error                        { return nil }
