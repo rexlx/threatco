@@ -110,7 +110,7 @@ export class CaseController {
         const runSearch = async () => {
             const query = document.getElementById('caseSearchInput').value.trim();
             if (!query) {
-                this.currentPage = 1; // Reset to page 1 on clear
+                this.currentPage = 1;
                 return this.loadCases();
             }
             await this.searchCases(query);
@@ -123,7 +123,7 @@ export class CaseController {
         // --- Pagination Logic ---
         document.getElementById('itemsPerPageSelect').onchange = (e) => {
             this.itemsPerPage = parseInt(e.target.value);
-            this.currentPage = 1; // Reset to page 1 when changing limit
+            this.currentPage = 1;
             this.loadCases();
         };
 
@@ -152,7 +152,7 @@ export class CaseController {
                 });
                 if (!res.ok) throw new Error(await res.text());
                 closeModal();
-                this.currentPage = 1; // Go to first page to see new case
+                this.currentPage = 1;
                 await this.loadCases();
             } catch (e) {
                 alert("Error creating case: " + e.message);
@@ -164,7 +164,7 @@ export class CaseController {
         const container = document.getElementById('caseListContainer');
         container.innerHTML = '<div class="loader"></div>';
         
-        // Hide pagination controls during search (unless you implement search pagination too)
+        // Hide pagination controls during search
         this.updatePaginationControls(0, true); 
 
         try {
@@ -181,7 +181,6 @@ export class CaseController {
         container.innerHTML = '<div class="loader"></div>';
         
         try {
-            // Pass the parameters to the backend
             const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}`);
             const cases = await res.json();
             
@@ -200,7 +199,6 @@ export class CaseController {
         const select = document.getElementById('itemsPerPageSelect');
 
         if (isSearch) {
-             // Disable pagination during search for now
              prevBtn.disabled = true;
              nextBtn.disabled = true;
              select.disabled = true;
@@ -210,11 +208,7 @@ export class CaseController {
 
         select.disabled = false;
         indicator.textContent = `Page ${this.currentPage}`;
-        
-        // Disable Prev if on page 1
         prevBtn.disabled = (this.currentPage <= 1);
-
-        // Disable Next if we received fewer items than the limit (means we reached the end)
         nextBtn.disabled = (resultCount < this.itemsPerPage);
     }
 
@@ -228,9 +222,8 @@ export class CaseController {
         }
 
         cases.forEach(c => {
-            const statusColor = c.status === 'Open' ? 'is-success' : 'is-danger';
+            const statusColor = c.status === 'Open' ? 'is-primary' : 'is-warning';
             
-            // Truncate logic
             let desc = c.description || 'No description';
             if (desc.length > 250) {
                 desc = desc.substring(0, 250) + '...';
@@ -239,8 +232,13 @@ export class CaseController {
             const box = document.createElement('div');
             box.className = 'box has-background-dark has-text-light mb-3';
             box.style.cursor = 'pointer';
-            box.style.borderLeft = c.status === 'Open' ? '4px solid #48c774' : '4px solid #f14668';
+            box.style.borderLeft = c.status === 'Open' ? '4px solid #151795ff' : '4px solid #900420ff';
+            
+            // We pass the summary object 'c' here, but openCase will now fetch the full details
             box.onclick = () => this.openCase(c);
+
+            // Use c.ioc_count if available (from optimized query), fallback to array length
+            const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
 
             box.innerHTML = `
                 <article class="media is-vcentered">
@@ -262,7 +260,7 @@ export class CaseController {
                     <div class="media-right has-text-right">
                         <small class="has-text-grey is-size-7">${new Date(c.created_at).toLocaleDateString()}</small>
                         <br>
-                        <span class="tag is-black is-rounded mt-1">${c.ioc_count !== undefined ? c.ioc_count : (c.iocs ? c.iocs.length : 0)} IOCs</span>
+                        <span class="tag is-black is-rounded mt-1">${iocCount} IOCs</span>
                     </div>
                 </article>
             `;
@@ -270,170 +268,192 @@ export class CaseController {
         });
     }
 
-    // openCase(c) ... (Same as previous, omitted for brevity but should be included in full file)
-    openCase(c) {
-        this.currentCase = c;
-        const isClosed = c.status === 'Closed';
-
+    async openCase(cSummary) {
+        // Show loading spinner while fetching full details
         this.container.innerHTML = `
             <div class="mb-4">
                 <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
             </div>
-            <div class="box has-background-custom">
-                <div class="level">
-                    <div class="level-left">
-                        <div style="max-width: 600px;">
-                            <h2 class="title is-3 has-text-white">${escapeHtml(c.name)}</h2>
-                            <p class="subtitle is-6 has-text-grey-light">Created by ${escapeHtml(c.created_by)} on ${new Date(c.created_at).toLocaleString()}</p>
-                        </div>
-                    </div>
-                    <div class="level-right">
-                         <div class="buttons">
-                            <button class="button ${isClosed ? 'is-info' : 'is-warning'}" id="btnToggleStatus">
-                                <span class="icon"><i class="material-icons">${isClosed ? 'unarchive' : 'archive'}</i></span>
-                                <span>${isClosed ? 'Reopen Case' : 'Close Case'}</span>
-                            </button>
-                            <button class="button is-danger" id="btnDeleteCase">
-                                <span class="icon"><i class="material-icons">delete</i></span>
-                                <span>Delete Case</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <hr class="has-background-grey-dark">
-                
-                <div class="columns">
-                    <div class="column is-two-thirds">
-                         <h4 class="title is-5 has-text-info">IOCs</h4>
-                         
-                         <div class="field has-addons mb-3">
-                            <div class="control is-expanded">
-                                <input class="input is-small" type="text" id="inputAddIOC" placeholder="Add IP, Domain, Hash...">
-                            </div>
-                            <div class="control">
-                                <button class="button is-info is-small" id="btnAddIOC">Add</button>
-                            </div>
-                         </div>
-
-                         <div class="level is-mobile has-background-black-ter p-2" style="border-radius:4px; margin-bottom: 0.5rem;">
-                            <div class="level-left">
-                                <label class="checkbox has-text-grey-light ml-2">
-                                    <input type="checkbox" id="checkAllIOCs"> Select All
-                                </label>
-                            </div>
-                            <div class="level-right">
-                                <button class="button is-small is-warning is-light" id="btnOpenMispModal">
-                                    <span class="icon is-small"><i class="material-icons">cloud_upload</i></span>
-                                    <span>Send Selected to MISP</span>
-                                </button>
-                            </div>
-                         </div>
-
-                         <div class="box has-background-dark p-2" id="iocListContainer" style="max-height: 400px; overflow-y: auto;">
-                            ${(c.iocs || []).map(ioc => `
-                                <div class="level is-mobile mb-1 p-1" style="border-bottom: 1px solid #333;">
-                                    <div class="level-left">
-                                        <label class="checkbox mr-2">
-                                            <input type="checkbox" class="ioc-checkbox" value="${escapeHtml(ioc)}">
-                                        </label>
-                                        <span class="has-text-light is-family-monospace">${escapeHtml(ioc)}</span>
-                                    </div>
-                                    <div class="level-right">
-                                        <button class="delete is-small delete-ioc" data-val="${escapeHtml(ioc)}"></button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                         </div>
-
-                         <h4 class="title is-5 has-text-info mt-5">Comments</h4>
-                         <div id="commentList" class="mb-4" style="max-height: 300px; overflow-y: auto;">
-                             ${(c.comments || []).map(cm => `
-                                <article class="media">
-                                    <div class="media-content">
-                                        <div class="content">
-                                            <p class="has-text-light">
-                                                <strong>${escapeHtml(cm.user)}</strong> <small>${new Date(cm.created_at).toLocaleString()}</small>
-                                                <br>
-                                                ${escapeHtml(cm.text)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </article>
-                             `).join('')}
-                         </div>
-                         <article class="media">
-                            <div class="media-content">
-                                <div class="field">
-                                    <p class="control">
-                                        <textarea class="textarea has-background-dark has-text-white" id="inputComment" rows="2" placeholder="Add a comment..."></textarea>
-                                    </p>
-                                </div>
-                                <div class="field">
-                                    <p class="control">
-                                        <button class="button is-info is-small" id="btnPostComment">Post comment</button>
-                                    </p>
-                                </div>
-                            </div>
-                         </article>
-                    </div>
-
-                    <div class="column">
-                         <div class="notification is-dark">
-                             <h4 class="title is-5 has-text-warning">Case Info</h4>
-                             <p class="has-text-grey-light block">${escapeHtml(c.description)}</p>
-                             <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
-                             <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
-                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal" id="mispModal">
-                <div class="modal-background"></div>
-                <div class="modal-card">
-                    <header class="modal-card-head has-background-warning">
-                        <p class="modal-card-title has-text-black">Send to MISP</p>
-                        <button class="delete" aria-label="close"></button>
-                    </header>
-                    <section class="modal-card-body has-background-dark has-text-light">
-                        <div class="notification is-warning is-light mb-4">
-                            You are about to send <strong id="mispCountDisplay">0</strong> IOCs to MISP.
-                        </div>
-                        
-                        <div class="field">
-                            <label class="label has-text-light">Event Title / Info</label>
-                            <div class="control">
-                                <input class="input has-background-black-ter has-text-white" type="text" id="mispEventTitle">
-                            </div>
-                            <p class="help has-text-grey">This will be the title of the MISP Event.</p>
-                        </div>
-
-                        <div class="field">
-                            <label class="label has-text-light">Tags</label>
-                            <div class="control">
-                                <input class="input has-background-black-ter has-text-white" type="text" id="mispTags" value="Application:Threatco, tlp:amber">
-                            </div>
-                            <p class="help has-text-grey">Comma separated tags (e.g. "phishing, apt28").</p>
-                        </div>
-
-                        <label class="label has-text-light">Selected IOCs Preview</label>
-                        <div class="box has-background-black-ter p-2" id="mispPreviewList" style="max-height: 150px; overflow-y: auto; border: 1px solid #444;"></div>
-                    </section>
-                    <footer class="modal-card-foot has-background-black-ter" style="border-top: 1px solid #444;">
-                        <button class="button is-warning" id="btnConfirmMisp">
-                            <span class="icon"><i class="material-icons">cloud_upload</i></span>
-                            <span>Send Events</span>
-                        </button>
-                        <button class="button is-dark" id="btnCancelMisp">Cancel</button>
-                    </footer>
-                </div>
+            <div class="has-text-centered p-6">
+                <div class="loader" style="height: 50px; width: 50px; border-width: 4px; display:inline-block;"></div>
+                <p class="mt-4 has-text-grey">Loading full case details...</p>
             </div>
         `;
+        document.getElementById('btnBackList').onclick = () => this.render();
 
-        this.attachDetailListeners(c);
+        try {
+            // FETCH FULL DETAILS HERE
+            // We use the ID from the summary object to get the full case with IOCs and Comments
+            const res = await this.app._fetch(`/cases/get?id=${cSummary.id}`);
+            if (!res.ok) throw new Error(await res.text());
+            
+            const c = await res.json();
+            this.currentCase = c;
+            const isClosed = c.status === 'Closed';
+
+            // Now render the Detail View using the fully populated 'c' object
+            this.container.innerHTML = `
+                <div class="mb-4">
+                    <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
+                </div>
+                <div class="box has-background-custom">
+                    <div class="level">
+                        <div class="level-left">
+                            <div style="max-width: 600px;">
+                                <h2 class="title is-3 has-text-white">${escapeHtml(c.name)}</h2>
+                                <p class="subtitle is-6 has-text-grey-light">Created by ${escapeHtml(c.created_by)} on ${new Date(c.created_at).toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div class="level-right">
+                            <div class="buttons">
+                                <button class="button ${isClosed ? 'is-info' : 'is-warning'}" id="btnToggleStatus">
+                                    <span class="icon"><i class="material-icons">${isClosed ? 'unarchive' : 'archive'}</i></span>
+                                    <span>${isClosed ? 'Reopen Case' : 'Close Case'}</span>
+                                </button>
+                                <button class="button is-danger" id="btnDeleteCase">
+                                    <span class="icon"><i class="material-icons">delete</i></span>
+                                    <span>Delete Case</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="has-background-grey-dark">
+                    
+                    <div class="columns">
+                        <div class="column is-two-thirds">
+                            <h4 class="title is-5 has-text-info">IOCs</h4>
+                            
+                            <div class="field has-addons mb-3">
+                                <div class="control is-expanded">
+                                    <input class="input is-small" type="text" id="inputAddIOC" placeholder="Add IP, Domain, Hash...">
+                                </div>
+                                <div class="control">
+                                    <button class="button is-info is-small" id="btnAddIOC">Add</button>
+                                </div>
+                            </div>
+
+                            <div class="level is-mobile has-background-black-ter p-2" style="border-radius:4px; margin-bottom: 0.5rem;">
+                                <div class="level-left">
+                                    <label class="checkbox has-text-grey-light ml-2">
+                                        <input type="checkbox" id="checkAllIOCs"> Select All
+                                    </label>
+                                </div>
+                                <div class="level-right">
+                                    <button class="button is-small is-warning is-light" id="btnOpenMispModal">
+                                        <span class="icon is-small"><i class="material-icons">cloud_upload</i></span>
+                                        <span>Send Selected to MISP</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="box has-background-dark p-2" id="iocListContainer" style="max-height: 400px; overflow-y: auto;">
+                                ${(c.iocs || []).map(ioc => `
+                                    <div class="level is-mobile mb-1 p-1" style="border-bottom: 1px solid #333;">
+                                        <div class="level-left">
+                                            <label class="checkbox mr-2">
+                                                <input type="checkbox" class="ioc-checkbox" value="${escapeHtml(ioc)}">
+                                            </label>
+                                            <span class="has-text-light is-family-monospace">${escapeHtml(ioc)}</span>
+                                        </div>
+                                        <div class="level-right">
+                                            <button class="delete is-small delete-ioc" data-val="${escapeHtml(ioc)}"></button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <h4 class="title is-5 has-text-info mt-5">Comments</h4>
+                            <div id="commentList" class="mb-4" style="max-height: 300px; overflow-y: auto;">
+                                ${(c.comments || []).map(cm => `
+                                    <article class="media">
+                                        <div class="media-content">
+                                            <div class="content">
+                                                <p class="has-text-light">
+                                                    <strong>${escapeHtml(cm.user)}</strong> <small>${new Date(cm.created_at).toLocaleString()}</small>
+                                                    <br>
+                                                    ${escapeHtml(cm.text)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </article>
+                                `).join('')}
+                            </div>
+                            <article class="media">
+                                <div class="media-content">
+                                    <div class="field">
+                                        <p class="control">
+                                            <textarea class="textarea has-background-dark has-text-white" id="inputComment" rows="2" placeholder="Add a comment..."></textarea>
+                                        </p>
+                                    </div>
+                                    <div class="field">
+                                        <p class="control">
+                                            <button class="button is-info is-small" id="btnPostComment">Post comment</button>
+                                        </p>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+
+                        <div class="column">
+                            <div class="notification is-dark">
+                                <h4 class="title is-5 has-text-warning">Case Info</h4>
+                                <p class="has-text-grey-light block">${escapeHtml(c.description)}</p>
+                                <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
+                                <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal" id="mispModal">
+                    <div class="modal-background"></div>
+                    <div class="modal-card">
+                        <header class="modal-card-head has-background-warning">
+                            <p class="modal-card-title has-text-black">Send to MISP</p>
+                            <button class="delete" aria-label="close"></button>
+                        </header>
+                        <section class="modal-card-body has-background-dark has-text-light">
+                            <div class="notification is-warning is-light mb-4">
+                                You are about to send <strong id="mispCountDisplay">0</strong> IOCs to MISP.
+                            </div>
+                            
+                            <div class="field">
+                                <label class="label has-text-light">Event Title / Info</label>
+                                <div class="control">
+                                    <input class="input has-background-black-ter has-text-white" type="text" id="mispEventTitle">
+                                </div>
+                                <p class="help has-text-grey">This will be the title of the MISP Event.</p>
+                            </div>
+
+                            <div class="field">
+                                <label class="label has-text-light">Tags</label>
+                                <div class="control">
+                                    <input class="input has-background-black-ter has-text-white" type="text" id="mispTags" value="Application:Threatco, tlp:amber">
+                                </div>
+                                <p class="help has-text-grey">Comma separated tags (e.g. "phishing, apt28").</p>
+                            </div>
+
+                            <label class="label has-text-light">Selected IOCs Preview</label>
+                            <div class="box has-background-black-ter p-2" id="mispPreviewList" style="max-height: 150px; overflow-y: auto; border: 1px solid #444;"></div>
+                        </section>
+                        <footer class="modal-card-foot has-background-black-ter" style="border-top: 1px solid #444;">
+                            <button class="button is-warning" id="btnConfirmMisp">
+                                <span class="icon"><i class="material-icons">cloud_upload</i></span>
+                                <span>Send Events</span>
+                            </button>
+                            <button class="button is-dark" id="btnCancelMisp">Cancel</button>
+                        </footer>
+                    </div>
+                </div>
+            `;
+
+            this.attachDetailListeners(c);
+
+        } catch (e) {
+            this.container.innerHTML = `<div class="notification is-warning">Error loading case details: ${e.message}</div>`;
+        }
     }
-    
-    // attachDetailListeners(c) ... (Same as previous)
+
     attachDetailListeners(c) {
         document.getElementById('btnBackList').onclick = () => this.render();
 
@@ -517,7 +537,8 @@ export class CaseController {
             newBtn.onclick = () => this.sendToMisp(selected);
         };
     }
-    
+
+
     async sendToMisp(selectedIOCs) {
         const title = document.getElementById('mispEventTitle').value;
         const tagsVal = document.getElementById('mispTags').value;
@@ -527,15 +548,19 @@ export class CaseController {
 
         btn.classList.add('is-loading');
 
+        // 1. Prepare Attributes List
         const attributes = selectedIOCs.map(ioc => {
+            // Heuristic for type detection
             let type = "other";
             if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ioc)) type = "ip-src";
             else if (/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/.test(ioc)) type = "domain";
             else if (ioc.length === 32) type = "md5";
             else if (ioc.length === 64) type = "sha256";
+
             return { value: ioc, type: type };
         });
 
+        // 2. Construct Payload
         const payload = {
             event_info: title,
             tag_name: tagsVal,
@@ -543,14 +568,19 @@ export class CaseController {
         };
 
         try {
+            // 3. Send Batch Request
             const res = await this.app._fetch('/misp/workflow/batch', {
                 method: 'POST',
                 body: JSON.stringify(payload)
             });
+
             if (!res.ok) throw new Error(await res.text());
+
             const json = await res.json();
             alert(`Success! Created MISP Event: ${json.message}`);
+
             document.getElementById('mispModal').classList.remove('is-active');
+
         } catch (e) {
             console.error(e);
             alert("Failed to send batch to MISP: " + e.message);
@@ -566,7 +596,11 @@ export class CaseController {
                 body: JSON.stringify(this.currentCase)
             });
             if (!res.ok) throw new Error(await res.text());
-            this.openCase(this.currentCase); 
+            
+            // Re-render details to show updated data
+            // We can just re-call openCase with the current object or fetch again.
+            // Since we just updated, let's just re-fetch to be safe and consistent.
+            this.openCase({ id: this.currentCase.id }); 
         } catch (e) {
             alert("Update failed: " + e.message);
         }

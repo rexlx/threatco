@@ -53,6 +53,7 @@ type Case struct {
 	Status      string    `json:"status"` // "Open", "Closed"
 	IOCs        []string  `json:"iocs"`
 	Comments    []Comment `json:"comments"`
+	IOCCount    int       `json:"ioc_count"`
 }
 
 type Comment struct {
@@ -705,8 +706,7 @@ func (db *PostgresDB) CreateCase(c Case) error {
 
 // Optimized GetCases with Pagination and Column Selection
 func (db *PostgresDB) GetCases(limit, offset int) ([]Case, error) {
-	// Only select what the List View actually needs.
-	// Use jsonb_array_length for IOC count instead of fetching the whole array.
+	// Optimized query: fetches the count instead of the full array
 	sql := `
         SELECT id, name, description, created_by, created_at, status, 
                jsonb_array_length(iocs) as ioc_count 
@@ -723,13 +723,10 @@ func (db *PostgresDB) GetCases(limit, offset int) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		var iocCount int
-		// Scan into a temporary struct or partial Case object
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &iocCount); err != nil {
+		// SCAN directly into c.IOCCount
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCCount); err != nil {
 			return nil, err
 		}
-		// Since we didn't fetch the real IOCs, maybe set a dummy slice of correct length if needed by frontend logic
-		// or update the frontend to use a separate 'Count' field.
 		cases = append(cases, c)
 	}
 	return cases, nil
