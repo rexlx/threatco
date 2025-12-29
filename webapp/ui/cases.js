@@ -34,7 +34,7 @@ export class CaseController {
                 </div>
             </div>
             
-            <div id="caseListContainer" class="columns is-multiline"></div>
+            <div id="caseListContainer"></div>
             
             <div class="modal" id="newCaseModal">
                 <div class="modal-background"></div>
@@ -134,50 +134,58 @@ export class CaseController {
         container.innerHTML = '';
 
         if (!cases || cases.length === 0) {
-            container.innerHTML = '<div class="column is-full"><p class="has-text-grey has-text-centered is-size-5">No cases found.</p></div>';
+            container.innerHTML = '<div class="notification is-dark has-text-centered">No cases found.</div>';
             return;
         }
 
         cases.forEach(c => {
-            const col = document.createElement('div');
-            col.className = 'column is-one-third';
-            const card = document.createElement('div');
-            card.className = 'card has-background-dark';
-            card.style.cursor = 'pointer';
-            card.style.height = '100%';
-            card.onclick = () => this.openCase(c);
-
             const statusColor = c.status === 'Open' ? 'is-success' : 'is-danger';
+            
+            // Truncate logic
+            let desc = c.description || 'No description';
+            if (desc.length > 250) {
+                desc = desc.substring(0, 250) + '...';
+            }
 
-            card.innerHTML = `
-                <div class="card-content">
-                    <div class="media">
-                        <div class="media-content" style="overflow: hidden;">
-                            <p class="title is-4 has-text-white is-truncated" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</p>
-                            <p class="subtitle is-6 has-text-grey-light">by ${escapeHtml(c.created_by)}</p>
-                        </div>
-                        <div class="media-right">
-                            <span class="tag ${statusColor}">${escapeHtml(c.status)}</span>
+            // Create a Box acting as a List Item row
+            const box = document.createElement('div');
+            box.className = 'box has-background-black has-text-light mb-3';
+            box.style.cursor = 'pointer';
+            box.style.borderLeft = c.status === 'Open' ? '4px solid #1750a0ff' : '4px solid #700319ff';
+            box.onclick = () => this.openCase(c);
+
+            box.innerHTML = `
+                <article class="media is-vcentered">
+                    <div class="media-left">
+                        <span class="tag ${statusColor}">${escapeHtml(c.status)}</span>
+                    </div>
+                    <div class="media-content">
+                        <div class="content">
+                            <p>
+                                <strong class="has-text-info is-size-5">${escapeHtml(c.name)}</strong> 
+                                <span class="has-text-grey-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
+                                <br>
+                                <span class="has-text-light is-size-7" style="word-break: break-word; display: block; margin-top: 4px;">
+                                    ${escapeHtml(desc)}
+                                </span>
+                            </p>
                         </div>
                     </div>
-                    <div class="content has-text-light">
-                        <div style="height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                            ${escapeHtml(c.description || 'No description')}
-                        </div>
+                    <div class="media-right has-text-right">
+                        <small class="has-text-grey is-size-7">${new Date(c.created_at).toLocaleDateString()}</small>
                         <br>
-                        <small class="has-text-grey">${new Date(c.created_at).toLocaleString()}</small>
-                        <br>
-                        <span class="tag is-dark mt-2">${c.iocs ? c.iocs.length : 0} IOCs</span>
+                        <span class="tag is-black is-rounded mt-1">${c.iocs ? c.iocs.length : 0} IOCs</span>
                     </div>
-                </div>
+                </article>
             `;
-            col.appendChild(card);
-            container.appendChild(col);
+            container.appendChild(box);
         });
     }
 
     openCase(c) {
         this.currentCase = c;
+        const isClosed = c.status === 'Closed';
+
         this.container.innerHTML = `
             <div class="mb-4">
                 <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
@@ -192,6 +200,10 @@ export class CaseController {
                     </div>
                     <div class="level-right">
                          <div class="buttons">
+                            <button class="button ${isClosed ? 'is-info' : 'is-warning'}" id="btnToggleStatus">
+                                <span class="icon"><i class="material-icons">${isClosed ? 'unarchive' : 'archive'}</i></span>
+                                <span>${isClosed ? 'Reopen Case' : 'Close Case'}</span>
+                            </button>
                             <button class="button is-danger" id="btnDeleteCase">
                                 <span class="icon"><i class="material-icons">delete</i></span>
                                 <span>Delete Case</span>
@@ -340,6 +352,13 @@ export class CaseController {
         const closeMisp = () => mispModal.classList.remove('is-active');
         document.getElementById('btnCancelMisp').onclick = closeMisp;
         mispModal.querySelector('.delete').onclick = closeMisp;
+
+        // TOGGLE STATUS
+        document.getElementById('btnToggleStatus').onclick = async () => {
+            const newStatus = this.currentCase.status === 'Open' ? 'Closed' : 'Open';
+            this.currentCase.status = newStatus;
+            await this.updateCase();
+        };
 
         // DELETE CASE
         document.getElementById('btnDeleteCase').onclick = async () => {

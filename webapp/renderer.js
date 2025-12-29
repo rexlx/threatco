@@ -19,7 +19,7 @@ const serviceCtrl = new ServiceController('servicesView', application);
 const healthCtrl = new HealthController('healthStatusContainer', application);
 const responseCtrl = new ResponseController('matchBox', application);
 const toolsCtrl = new ToolsController('toolsContainer', application);
-const caseCtrl = new CaseController('casesView', application);
+const caseCtrl = new CaseController('casesContainer', application);
 
 const mainSection = document.getElementById("mainSection");
 const serviceView = document.getElementById("servicesView");
@@ -40,15 +40,16 @@ async function main() {
 }
 
 function hideAll() {
-    const casesView = document.getElementById('casesView');
-    
-    [mainSection, serviceView, profileView, casesView].forEach(el => { 
+    [mainSection, serviceView, profileView].forEach(el => { 
         if(el) el.classList.add('is-hidden'); 
     });
     
     document.getElementById('healthStatusContainer').classList.add('is-hidden');
     document.getElementById('matchBox').classList.add('is-hidden');
     if (toolsContainer) toolsContainer.classList.add('is-hidden');
+    
+    const casesContainer = document.getElementById('casesContainer');
+    if (casesContainer) casesContainer.classList.add('is-hidden');
 }
 
 function showMainView() {
@@ -87,7 +88,7 @@ if (sidebarCases) {
     sidebarCases.addEventListener('click', (e) => {
         setActiveSidebar(e.currentTarget);
         hideAll();
-        // The CaseController handles un-hiding its own container in .render()
+        mainSection.classList.remove('is-hidden');
         caseCtrl.render();
     });
 }
