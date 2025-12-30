@@ -230,9 +230,9 @@ export class CaseController {
             }
 
             const box = document.createElement('div');
-            box.className = 'box has-background-dark has-text-light mb-3';
+            box.className = 'box has-background-black has-text-light mb-3';
             box.style.cursor = 'pointer';
-            box.style.borderLeft = c.status === 'Open' ? '4px solid #151795ff' : '4px solid #900420ff';
+            box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid #900420ff';
             
             // We pass the summary object 'c' here, but openCase will now fetch the full details
             box.onclick = () => this.openCase(c);
@@ -249,7 +249,7 @@ export class CaseController {
                         <div class="content">
                             <p>
                                 <strong class="has-text-info is-size-5">${escapeHtml(c.name)}</strong> 
-                                <span class="has-text-grey-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
+                                <span class="has-text-info-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
                                 <br>
                                 <span class="has-text-light is-size-7" style="word-break: break-word; display: block; margin-top: 4px;">
                                     ${escapeHtml(desc)}
@@ -260,7 +260,7 @@ export class CaseController {
                     <div class="media-right has-text-right">
                         <small class="has-text-grey is-size-7">${new Date(c.created_at).toLocaleDateString()}</small>
                         <br>
-                        <span class="tag is-black is-rounded mt-1">${iocCount} IOCs</span>
+                        <span class="tag is-dark is-rounded mt-1">${iocCount} IOCs</span>
                     </div>
                 </article>
             `;

@@ -651,6 +651,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/previous-results", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
 	s.Gateway.HandleFunc("/responses", http.HandlerFunc(s.ValidateSessionToken(s.ViewResponsesHandler)))
 	s.Gateway.HandleFunc("/getuptime", http.HandlerFunc(s.ValidateSessionToken(s.GetRuntimeHandler)))
+	s.Gateway.HandleFunc("/tools/inspect-archive", http.HandlerFunc(s.ValidateSessionToken(s.ToolsInspectArchiveHandler)))
 	s.Gateway.HandleFunc("/tools/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParseFileHandler)))
 	s.Gateway.HandleFunc("/tools/dnslookup", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler)))
 	s.Gateway.HandleFunc("/tools/dnslookup2", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler2)))

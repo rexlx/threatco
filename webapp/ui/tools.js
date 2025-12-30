@@ -2,17 +2,18 @@ import { IocTool } from './tools/ioc.js';
 import { TransformerTool } from './tools/transformer.js';
 import { CryptoTool } from './tools/crypto.js';
 import { DnsTool } from './tools/dns.js';
+import { ArchiveTool } from './tools/archive.js'; // Import new tool
 
 export class ToolsController {
     constructor(containerId, app) {
         this.container = document.getElementById(containerId);
         this.app = app;
         
-        // Initialize sub-controllers
         this.iocTool = new IocTool(app);
         this.transformerTool = new TransformerTool(app);
         this.cryptoTool = new CryptoTool(app);
         this.dnsTool = new DnsTool(app);
+        this.archiveTool = new ArchiveTool(app); // Initialize
     }
 
     render() {
@@ -25,6 +26,7 @@ export class ToolsController {
                         <li data-tab="tool-decoder"><a><span class="icon"><i class="material-icons">transform</i></span><span>Transformer</span></a></li>
                         <li data-tab="tool-aes"><a><span class="icon"><i class="material-icons">lock</i></span><span>Crypto</span></a></li>
                         <li data-tab="tool-dns"><a><span class="icon"><i class="material-icons">dns</i></span><span>DNS</span></a></li>
+                        <li data-tab="tool-archive"><a><span class="icon"><i class="material-icons">folder_zip</i></span><span>Archive</span></a></li>
                     </ul>
                 </div>
                 
@@ -34,19 +36,20 @@ export class ToolsController {
                 <div class="tool-content is-hidden" id="view-tool-decoder">${this.transformerTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-aes">${this.cryptoTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-dns">${this.dnsTool.render()}</div>
+                <div class="tool-content is-hidden" id="view-tool-archive">${this.archiveTool.render()}</div>
             </div>`;
 
         this.attachListeners();
         
-        // Delegate listener attachment to sub-tools
         this.iocTool.attachListeners(() => this.render());
         this.transformerTool.attachListeners();
         this.cryptoTool.attachListeners();
         this.dnsTool.attachListeners();
+        this.archiveTool.attachListeners(); // Attach listeners
     }
 
     attachListeners() {
-        // FIX: Only select 'li' elements that are direct children of our main nav ID
+        // ... (Existing listener logic remains the same) ...
         const navContainer = document.getElementById('tool-main-nav');
         if (!navContainer) return;
         
@@ -54,22 +57,12 @@ export class ToolsController {
         
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
-                // UI Toggle
                 tabs.forEach(t => t.classList.remove('is-active'));
                 tab.classList.add('is-active');
-
-                // View Toggle
                 const targetId = tab.dataset.tab;
-                
-                // Hide all tool views
                 this.container.querySelectorAll('.tool-content').forEach(el => el.classList.add('is-hidden'));
-                
-                // Show the specific view
-                const viewId = `view-${targetId}`;
-                const viewEl = document.getElementById(viewId);
-                if (viewEl) {
-                    viewEl.classList.remove('is-hidden');
-                }
+                const viewEl = document.getElementById(`view-${targetId}`);
+                if (viewEl) viewEl.classList.remove('is-hidden');
             });
         });
     }

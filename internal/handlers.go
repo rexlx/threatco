@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/aes"
@@ -8,12 +9,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -428,6 +431,138 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+// Add to internal/handlers.go
+
+func (s *Server) ToolsInspectArchiveHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Increase limit to 500MB for this specific handler
+	// We use MaxBytesReader to prevent the server from accepting infinite streams
+	const MaxArchiveSize = 500 * 1024 * 1024 // 500MB
+	r.Body = http.MaxBytesReader(w, r.Body, MaxArchiveSize)
+
+	// 2. Stream directly to a Temp File (Avoids loading 500MB into RAM)
+	// "multipart/form-data" usually requires parsing, but we can iterate the parts
+	// to find the file and stream it.
+	// Standard ParseMultipartForm spills to disk anyway, but this gives us control.
+	reader, err := r.MultipartReader()
+	if err != nil {
+		http.Error(w, "Upload error: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Prepare response structure
+	type FileInfo struct {
+		Name       string `json:"name"`
+		Size       uint64 `json:"size"`
+		Compressed uint64 `json:"compressed_size"`
+		SHA256     string `json:"sha256"`
+		Suspicious bool   `json:"suspicious"`
+		Warning    string `json:"warning"`
+	}
+	var results []FileInfo
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Read error", http.StatusInternalServerError)
+			return
+		}
+
+		// We only care about the form field named "file"
+		if part.FormName() == "file" {
+			// Create a temp file that is NOT accessible via web
+			tmpFile, err := os.CreateTemp("", "threatco-inspect-*.zip")
+			if err != nil {
+				http.Error(w, "Temp file creation failed", http.StatusInternalServerError)
+				return
+			}
+			// CRITICAL: Ensure file is deleted when function exits
+			defer os.Remove(tmpFile.Name())
+			defer tmpFile.Close()
+
+			// Stream upload to the temp file
+			size, err := io.Copy(tmpFile, part)
+			if err != nil {
+				http.Error(w, "Stream copy failed", http.StatusInternalServerError)
+				return
+			}
+
+			// 3. Open the Temp File as a Zip Reader
+			// usage of archive/zip requires ReaderAt, which os.File provides
+			zReader, err := zip.NewReader(tmpFile, size)
+			if err != nil {
+				// If it fails to parse, it might not be a zip or is corrupted
+				http.Error(w, "Invalid ZIP archive: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			// 4. Inspect Contents safely
+			for _, zf := range zReader.File {
+				info := FileInfo{
+					Name:       zf.Name,
+					Size:       zf.UncompressedSize64,
+					Compressed: zf.CompressedSize64,
+					Suspicious: false,
+				}
+
+				// Check 1: Zip Slip (Directory Traversal)
+				if strings.Contains(zf.Name, "..") {
+					info.Suspicious = true
+					info.Warning = "Potential Zip Slip (path traversal)"
+				}
+
+				// Check 2: Zip Bomb (Compression Ratio)
+				// Ratio > 100x and size > 10MB is suspicious
+				if zf.CompressedSize64 > 0 {
+					ratio := float64(zf.UncompressedSize64) / float64(zf.CompressedSize64)
+					if ratio > 100 && zf.UncompressedSize64 > (10*1024*1024) {
+						info.Suspicious = true
+						info.Warning = fmt.Sprintf("High compression ratio (%.0fx)", ratio)
+					}
+				}
+
+				// Check 3: Absolute Paths
+				if filepath.IsAbs(zf.Name) {
+					info.Suspicious = true
+					info.Warning = "Absolute path detected"
+				}
+
+				// Calculate Hash (Safe Streaming)
+				if !zf.FileInfo().IsDir() {
+					// Only hash if not suspiciously huge to avoid DoS on the hasher
+					if info.Suspicious && info.Size > (100*1024*1024) {
+						info.SHA256 = "SKIPPED_DUE_TO_RISK"
+					} else {
+						rc, err := zf.Open()
+						if err == nil {
+							hasher := sha256.New()
+							// Limit hashing to first 100MB to preserve server resources
+							// If a file is 10GB, we don't want to spend CPU hashing it all
+							limitReader := io.LimitReader(rc, 100*1024*1024)
+							if _, err := io.Copy(hasher, limitReader); err == nil {
+								info.SHA256 = hex.EncodeToString(hasher.Sum(nil))
+								if zf.UncompressedSize64 > 100*1024*1024 {
+									info.SHA256 += " (partial)"
+								}
+							}
+							rc.Close()
+						}
+					}
+				}
+
+				results = append(results, info)
+			}
+			// We only process one file
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }
 
 func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
