@@ -7,7 +7,7 @@ export class TransformerTool {
         return `
         <div id="tool-decoder" class="block" style="scroll-margin-top: 80px;">
             <h4 class="title is-4 has-text-white">Text Transformer</h4>
-            <p class="has-text-grey-light mb-4">Decode, encode, and defang text artifacts.</p>
+            <p class="has-text-grey-light mb-4">Decode, encode, defang, and process lists.</p>
 
             <div class="field">
                 <label class="label has-text-grey-light">Input</label>
@@ -24,6 +24,7 @@ export class TransformerTool {
                     <button class="button is-small is-warning is-light" data-op="url_encode">URL Encode</button>
                     <button class="button is-small is-danger is-light" data-op="defang">Defang</button>
                     <button class="button is-small is-success is-light" data-op="refang">Refang</button>
+                    <button class="button is-small is-primary is-light" data-op="sort_uniq_nl">Sort | Uniq | Nl</button>
                 </div>
             </div>
 
@@ -45,6 +46,7 @@ export class TransformerTool {
         const buttons = document.querySelectorAll('#tool-decoder button[data-op]');
         buttons.forEach(btn => {
             btn.addEventListener('click', (e) => {
+                // Ensure we get the data-op from the button even if icon/span is clicked
                 const op = e.target.closest('button').dataset.op;
                 this.runOp(op);
             });
@@ -77,6 +79,18 @@ export class TransformerTool {
                 case 'url_encode': res = encodeURIComponent(input); break;
                 case 'defang': res = input.replace(/\./g, '[.]').replace(/http/gi, 'hxxp'); break;
                 case 'refang': res = input.replace(/\[\.\]/g, '.').replace(/hxxp/gi, 'http'); break;
+                case 'sort_uniq_nl': 
+                    // 1. Split by newlines and remove empty trailing lines
+                    const lines = input.split(/\r?\n/).filter(line => line.length > 0);
+                    // 2. Sort and Uniq (Set automatically deduplicates)
+                    const sortedUnique = [...new Set(lines)].sort();
+                    // 3. Number lines (pad start for alignment)
+                    const padding = String(sortedUnique.length).length;
+                    res = sortedUnique.map((line, idx) => {
+                        const num = String(idx + 1).padStart(padding, ' ');
+                        return `${num}  ${line}`;
+                    }).join('\n');
+                    break;
             }
             output.value = res;
         } catch (e) {

@@ -2,7 +2,8 @@ import { IocTool } from './tools/ioc.js';
 import { TransformerTool } from './tools/transformer.js';
 import { CryptoTool } from './tools/crypto.js';
 import { DnsTool } from './tools/dns.js';
-import { ArchiveTool } from './tools/archive.js'; // Import new tool
+import { ArchiveTool } from './tools/archive.js';
+import { DescribeTool } from './tools/describe.js'; // [1] Import the new tool
 
 export class ToolsController {
     constructor(containerId, app) {
@@ -13,7 +14,8 @@ export class ToolsController {
         this.transformerTool = new TransformerTool(app);
         this.cryptoTool = new CryptoTool(app);
         this.dnsTool = new DnsTool(app);
-        this.archiveTool = new ArchiveTool(app); // Initialize
+        this.archiveTool = new ArchiveTool(app);
+        this.describeTool = new DescribeTool(app); // [2] Initialize the new tool
     }
 
     render() {
@@ -27,6 +29,7 @@ export class ToolsController {
                         <li data-tab="tool-aes"><a><span class="icon"><i class="material-icons">lock</i></span><span>Crypto</span></a></li>
                         <li data-tab="tool-dns"><a><span class="icon"><i class="material-icons">dns</i></span><span>DNS</span></a></li>
                         <li data-tab="tool-archive"><a><span class="icon"><i class="material-icons">folder_zip</i></span><span>Archive</span></a></li>
+                        <li data-tab="tool-describe"><a><span class="icon"><i class="material-icons">bar_chart</i></span><span>Stats</span></a></li>
                     </ul>
                 </div>
                 
@@ -37,6 +40,7 @@ export class ToolsController {
                 <div class="tool-content is-hidden" id="view-tool-aes">${this.cryptoTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-dns">${this.dnsTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-archive">${this.archiveTool.render()}</div>
+                <div class="tool-content is-hidden" id="view-tool-describe">${this.describeTool.render()}</div>
             </div>`;
 
         this.attachListeners();
@@ -45,11 +49,11 @@ export class ToolsController {
         this.transformerTool.attachListeners();
         this.cryptoTool.attachListeners();
         this.dnsTool.attachListeners();
-        this.archiveTool.attachListeners(); // Attach listeners
+        this.archiveTool.attachListeners();
+        this.describeTool.attachListeners(); // [5] Attach listeners for the new tool
     }
 
     attachListeners() {
-        // ... (Existing listener logic remains the same) ...
         const navContainer = document.getElementById('tool-main-nav');
         if (!navContainer) return;
         
