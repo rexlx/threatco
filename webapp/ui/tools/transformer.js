@@ -22,7 +22,7 @@ export class TransformerTool {
         const sep = document.getElementById('col-sep').value || ',';
         const gridDiv = document.getElementById('col-grid-output');
 
-        let html = `<table class="table is-narrow is-fullwidth has-background-black has-text-white"><thead><tr>`;
+        let html = `<table class="table is-narrow has-background-black has-text-white"><thead><tr>`;
 
         // Create header with "Remove" buttons for each column
         this.activeColumns.forEach((isActive, idx) => {
@@ -124,7 +124,7 @@ export class TransformerTool {
                     <div class="control"><input id="col-sep" class="input is-small" type="text" placeholder="Separator (e.g. , or |)" value=","></div>
                     <div class="control"><button id="btn-apply-sep" class="button is-small is-info">Apply</button></div>
                 </div>
-                <div id="col-grid-output" style="max-height: 400px; overflow-y: auto;"></div>
+                <div id="col-grid-output" style="max-height: 400px; overflow-y: auto; overflow-x: auto;"></div>
                 <button class="button is-small is-success is-fullwidth mt-3" id="btn-save-grid">Commit Changes to Output</button>
             </div>
         </div>`;
@@ -153,7 +153,7 @@ export class TransformerTool {
             });
         }
 
-        // [3] NEW: Wire up the column manipulator UI events
+        // [3] Wire up the column manipulator UI events
         this.attachGridListeners();
     }
 
