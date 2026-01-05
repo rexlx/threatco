@@ -6,11 +6,16 @@ import (
 	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"html"
 	"io"
@@ -28,6 +33,7 @@ import (
 	"github.com/rexlx/threatco/optional"
 	"github.com/rexlx/threatco/parser"
 	"github.com/rexlx/threatco/vendors"
+	"golang.org/x/crypto/ssh"
 )
 
 var store *UploadStore
@@ -563,6 +569,39 @@ func (s *Server) ToolsInspectArchiveHandler(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+// Add to internal/handlers.go imports:
+// "crypto/x509"
+// "encoding/pem"
+// "golang.org/x/crypto/ssh"
+
+func (s *Server) ToolsGenerateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
+	keyType := r.URL.Query().Get("type") // "rsa" or "ecdsa"
+
+	var privKeyPEM []byte
+	var pubKeySSH []byte
+
+	if keyType == "ecdsa" {
+		privateKey, _ := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+		b, _ := x509.MarshalECPrivateKey(privateKey)
+		privKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
+		publicKey, _ := ssh.NewPublicKey(&privateKey.PublicKey)
+		pubKeySSH = ssh.MarshalAuthorizedKey(publicKey)
+	} else {
+		// Default to RSA 4096
+		privateKey, _ := rsa.GenerateKey(rand.Reader, 4096)
+		privKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+		publicKey, _ := ssh.NewPublicKey(&privateKey.PublicKey)
+		pubKeySSH = ssh.MarshalAuthorizedKey(publicKey)
+	}
+
+	resp := map[string]string{
+		"private": string(privKeyPEM),
+		"public":  string(pubKeySSH),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) AddServiceHandler(w http.ResponseWriter, r *http.Request) {
