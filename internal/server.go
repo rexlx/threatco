@@ -672,6 +672,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/tools/encrypt", http.HandlerFunc(s.ValidateSessionToken(s.ToolsEncryptHandler)))
 	s.Gateway.HandleFunc("/tools/inspect-archive", http.HandlerFunc(s.ValidateSessionToken(s.ToolsInspectArchiveHandler)))
 	s.Gateway.HandleFunc("/tools/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParseFileHandler)))
+	s.Gateway.HandleFunc("/tools/ssh-exec", http.HandlerFunc(s.ValidateSessionToken(s.ToolsSSHExecHandler)))
 	s.Gateway.HandleFunc("/tools/ssh-gen", http.HandlerFunc(s.ValidateSessionToken(s.ToolsGenerateSSHKeyHandler)))
 	s.Gateway.HandleFunc("/tools/ssh-deploy", http.HandlerFunc(s.ValidateSessionToken(s.ToolsSSHDeployHandler)))
 	s.Gateway.HandleFunc("/updatekey", http.HandlerFunc(s.ValidateSessionToken(s.NewApiKeyGeneratorHandler)))

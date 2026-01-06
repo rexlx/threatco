@@ -2553,6 +2553,88 @@ func (s *Server) sendSshNotification(user, host, msg string, isError bool) {
 	})
 }
 
+// internal/handlers.go
+
+// internal/handlers.go
+
+type SSHExecRequest struct {
+	Host       string   `json:"host"`
+	Method     string   `json:"method"`
+	Password   string   `json:"password"`
+	PrivateKey string   `json:"private_key"`
+	Commands   []string `json:"commands"`
+}
+
+func (s *Server) ToolsSSHExecHandler(w http.ResponseWriter, r *http.Request) {
+	var req SSHExecRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 1. Parse Host (user@address:port)
+	user := "root"
+	addr := req.Host
+	if strings.Contains(req.Host, "@") {
+		parts := strings.Split(req.Host, "@")
+		user = parts[0]
+		addr = parts[1]
+	}
+	if !strings.Contains(addr, ":") {
+		addr += ":22"
+	}
+
+	// 2. Setup Auth
+	var auth ssh.AuthMethod
+	if req.Method == "key" {
+		signer, err := ssh.ParsePrivateKey([]byte(req.PrivateKey))
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]any{"output": "Invalid Private Key", "error": true})
+			return
+		}
+		auth = ssh.PublicKeys(signer)
+	} else {
+		auth = ssh.Password(req.Password)
+	}
+
+	// 3. Connect and Execute
+	config := &ssh.ClientConfig{
+		User:            user,
+		Auth:            []ssh.AuthMethod{auth},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         15 * time.Second,
+	}
+
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"output": "Connection Failed: " + err.Error(), "error": true})
+		return
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"output": "Session Failed", "error": true})
+		return
+	}
+	defer session.Close()
+
+	// Join commands with semicolon
+	fullCmd := strings.Join(req.Commands, "; ")
+	output, err := session.CombinedOutput(fullCmd)
+
+	resp := map[string]any{
+		"output": string(output),
+		"error":  err != nil,
+	}
+	if err != nil {
+		resp["output"] = string(output) + "\nExecution Error: " + err.Error()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

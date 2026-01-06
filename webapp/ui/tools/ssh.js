@@ -1,11 +1,13 @@
 // webapp/ui/tools/ssh.js
 import { SshGenTool } from './sshgen.js';
 import { SshTradeTool } from './sshtrade.js';
+import { SshCommandTool } from './sshcommand.js'; //
 
 export class SshTool {
     constructor(app) {
         this.genTool = new SshGenTool(app);
         this.tradeTool = new SshTradeTool(app);
+        this.commandTool = new SshCommandTool(app); //
     }
 
     render() {
@@ -19,8 +21,14 @@ export class SshTool {
 
             <hr class="has-background-grey-dark">
 
-            <div class="box has-background-black-bis">
+            <div class="box has-background-black-bis mb-6">
                 ${this.tradeTool.render()}
+            </div>
+
+            <hr class="has-background-grey-dark">
+
+            <div class="box has-background-black-bis">
+                ${this.commandTool.render()}
             </div>
         </div>`;
     }
@@ -28,5 +36,7 @@ export class SshTool {
     attachListeners() {
         this.genTool.attachListeners();
         this.tradeTool.attachListeners();
+        // Pass a callback so CommandTool can access TradeTool's host list
+        this.commandTool.attachListeners(() => this.tradeTool.hosts);
     }
 }
