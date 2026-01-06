@@ -2459,6 +2459,100 @@ func (s *Server) ToolsChecksumHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(checksum))
 }
 
+// internal/handlers.go
+
+type SSHDeployRequest struct {
+	Hosts      []string `json:"hosts"`
+	Method     string   `json:"method"`
+	Password   string   `json:"password"`
+	PrivateKey string   `json:"private_key"`
+	PublicKey  string   `json:"public_key"`
+}
+
+func (s *Server) ToolsSSHDeployHandler(w http.ResponseWriter, r *http.Request) {
+	var req SSHDeployRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	email := r.Context().Value("email").(string)
+
+	// Process in background
+	go func() {
+		for _, hostAddr := range req.Hosts {
+			var auth ssh.AuthMethod
+			if req.Method == "key" {
+				signer, err := ssh.ParsePrivateKey([]byte(req.PrivateKey))
+				if err != nil {
+					s.sendSshNotification(email, hostAddr, fmt.Sprintf("Key Error: %v", err), true)
+					continue
+				}
+				auth = ssh.PublicKeys(signer)
+			} else {
+				auth = ssh.Password(req.Password)
+			}
+
+			// Parse user@host:port
+			user := "root"
+			addr := hostAddr
+			if strings.Contains(hostAddr, "@") {
+				parts := strings.Split(hostAddr, "@")
+				user = parts[0]
+				addr = parts[1]
+			}
+			if !strings.Contains(addr, ":") {
+				addr += ":22"
+			}
+
+			config := &ssh.ClientConfig{
+				User:            user,
+				Auth:            []ssh.AuthMethod{auth},
+				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				Timeout:         10 * time.Second,
+			}
+
+			client, err := ssh.Dial("tcp", addr, config)
+			if err != nil {
+				s.sendSshNotification(email, hostAddr, fmt.Sprintf("Conn Failed: %v", err), true)
+				continue
+			}
+
+			session, err := client.NewSession()
+			if err != nil {
+				s.sendSshNotification(email, hostAddr, "Session Error", true)
+				client.Close()
+				continue
+			}
+
+			// Deployment command
+			cmd := fmt.Sprintf("mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '%s' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys", req.PublicKey)
+			err = session.Run(cmd)
+
+			if err != nil {
+				s.sendSshNotification(email, hostAddr, fmt.Sprintf("Deploy Failed: %v", err), true)
+			} else {
+				s.sendSshNotification(email, hostAddr, "Public key successfully deployed.", false)
+			}
+
+			session.Close()
+			client.Close()
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(`{"status": "processing"}`))
+}
+
+// Helper to send notifications back to the user via WebSocket Hub
+func (s *Server) sendSshNotification(user, host, msg string, isError bool) {
+	s.Hub.SendToUser(s.RespCh, user, Notification{
+		Info:    fmt.Sprintf("[SSH %s] %s", host, msg),
+		Error:   isError,
+		Created: time.Now(),
+	})
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

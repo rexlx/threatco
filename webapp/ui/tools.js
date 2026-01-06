@@ -5,7 +5,7 @@ import { DnsTool } from './tools/dns.js';
 import { ArchiveTool } from './tools/archive.js';
 import { DescribeTool } from './tools/describe.js';
 import { SignatureTool } from './tools/signature.js';
-import { SshGenTool } from './tools/sshgen.js';
+import { SshTool } from './tools/ssh.js'; // Consolidated SSH tool container
 
 export class ToolsController {
     constructor(containerId, app) {
@@ -19,7 +19,7 @@ export class ToolsController {
         this.archiveTool = new ArchiveTool(app);
         this.describeTool = new DescribeTool(app);
         this.signatureTool = new SignatureTool(app);
-        this.sshGenTool = new SshGenTool(app);
+        this.sshTool = new SshTool(app); // Initializing the stacked SSH tool
     }
 
     render() {
@@ -35,7 +35,7 @@ export class ToolsController {
                         <li data-tab="tool-archive"><a><span class="icon"><i class="material-icons">folder_zip</i></span><span>Archive</span></a></li>
                         <li data-tab="tool-describe"><a><span class="icon"><i class="material-icons">bar_chart</i></span><span>Stats</span></a></li>
                         <li data-tab="tool-signature"><a><span class="icon"><i class="material-icons">fingerprint</i></span><span>File ID</span></a></li>
-                        <li data-tab="tool-sshgen"><a><span class="icon"><i class="material-icons">vpn_key</i></span><span>SSH Key Gen</span></a></li>
+                        <li data-tab="tool-ssh"><a><span class="icon"><i class="material-icons">vpn_key</i></span><span>SSH Tools</span></a></li>
                     </ul>
                 </div>
                 
@@ -48,7 +48,7 @@ export class ToolsController {
                 <div class="tool-content is-hidden" id="view-tool-archive">${this.archiveTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-describe">${this.describeTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-signature">${this.signatureTool.render()}</div>
-                <div class="tool-content is-hidden" id="view-tool-sshgen">${this.sshGenTool.render()}</div>
+                <div class="tool-content is-hidden" id="view-tool-ssh">${this.sshTool.render()}</div>
             </div>`;
 
         this.attachListeners();
@@ -60,7 +60,7 @@ export class ToolsController {
         this.archiveTool.attachListeners();
         this.describeTool.attachListeners();
         this.signatureTool.attachListeners();
-        this.sshGenTool.attachListeners();
+        this.sshTool.attachListeners(); // Attaching consolidated listeners
     }
 
     attachListeners() {
