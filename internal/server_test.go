@@ -1,6 +1,9 @@
 package internal
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,6 +53,12 @@ func (m *MockDB) DeleteCase(id string) error                        { return nil
 func (m *MockDB) SearchCases(query string) ([]Case, error)          { return nil, nil }
 
 func setupTestServer() *Server {
+	// Generate a random key for the test server to support Encryption tests
+	key := make([]byte, 32)
+	rand.Read(key)
+	block, _ := aes.NewCipher(key)
+	aesGCM, _ := cipher.NewGCM(block)
+
 	return &Server{
 		ID:     "test-server",
 		RespCh: make(chan ResponseItem, 10),
@@ -60,7 +69,12 @@ func setupTestServer() *Server {
 			Charts:      []byte(views.NoDataView),
 		},
 		Details: Details{
+			Key:   &aesGCM, // Injected Cipher
 			Stats: make(map[string]float64),
+			SupportedServices: []ServiceType{
+				{Kind: "valid_service"},
+				{Kind: "misp"},
+			},
 		},
 		Log: log.New(io.Discard, "", 0),
 		DB:  &MockDB{},
@@ -214,5 +228,63 @@ func TestConcurrency_Responsiveness(t *testing.T) {
 		t.Errorf("Server is LOCKING UP! Read took %v", duration)
 	} else {
 		t.Log("SUCCESS: Server remained responsive during heavy processing.")
+	}
+}
+
+func TestServer_EncryptDecrypt(t *testing.T) {
+	s := setupTestServer()
+	originalText := "secret-api-key-123"
+
+	// 1. Test Encryption
+	encrypted, err := s.Encrypt(originalText)
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+	if encrypted == originalText {
+		t.Fatal("Encrypt returned plaintext")
+	}
+
+	// 2. Test Decryption
+	decrypted, keyUsed, err := s.Decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+
+	if decrypted != originalText {
+		t.Errorf("Decrypted text mismatch.\nGot:  %s\nWant: %s", decrypted, originalText)
+	}
+
+	if keyUsed != KeyUsedNew {
+		t.Errorf("Expected key used to be '%s', got '%s'", KeyUsedNew, keyUsed)
+	}
+}
+
+func TestServer_CleanUserServices(t *testing.T) {
+	s := setupTestServer() // Configured with "valid_service" and "misp"
+
+	// Create user with mixed valid and invalid services
+	u, _ := NewUser("test@test.com", false, []ServiceType{
+		{Kind: "valid_service"}, // Should be kept
+		{Kind: "hacker_tool"},   // Should be removed
+		{Kind: "misp"},          // Should be kept
+	})
+
+	// Pre-check
+	if len(u.Services) != 3 {
+		t.Fatalf("Setup error: expected 3 services initially, got %d", len(u.Services))
+	}
+
+	// Run Clean
+	s.CleanUserServices(u)
+
+	// Post-check
+	if len(u.Services) != 2 {
+		t.Errorf("CleanUserServices failed: expected 2 services, got %d", len(u.Services))
+	}
+
+	for _, svc := range u.Services {
+		if svc.Kind == "hacker_tool" {
+			t.Error("CleanUserServices failed: invalid service 'hacker_tool' was not removed")
+		}
 	}
 }
