@@ -2635,6 +2635,76 @@ func (s *Server) ToolsSSHExecHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+type NpmCheckResult struct {
+	FileName string     `json:"file_name"`
+	Matches  []NpmMatch `json:"matches"`
+	Error    string     `json:"error,omitempty"`
+}
+
+type NpmMatch struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Severity    string `json:"severity"`
+	Type        string `json:"type"` // Added field
+}
+
+func (s *Server) ToolsNpmCheckHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse uploaded files (multipart) with a 10MB limit
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "File upload error", http.StatusBadRequest)
+		return
+	}
+
+	files := r.MultipartForm.File["files"]
+	results := make([]NpmCheckResult, 0)
+
+	for _, fileHeader := range files {
+		res := NpmCheckResult{FileName: fileHeader.Filename}
+
+		f, err := fileHeader.Open()
+		if err != nil {
+			res.Error = "Could not open file"
+			results = append(results, res)
+			continue
+		}
+
+		var pkg map[string]interface{}
+		if err := json.NewDecoder(f).Decode(&pkg); err != nil {
+			res.Error = "Invalid JSON format"
+			f.Close()
+			results = append(results, res)
+			continue
+		}
+		f.Close()
+
+		// 2. Extract dependencies and devDependencies
+		deps := make(map[string]bool)
+		for _, key := range []string{"dependencies", "devDependencies"} {
+			if d, ok := pkg[key].(map[string]interface{}); ok {
+				for name := range d {
+					deps[name] = true
+				}
+			}
+		}
+
+		// 3. Check against static map from npm_db.go
+		for name, vuln := range MaliciousNpmPackages {
+			if deps[name] {
+				res.Matches = append(res.Matches, NpmMatch{
+					Name:        name,
+					Description: vuln.Description,
+					Severity:    vuln.Severity,
+					Type:        vuln.Type, // Map the type
+				})
+			}
+		}
+		results = append(results, res)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

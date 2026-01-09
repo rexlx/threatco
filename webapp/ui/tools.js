@@ -5,7 +5,8 @@ import { DnsTool } from './tools/dns.js';
 import { ArchiveTool } from './tools/archive.js';
 import { DescribeTool } from './tools/describe.js';
 import { SignatureTool } from './tools/signature.js';
-import { SshTool } from './tools/ssh.js'; // Consolidated SSH tool container
+import { SshTool } from './tools/ssh.js';
+import { NpmTool } from './tools/npm.js'; // Added NPM Tool import
 
 export class ToolsController {
     constructor(containerId, app) {
@@ -19,7 +20,8 @@ export class ToolsController {
         this.archiveTool = new ArchiveTool(app);
         this.describeTool = new DescribeTool(app);
         this.signatureTool = new SignatureTool(app);
-        this.sshTool = new SshTool(app); // Initializing the stacked SSH tool
+        this.sshTool = new SshTool(app);
+        this.npmTool = new NpmTool(app); // Initialized NPM Auditor
     }
 
     render() {
@@ -36,7 +38,7 @@ export class ToolsController {
                         <li data-tab="tool-describe"><a><span class="icon"><i class="material-icons">bar_chart</i></span><span>Stats</span></a></li>
                         <li data-tab="tool-signature"><a><span class="icon"><i class="material-icons">fingerprint</i></span><span>File ID</span></a></li>
                         <li data-tab="tool-ssh"><a><span class="icon"><i class="material-icons">vpn_key</i></span><span>SSH Tools</span></a></li>
-                    </ul>
+                        <li data-tab="tool-npm"><a><span class="icon"><i class="material-icons">inventory_2</i></span><span>NPM Auditor</span></a></li> </ul>
                 </div>
                 
                 <h2 class="title is-2 has-text-info">Tools</h2>
@@ -49,7 +51,7 @@ export class ToolsController {
                 <div class="tool-content is-hidden" id="view-tool-describe">${this.describeTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-signature">${this.signatureTool.render()}</div>
                 <div class="tool-content is-hidden" id="view-tool-ssh">${this.sshTool.render()}</div>
-            </div>`;
+                <div class="tool-content is-hidden" id="view-tool-npm">${this.npmTool.render()}</div> </div>`;
 
         this.attachListeners();
         
@@ -60,7 +62,8 @@ export class ToolsController {
         this.archiveTool.attachListeners();
         this.describeTool.attachListeners();
         this.signatureTool.attachListeners();
-        this.sshTool.attachListeners(); // Attaching consolidated listeners
+        this.sshTool.attachListeners();
+        this.npmTool.attachListeners(); // Attached NPM Auditor listeners
     }
 
     attachListeners() {
