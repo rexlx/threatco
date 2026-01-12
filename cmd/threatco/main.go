@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/rexlx/threatco/internal"
+	//github.com/prometheus/client_golang/prometheus/promhttp
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -63,6 +65,21 @@ func main() {
 				ticker.Stop()
 				os.Exit(0)
 			}
+		}
+	}()
+
+	promMux := http.NewServeMux()
+	promMux.Handle("/metrics", promhttp.Handler())
+
+	promSrv := &http.Server{
+		Addr:    ":8089",
+		Handler: promMux,
+	}
+
+	go func() {
+		fmt.Println("Starting Prometheus monitoring on :8089/metrics")
+		if err := promSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("Prometheus listener error: %v\n", err)
 		}
 	}()
 

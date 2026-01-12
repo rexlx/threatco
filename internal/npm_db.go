@@ -41,6 +41,37 @@ var MaliciousNpmPackages = map[string]NpmVulnerability{
 		Severity:    "critical",
 		Type:        "Malware",
 	},
+	// --- 2025 React & Related Typosquats / Malware Waves ---
+	"reeact-login-page": {
+		Description: "Typosquat of popular 'react-login-page'. Deploys keylogger and exfiltrates sensitive data (part of a 16-package campaign by author 'lolapalooza' targeting React login/UI components).",
+		Severity:    "critical",
+		Type:        "Typosquat + Malware",
+	},
+	"react-router-dom.js": {
+		Description: "Typosquat of 'react-router-dom' (added .js suffix). Part of July/October 2025 wave delivering multi-stage info-stealers (credential harvesting across Windows/macOS/Linux via postinstall scripts and obfuscated payloads).",
+		Severity:    "critical",
+		Type:        "Typosquat + Info Stealer",
+	},
+	"vite-plugin-react-extend": {
+		Description: "Typosquat of official '@vitejs/plugin-react'. Deploys destructive payloads (recursive file deletion, system crashes) targeting React/Vite projects; remained undetected for years in some cases.",
+		Severity:    "critical",
+		Type:        "Typosquat + Destructive Malware",
+	},
+	"zustand.js": {
+		Description: "Typosquat of 'zustand' state management lib (common in React apps). Part of the same 2025 multi-stage credential theft campaign as react-router-dom.js variants.",
+		Severity:    "high",
+		Type:        "Typosquat + Info Stealer",
+	},
+	"nodemonjs": {
+		Description: "Typosquat of 'nodemon'. Delivers obfuscated info-stealer payloads in 2025 campaigns affecting React/Next.js developer workflows.",
+		Severity:    "high",
+		Type:        "Typosquat + Malware",
+	},
+	"typescriptjs": {
+		Description: "Typosquat of 'typescript'. Part of coordinated 2025 waves using postinstall hooks to launch cross-platform stealers targeting dev environments.",
+		Severity:    "high",
+		Type:        "Typosquat + Info Stealer",
+	},
 
 	// --- High Profile Supply Chain Incidents ---
 	"ua-parser-js": {

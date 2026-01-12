@@ -22,6 +22,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rexlx/threatco/views"
 	"go.etcd.io/bbolt"
 )
@@ -64,6 +65,7 @@ type Server struct {
 	ProxyOperators map[string]ProxyOperator `json:"-"`
 	ID             string                   `json:"id"`
 	Details        Details                  `json:"details"`
+	Gauges         *prometheus.GaugeVec     `json:"-"`
 }
 
 type Details struct {
@@ -225,6 +227,16 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		}
 		svr.Details.PreviousKey = &oldAesGCM
 	}
+	svr.Gauges = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vendor_responses",
+			Help: "Custom statistics from ThreatCo internal state",
+		},
+		[]string{"vendor_responses"},
+	)
+
+	// Register it with the default registry
+	prometheus.MustRegister(svr.Gauges)
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	fmt.Println("Server initialized with ID:", svr.ID)
 	return svr
@@ -708,6 +720,9 @@ func (s *Server) UpdateCharts() {
 	s.Details.Stats["sys"] = float64(m.Sys) / 1024
 	s.Details.Stats["num_gc"] = float64(m.NumGC)
 	s.Details.Stats["pause_total_ns"] = float64(m.PauseTotalNs) / 1000000
+	s.Details.Stats["go_memstats_alloc_bytes_total"] = float64(m.TotalAlloc)
+	s.Details.Stats["go_memstats_frees_total"] = float64(m.Frees)
+	s.Gauges.WithLabelValues("vendor_responses").Set(s.Details.Stats["vendor_responses"])
 	for i, stat := range s.Details.Stats {
 		_, ok := s.Cache.Coordinates[i]
 		if !ok {
