@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -2703,6 +2704,75 @@ func (s *Server) ToolsNpmCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+func (s *Server) ToolsGenerateUUIDHandler(w http.ResponseWriter, r *http.Request) {
+	uuidStr := uuid.New().String()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"uuid": uuidStr})
+}
+
+type PasswordRequest struct {
+	Length int  `json:"length"`
+	Upper  bool `json:"upper"`
+	Lower  bool `json:"lower"`
+	Num    bool `json:"num"`
+	Sym    bool `json:"sym"`
+}
+
+func (s *Server) ToolsGeneratePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var req PasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Length < 1 {
+		req.Length = 32
+	}
+	if req.Length > 256 {
+		req.Length = 256 // Reasonable limit
+	}
+
+	const (
+		upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		lower = "abcdefghijklmnopqrstuvwxyz"
+		num   = "0123456789"
+		sym   = "!@#$%^&*()_+~`|}{[]:;?><,./-="
+	)
+
+	var charset string
+	if req.Upper {
+		charset += upper
+	}
+	if req.Lower {
+		charset += lower
+	}
+	if req.Num {
+		charset += num
+	}
+	if req.Sym {
+		charset += sym
+	}
+
+	// Fallback if nothing selected
+	if charset == "" {
+		charset = lower + upper + num
+	}
+
+	password := make([]byte, req.Length)
+	for i := 0; i < req.Length; i++ {
+		// Use crypto/rand for secure index selection
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			http.Error(w, "Random generation error", http.StatusInternalServerError)
+			return
+		}
+		password[i] = charset[n.Int64()]
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"password": string(password)})
 }
 
 type NewUserRequest struct {

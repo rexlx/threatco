@@ -681,6 +681,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/tools/decrypt", http.HandlerFunc(s.ValidateSessionToken(s.ToolsDecryptHandler)))
 	s.Gateway.HandleFunc("/tools/npm-check", http.HandlerFunc(s.ValidateSessionToken(s.ToolsNpmCheckHandler)))
 	s.Gateway.HandleFunc("/tools/dnslookup", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler)))
+	s.Gateway.HandleFunc("/tools/uuid", http.HandlerFunc(s.ValidateSessionToken(s.ToolsGenerateUUIDHandler)))
+	s.Gateway.HandleFunc("/tools/password", http.HandlerFunc(s.ValidateSessionToken(s.ToolsGeneratePasswordHandler)))
 	s.Gateway.HandleFunc("/tools/dnslookup2", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler2)))
 	s.Gateway.HandleFunc("/tools/encrypt", http.HandlerFunc(s.ValidateSessionToken(s.ToolsEncryptHandler)))
 	s.Gateway.HandleFunc("/tools/inspect-archive", http.HandlerFunc(s.ValidateSessionToken(s.ToolsInspectArchiveHandler)))

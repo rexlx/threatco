@@ -6,7 +6,8 @@ import { ArchiveTool } from './tools/archive.js';
 import { DescribeTool } from './tools/describe.js';
 import { SignatureTool } from './tools/signature.js';
 import { SshTool } from './tools/ssh.js';
-import { NpmTool } from './tools/npm.js'; // Added NPM Tool import
+import { NpmTool } from './tools/npm.js';
+import { GeneratorTool } from './tools/generator.js'; // Added Import
 
 export class ToolsController {
     constructor(containerId, app) {
@@ -21,7 +22,8 @@ export class ToolsController {
         this.describeTool = new DescribeTool(app);
         this.signatureTool = new SignatureTool(app);
         this.sshTool = new SshTool(app);
-        this.npmTool = new NpmTool(app); // Initialized NPM Auditor
+        this.npmTool = new NpmTool(app);
+        this.generatorTool = new GeneratorTool(app); // Initialized Generator
     }
 
     render() {
@@ -39,6 +41,7 @@ export class ToolsController {
                     <li data-tab="tool-signature"><a><span class="icon"><i class="material-icons">fingerprint</i></span><span>File ID</span></a></li>
                     <li data-tab="tool-ssh"><a><span class="icon"><i class="material-icons">vpn_key</i></span><span>SSH Tools</span></a></li>
                     <li data-tab="tool-npm"><a><span class="icon"><i class="material-icons">inventory_2</i></span><span>NPM Auditor</span></a></li>
+                    <li data-tab="tool-generator"><a><span class="icon"><i class="material-icons">shuffle</i></span><span>Generators</span></a></li>
                 </ul>
             </div>
             
@@ -53,6 +56,7 @@ export class ToolsController {
             <div class="tool-content is-hidden" id="view-tool-signature">${this.signatureTool.render()}</div>
             <div class="tool-content is-hidden" id="view-tool-ssh">${this.sshTool.render()}</div>
             <div class="tool-content is-hidden" id="view-tool-npm">${this.npmTool.render()}</div>
+            <div class="tool-content is-hidden" id="view-tool-generator">${this.generatorTool.render()}</div>
         </div>`;
 
     // Initialize global tool listeners
@@ -68,6 +72,7 @@ export class ToolsController {
     this.signatureTool.attachListeners();
     this.sshTool.attachListeners();
     this.npmTool.attachListeners();
+    this.generatorTool.attachListeners();
 }
 
     attachListeners() {
