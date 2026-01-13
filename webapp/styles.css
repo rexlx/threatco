@@ -1,3 +1,17 @@
+:root {
+    color-scheme: dark !important;
+}
+
+/* Override Bulma's light mode detection */
+@media (prefers-color-scheme: light) {
+    :root {
+        --bulma-scheme-brightness: dark !important;
+        --bulma-scheme-main-l: 9% !important; /* Standard Bulma dark background */
+        --bulma-text-l: 71% !important;
+        /* Add other --bulma- variables from the 'dark' block in bulma.min.css if needed */
+    }
+}
+
 /* Simple fade-in animation */
 @keyframes fadeIn {
     from { opacity: 0; }

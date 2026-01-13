@@ -22,6 +22,7 @@
 
 /* Merged and cleaned styles */
 :root {
+    color-scheme: dark !important;
     --background-dark: #0b141c; /* User's color */
     --background-light: #2c2c2c; /* Original color */
     --text-info: #3298dc; /* Original color */
@@ -30,10 +31,21 @@
     --text-header: #222;    /* User's color */
 }
 
+/* Override Bulma's light mode detection */
+@media (prefers-color-scheme: light) {
+    :root {
+        --bulma-scheme-brightness: dark !important;
+        --bulma-scheme-main-l: 9% !important; /* Standard Bulma dark background */
+        --bulma-text-l: 71% !important;
+        /* Add other --bulma- variables from the 'dark' block in bulma.min.css if needed */
+    }
+}
+
 /* --- FIX --- */
 /* Apply the background color to the entire page to prevent white background on scroll. */
 html, body {
-    background-color: var(--background-dark);
+    background-color: var(--background-dark) !important;
+    color: var(--text-light) !important;
 }
 
 body {
