@@ -1096,7 +1096,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Println("login successful", email)
-	http.Redirect(w, r, "/services", http.StatusSeeOther)
+	http.Redirect(w, r, "/app", http.StatusSeeOther)
 	s.Memory.Lock()
 	s.Details.Stats["logins"]++
 	s.Memory.Unlock()
