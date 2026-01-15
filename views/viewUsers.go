@@ -21,9 +21,25 @@ var ViewUsersSection string = `
 				%v
 			</tbody>
 		</table>
+		<nav class="pagination is-centered" role="navigation" aria-label="pagination">
+			%v
+		</nav>
 	</div>
 </section>
 `
+
+var PaginationControls string = `
+	%v
+	<ul class="pagination-list">
+		%v
+	</ul>
+	%v
+`
+
+var PaginationItem string = `<li><a class="pagination-link %v" href="?page=%d">%d</a></li>`
+var PaginationEllipsis string = `<li><span class="pagination-ellipsis">&hellip;</span></li>`
+var PaginationPrevious string = `<a class="pagination-previous %v" href="?page=%d">« Previous</a>`
+var PaginationNext string = `<a class="pagination-next %v" href="?page=%d">Next »</a>`
 
 var UserTableBody string = `
 <tr>

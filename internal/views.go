@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/rexlx/threatco/views"
 )
@@ -27,9 +28,34 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.Log.Println("AllUsersViewHandler", err)
 	}
+
+	// Pagination settings
+	const usersPerPage = 15
+	totalUsers := len(_users)
+	totalPages := (totalUsers + usersPerPage - 1) / usersPerPage
+
+	// Get page from query parameter
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 && p <= totalPages {
+			page = p
+		}
+	}
+
+	// Calculate start and end indices
+	startIdx := (page - 1) * usersPerPage
+	endIdx := startIdx + usersPerPage
+	if endIdx > totalUsers {
+		endIdx = totalUsers
+	}
+
+	// Get paginated users
+	paginatedUsers := _users[startIdx:endIdx]
+
 	var deleteButton, newKeyButton string
 	users := ""
-	for _, u := range _users {
+	for _, u := range paginatedUsers {
 		if user.Admin || u.Email == email {
 			deleteButton = fmt.Sprintf(`<button class="button is-danger is-outlined delete-user-btn" data-email="%s">Delete</button>`, u.Email)
 			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined generate-key-btn" data-email="%s">New API Key</button>`, u.Email)
@@ -44,8 +70,82 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated, deleteButton, newKeyButton)
 	}
-	tempDiv := fmt.Sprintf(views.ViewUsersSection, users)
+
+	// Build pagination controls
+	paginationHTML := s.buildPaginationControls(page, totalPages)
+
+	tempDiv := fmt.Sprintf(views.ViewUsersSection, users, paginationHTML)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
+}
+
+func (s *Server) buildPaginationControls(currentPage, totalPages int) string {
+	if totalPages <= 1 {
+		return ""
+	}
+
+	var prevBtn, nextBtn string
+	pageItems := ""
+
+	// Previous button
+	if currentPage > 1 {
+		prevBtn = fmt.Sprintf(views.PaginationPrevious, "", currentPage-1)
+	} else {
+		prevBtn = fmt.Sprintf(views.PaginationPrevious, "is-disabled", currentPage)
+	}
+
+	// Page numbers
+	const maxPageButtons = 7
+	var startPage, endPage int
+
+	if totalPages <= maxPageButtons {
+		startPage = 1
+		endPage = totalPages
+	} else {
+		startPage = currentPage - 3
+		endPage = currentPage + 3
+		if startPage < 1 {
+			startPage = 1
+			endPage = maxPageButtons
+		}
+		if endPage > totalPages {
+			endPage = totalPages
+			startPage = totalPages - maxPageButtons + 1
+		}
+	}
+
+	// Add ellipsis at start if needed
+	if startPage > 1 {
+		pageItems += fmt.Sprintf(views.PaginationItem, "", 1, 1)
+		if startPage > 2 {
+			pageItems += views.PaginationEllipsis
+		}
+	}
+
+	// Add page numbers
+	for p := startPage; p <= endPage; p++ {
+		activeClass := ""
+		if p == currentPage {
+			activeClass = "is-current"
+		}
+		pageItems += fmt.Sprintf(views.PaginationItem, activeClass, p, p)
+	}
+
+	// Add ellipsis at end if needed
+	if endPage < totalPages {
+		if endPage < totalPages-1 {
+			pageItems += views.PaginationEllipsis
+		}
+		pageItems += fmt.Sprintf(views.PaginationItem, "", totalPages, totalPages)
+	}
+
+	// Next button
+	if currentPage < totalPages {
+		nextBtn = fmt.Sprintf(views.PaginationNext, "", currentPage+1)
+	} else {
+		nextBtn = fmt.Sprintf(views.PaginationNext, "is-disabled", currentPage)
+	}
+
+	return fmt.Sprintf(views.PaginationControls, prevBtn, pageItems, nextBtn)
 }
 
 func (S *Server) CreateUserViewHandler(w http.ResponseWriter, r *http.Request) {

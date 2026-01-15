@@ -11,7 +11,6 @@ var BaseView string = `<!DOCTYPE html>
     <link rel="stylesheet" href="/static/s.css">
     <script src="/static/htmx.min.js"></script>
     <script src="/static/echarts.min.js"></script>
-    <script src="/static/js/functions.js"></script>
 </head>
 
 <body>
