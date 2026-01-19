@@ -854,67 +854,91 @@ func uniqueStrings(input []string) []string {
 
 func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "api/v1/search")
-	request, err := http.NewRequest("GET", thisUrl, nil)
-	if err != nil {
-		fmt.Println("URLScanHelper: request error", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
-	}
+	request, _ := http.NewRequest("GET", thisUrl, nil)
 	query := request.URL.Query()
 	query.Set("q", req.Value)
-	query.Set("size", "100")
-	query.Set("datasource", "scans")
+	query.Set("size", "10")
 	request.URL.RawQuery = query.Encode()
+
 	resp := ep.Do(request)
 	if len(resp) == 0 {
-		fmt.Println("URLScanHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	out, err := json.Marshal(req)
-	if err != nil {
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
+
+	out, _ := json.Marshal(req)
+	resch <- ResponseItem{ID: req.TransactionID, Vendor: req.To, Data: out, Time: time.Now()}
+
+	var response vendors.URLScanSearchResponse
+	if err := json.Unmarshal(resp, &response); err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad response: %v", err))
 	}
 
-	resItem := ResponseItem{
-		ID:     req.TransactionID,
-		Vendor: req.To,
-		Data:   out,
-		Time:   time.Now(),
-	}
-	mergedData, err := MergeJSONData(resItem.Data, resp)
-	if err != nil {
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
-	}
-	resItem.Data = mergedData
-	resch <- resItem
-	var response vendors.URLScanSearchResponse
-	err = json.Unmarshal(resp, &response)
-	if err != nil {
-		fmt.Println("URLScanHelper: bad vendor response", err)
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
-	}
 	if len(response.Results) == 0 {
-		fmt.Println("URLScanHelper: no hits found")
 		return CreateAndWriteSummarizedEvent(req, false, "no hits found")
 	}
-	info := fmt.Sprintf("found %d results for value", len(response.Results))
-	if len(response.Results) > 0 && response.Results[0].Result != "" {
-		info += fmt.Sprintf(", first result: %s", response.Results[0].Result)
+
+	res := response.Results[0]
+	rawScore := 0
+
+	// 1. Try verdict score first (mapped from URLScanSearchVerdicts)
+	if res.Verdicts != nil {
+		rawScore = res.Verdicts.Score
 	}
+
+	// 2. Secondary checks if score is low or missing
+	if rawScore < 20 {
+		if res.Page != nil {
+			// Reputation dampener for high-rank domains
+			if res.Page.UmbrellaRank > 0 && res.Page.UmbrellaRank < 100000 {
+				rawScore = 0
+			}
+
+			// Age check (requires adding ApexDomainAgeDays to URLScanSearchPage)
+			if res.Page.ApexDomainAgeDays > 0 && res.Page.ApexDomainAgeDays < 30 {
+				rawScore = 70
+			}
+		}
+
+		// Targeted tag check (requires adding Tags []string to URLScanSearchTask)
+		// if res.Task != nil {
+		// 	for _, tag := range res.Task.Tags {
+		// 		t := strings.ToLower(tag)
+		// 		if t == "malicious" || t == "phishing" || t == "malware" {
+		// 			rawScore = 100
+		// 			break
+		// 		}
+		// 	}
+		// }
+	}
+
+	// 3. Normalize and map to ThreatLevelID
+	threatID := GetThreatLevelID("urlscan", rawScore, WeightURLScan)
+
+	bg := "has-background-primary-dark"
+	if threatID >= ThreatLevelHigh {
+		bg = "has-background-danger"
+	} else if threatID >= ThreatLevelLow {
+		bg = "has-background-warning"
+	}
+
+	info := fmt.Sprintf("found %d results. Top Result: %s (Rank: %d)",
+		len(response.Results), res.Page.Domain, res.Page.UmbrellaRank)
 
 	sum := SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: "has-background-warning",
-		Info:       info,
-		From:       req.To,
-		Value:      req.Value,
-		ID:         "",
-		Link:       req.TransactionID,
-		Matched:    true,
-		Type:       req.Type,
-		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		Timestamp:     time.Now(),
+		Background:    bg,
+		Info:          truncateString(info, 150),
+		From:          req.To,
+		Value:         req.Value,
+		ID:            res.ID,
+		Link:          req.TransactionID,
+		Matched:       rawScore > 0,
+		ThreatLevelID: threatID,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("https://urlscan.io/result/%s/", res.ID),
 	}
-	return json.Marshal(sum)
 
+	return json.Marshal(sum)
 }
 
 func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {

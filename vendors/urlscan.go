@@ -580,23 +580,24 @@ type URLScanSearchLinks struct {
 }
 
 type URLScanSearchPage struct {
-	Country      string    `json:"country,omitempty"`
-	Server       string    `json:"server,omitempty"`
-	IP           string    `json:"ip,omitempty"`
-	MimeType     string    `json:"mimeType,omitempty"`
-	Title        string    `json:"title,omitempty"`
-	URL          string    `json:"url,omitempty"`
-	TLSValidDays int       `json:"tlsValidDays,omitempty"`
-	TLSAgeDays   int       `json:"tlsAgeDays,omitempty"`
-	PTR          string    `json:"ptr,omitempty"`
-	TLSValidFrom time.Time `json:"tlsValidFrom,omitempty"`
-	Domain       string    `json:"domain,omitempty"`
-	UmbrellaRank int       `json:"umbrellaRank,omitempty"`
-	ApexDomain   string    `json:"apexDomain,omitempty"`
-	ASNName      string    `json:"asnname,omitempty"`
-	ASN          string    `json:"asn,omitempty"`
-	TLSIssuer    string    `json:"tlsIssuer,omitempty"`
-	Status       string    `json:"status,omitempty"`
+	Country           string    `json:"country,omitempty"`
+	Server            string    `json:"server,omitempty"`
+	IP                string    `json:"ip,omitempty"`
+	MimeType          string    `json:"mimeType,omitempty"`
+	Title             string    `json:"title,omitempty"`
+	URL               string    `json:"url,omitempty"`
+	TLSValidDays      int       `json:"tlsValidDays,omitempty"`
+	TLSAgeDays        int       `json:"tlsAgeDays,omitempty"`
+	PTR               string    `json:"ptr,omitempty"`
+	TLSValidFrom      time.Time `json:"tlsValidFrom,omitempty"`
+	Domain            string    `json:"domain,omitempty"`
+	UmbrellaRank      int       `json:"umbrellaRank,omitempty"`
+	ApexDomain        string    `json:"apexDomain,omitempty"`
+	ApexDomainAgeDays int       `json:"apexDomainAgeDays,omitempty"`
+	ASNName           string    `json:"asnname,omitempty"`
+	ASN               string    `json:"asn,omitempty"`
+	TLSIssuer         string    `json:"tlsIssuer,omitempty"`
+	Status            string    `json:"status,omitempty"`
 }
 
 type URLScanSearchText struct {
