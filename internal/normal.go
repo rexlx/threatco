@@ -6,7 +6,6 @@ import (
 	"sync"
 )
 
-// Threat Level Constants (The "Normalized" Output)
 const (
 	ThreatLevelUnknown  = 0
 	ThreatLevelSafe     = 1
@@ -17,11 +16,15 @@ const (
 )
 
 const (
-	WeightDefault    = 1.0
-	WeightMandiant   = 1.2
-	WeightVirusTotal = 0.8
-	WeightCloudflare = 1.0
-	WeightMISP       = 1.0
+	WeightDefault         = 1.0
+	WeightMandiant        = 1.2
+	WeightVirusTotal      = 0.8
+	WeightCloudflare      = 1.0
+	WeightMISP            = 1.0
+	WeightCrowdstrike     = 1.1
+	WeightURLScan         = 0.9
+	WeightDeepfry         = 0.5
+	WeightDomainToolsIris = 1.0
 )
 
 // NormalizerFunc defines the signature for logic that converts a vendor-specific
@@ -37,15 +40,13 @@ var (
 
 // init registers the default strategies for your known vendors.
 func init() {
-	// Cloudflare: RiskScore is typically 0-100
+	// RiskScore is 0-100
 	RegisterNormalizer("cloudflare", NormalizeStandardScale)
-
-	// Mandiant: ThreatScore is typically 0-100
 	RegisterNormalizer("mandiant", NormalizeStandardScale)
-
-	// CrowdStrike: Assuming you extract a severity 1-100
 	RegisterNormalizer("crowdstrike", NormalizeStandardScale)
+	RegisterNormalizer("misp", NormalizeStandardScale)
 
+	// virustotal: Malicious count mapping
 	RegisterNormalizer("virustotal", func(maliciousCount int) int {
 		switch {
 		case maliciousCount == 0:
@@ -92,9 +93,12 @@ func GetThreatLevelID(vendor string, rawScore int, weight float64) int {
 		// Default fallback: Assume the number is already 0-100
 		standardScore = NormalizeStandardScale(rawScore)
 	}
+	// Apply weight
+	weightedScore := int(float64(standardScore) * weight)
+	finalScore := NormalizeStandardScale(weightedScore)
 
 	// 2. Map the standard 0-100 score to your specific ThreatLevelID buckets
-	return MapScoreToID(standardScore)
+	return MapScoreToID(finalScore)
 }
 
 // RegisterNormalizer allows you to add or overwrite vendor logic at runtime/startup.

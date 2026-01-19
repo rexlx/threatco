@@ -358,6 +358,7 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 		fmt.Printf("CrowdstrikeHelper: unsupported type %s, TransactionID: %s", req.Type, req.TransactionID)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unsupported type: %s", req.Type))
 	}
+	rawScore := 0
 	filter := vendors.CSFalconFilterBuilder(thisType, req.Value)
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "intel/combined/indicators/v1")
 	indicatorUrl := fmt.Sprintf("%s?filter=%s", thisUrl, url.QueryEscape(filter))
@@ -404,20 +405,37 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 	}
 	info := `found %d reports (%v) for value with %v labels`
 	resc := response.Resources[0]
+	if len(resc.ThreatTypes) > 0 {
+		rawScore = 50
+	}
+	for _, label := range resc.Labels {
+		if strings.Contains(strings.ToLower(label.Name), "malware") || strings.Contains(strings.ToLower(label.Name), "ransomware") || strings.Contains(strings.ToLower(label.Name), "malicious") {
+			rawScore = 90
+		}
+		if rawScore < 50 && (strings.Contains(strings.ToLower(label.Name), "suspicious") || strings.Contains(strings.ToLower(label.Name), "phishing")) {
+			rawScore = 50
+		}
+	}
+	if rawScore == 0 && len(resc.Reports) > 0 {
+		rawScore = 25
+	}
 	reports := strings.Join(resc.Reports, ", ")
 	if len(reports) > 100 {
 		reports = reports[:100] + "..."
 	}
+	threatID := GetThreatLevelID("crowdstrike", rawScore, WeightCrowdstrike)
 	info = fmt.Sprintf(info, len(resc.Reports), reports, len(resc.Labels))
 	// s.Log.Printf("CrowdstrikeHelper: found %d reports (%v) for value with %v labels", len(resc.Reports), reports, len(resc.Labels))
 	event := SummarizedEvent{
-		AttrCount:  len(resc.Labels),
-		Timestamp:  time.Now(),
-		Background: "has-background-warning",
-		Info:       info,
-		From:       req.To,
-		Value:      req.Value,
-		Link:       req.TransactionID,
+		AttrCount:     len(resc.Labels),
+		Timestamp:     time.Now(),
+		Background:    "has-background-warning",
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		ThreatLevelID: threatID,
+		Matched:       len(resc.Reports) > 0,
 	}
 	return json.Marshal(event)
 
