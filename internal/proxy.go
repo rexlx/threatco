@@ -89,7 +89,7 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 		}
 		return resp, nil
 	}
-	resp, err = ParseCorrectMispResponse(req, response)
+	resp, err = NewParseCorrectMispResponse(req, response)
 	if err != nil {
 		badNews := SummarizedEvent{
 			Timestamp:     time.Now(),
@@ -313,6 +313,8 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 	stats := response.Data.Attributes.LastAnalysisStats
 	matched := stats.Malicious > 0 || stats.Suspicious > 0
 
+	maliciousCount := stats.Malicious
+	threatID := GetThreatLevelID("virustotal", maliciousCount, WeightVirusTotal)
 	// Default to dark/neutral for safe
 	background := "has-background-primary-dark"
 	if stats.Malicious > 0 {
@@ -323,13 +325,14 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 
 	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, stats.Harmless, stats.Malicious, stats.Suspicious, stats.Undetected, stats.Timeout)
 	sum := SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: background,
-		Info:       info,
-		From:       req.To,
-		Value:      displayValue,
-		Link:       req.TransactionID,
-		Matched:    matched, // Use the calculated boolean
+		Timestamp:     time.Now(),
+		Background:    background,
+		ThreatLevelID: threatID,
+		Info:          info,
+		From:          req.To,
+		Value:         displayValue,
+		Link:          req.TransactionID,
+		Matched:       matched, // Use the calculated boolean
 	}
 	return json.Marshal(sum)
 }

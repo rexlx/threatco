@@ -62,6 +62,7 @@ var SupportedServices = []ServiceType{
 }
 
 type ServiceType struct {
+	Weight        int        `json:"weight"`
 	UploadService bool       `json:"upload_service"`
 	Expires       int        `json:"expires"`
 	Secret        string     `json:"secret"`

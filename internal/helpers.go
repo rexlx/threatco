@@ -373,7 +373,62 @@ func (s *Server) SimpleServiceCheck() error {
 	return nil
 }
 
+func NewParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
+	maxScore := 0
+	totalEvents := 0
+	info := `Results: `
+	bg := "has-background-primary-dark"
+
+	var attrs int
+	var mispID string
+
+	for _, r := range response.Response {
+		// 1. Calculate the raw 0-100 score
+		normalizedScore := ScoreMispThreat(r.Event.ThreatLevelID)
+
+		// 2. Track the highest score found (Worst Case Strategy)
+		if normalizedScore > maxScore {
+			maxScore = normalizedScore
+		}
+
+		info += fmt.Sprintf("ID %s (Score: %d); ", r.Event.ID, normalizedScore)
+		attrs += len(r.Event.Attribute)
+
+		// 3. Handle ID label cleanly
+		if totalEvents == 0 {
+			mispID = r.Event.ID
+		} else {
+			mispID = "multiple"
+		}
+		totalEvents++
+	}
+
+	if maxScore > 0 {
+		bg = "has-background-warning"
+	}
+	tid := GetThreatLevelID("misp", maxScore, WeightMISP)
+	e := SummarizedEvent{
+		Matched:    maxScore > 0,
+		Timestamp:  time.Now(),
+		Info:       truncateString(info, 150),
+		Background: bg,
+		From:       req.To,
+		ID:         mispID,
+		AttrCount:  attrs,
+
+		// 4. FIX: Map the 0-100 score to your DB ID (1-5)
+		ThreatLevelID: tid,
+
+		Value:   req.Value,
+		Link:    req.TransactionID,
+		Type:    req.Type,
+		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+	}
+	return json.Marshal(e)
+}
+
 func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
+	// maxScore := 0
 	if len(response.Response) != 0 {
 		if len(response.Response) > 1 {
 			info := "received multiple hits: "
