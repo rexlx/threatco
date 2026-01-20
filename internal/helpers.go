@@ -256,17 +256,18 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				attrs = 0
 			}
 			info := "received multiple hits: "
-			var tLevel int
+			var maxScore int
 			for _, r := range response {
-				t, err := strconv.Atoi(r.ThreatLevelID)
-				if err != nil {
-					tLevel += 0
-				} else {
-					tLevel += t
+				// Use ScoreMispThreat to convert MISP's 1-4 scale to 0-100
+				normalizedScore := ScoreMispThreat(r.ThreatLevelID)
+				if normalizedScore > maxScore {
+					maxScore = normalizedScore
 				}
 				info += fmt.Sprintf("ID %s: %s; ", r.ID, r.Info)
 			}
 			info = truncateString(info, 150)
+			// Map the 0-100 score to the 1-5 ThreatLevelID
+			tid := GetThreatLevelID("misp", maxScore, WeightMISP)
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
@@ -275,7 +276,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				From:          req.To,
 				ID:            "multiple hits",
 				AttrCount:     attrs,
-				ThreatLevelID: tLevel,
+				ThreatLevelID: tid,
 				Value:         req.Value,
 				Link:          req.TransactionID,
 				Type:          req.Type,
@@ -288,10 +289,9 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				fmt.Println("got bad attr data from misp...")
 				attrs = 0
 			}
-			tlid, err := strconv.Atoi(response[0].ThreatLevelID)
-			if err != nil {
-				tlid = 0
-			}
+			// Use ScoreMispThreat to convert MISP's 1-4 scale to 0-100, then map to 1-5
+			normalizedScore := ScoreMispThreat(response[0].ThreatLevelID)
+			tid := GetThreatLevelID("misp", normalizedScore, WeightMISP)
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
@@ -299,7 +299,7 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				From:          req.To,
 				ID:            response[0].ID,
 				AttrCount:     attrs,
-				ThreatLevelID: tlid,
+				ThreatLevelID: tid,
 				Value:         req.Value,
 				Info:          response[0].Info,
 				Link:          req.TransactionID,
