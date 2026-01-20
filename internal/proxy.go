@@ -318,7 +318,7 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 	// Default to dark/neutral for safe
 	background := "has-background-primary-dark"
 	if stats.Malicious > 0 {
-		background = "has-background-danger"
+		background = "has-background-warning-dark"
 	} else if stats.Suspicious > 0 {
 		background = "has-background-warning"
 	}
@@ -819,7 +819,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 	// Determine background color based on risk
 	bg := "has-background-info" // Default (blue)
 	if maxRisk >= 70 {
-		bg = "has-background-danger" // High risk (red)
+		bg = "has-background-warning-dark" // High risk (red)
 	} else if maxRisk > 0 {
 		bg = "has-background-warning" // Moderate risk (yellow)
 	}
@@ -916,7 +916,7 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 
 	bg := "has-background-primary-dark"
 	if threatID >= ThreatLevelHigh {
-		bg = "has-background-danger"
+		bg = "has-background-warning-dark"
 	} else if threatID >= ThreatLevelLow {
 		bg = "has-background-warning"
 	}

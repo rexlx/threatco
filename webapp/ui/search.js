@@ -184,7 +184,8 @@ export class SearchController {
         }
 
         if (!isHistoryView) {
-            resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
+            // resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
+            resultsArray.sort((a, b) => (b.threat_level_id || 0) - (a.threat_level_id || 0));
         }
 
         for (const result of resultsArray) {
