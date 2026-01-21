@@ -427,6 +427,31 @@ func NewParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRes
 	return json.Marshal(e)
 }
 
+func ExtractThreatLevelID(rawData []byte) (int, error) {
+	// Unmarshal into a slice of maps since the objects are non-uniform
+	var data []map[string]interface{}
+	if err := json.Unmarshal(rawData, &data); err != nil {
+		return 0, err
+	}
+
+	for _, obj := range data {
+		// Check if the key exists in this specific object
+		if val, ok := obj["threat_level_id"]; ok {
+			// JSON numbers are unmarshaled as float64 by default
+			if threatLevel, ok := val.(string); ok {
+				tid, err := strconv.Atoi(threatLevel)
+				if err != nil {
+					fmt.Println("ExtractThreatLevelID error...", val, err)
+					return 0, err
+				}
+				return tid, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("threat_level_id not found")
+}
+
 func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
 	// maxScore := 0
 	if len(response.Response) != 0 {

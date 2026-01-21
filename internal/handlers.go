@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1805,7 +1806,42 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 		filtered = matched
 	}
 
-	return filtered
+	// 4. sort
+	type sortableItem struct {
+		item        ResponseItem
+		threatLevel int
+	}
+
+	temp := make([]sortableItem, len(filtered))
+	for i, v := range filtered {
+		tid, err := ExtractThreatLevelID(v.Data)
+		if err != nil {
+			tid = 0
+		}
+		temp[i] = sortableItem{
+			item:        v,
+			threatLevel: tid,
+		}
+	}
+	slices.SortFunc(temp, func(a, b sortableItem) int {
+		// First: Compare Threat Level (Descending: b - a)
+		if a.threatLevel != b.threatLevel {
+			return b.threatLevel - a.threatLevel
+		}
+		// Second: Compare Time to prevent jitter (Descending: b after a)
+		if b.item.Time.After(a.item.Time) {
+			return 1
+		}
+		if b.item.Time.Before(a.item.Time) {
+			return -1
+		}
+		return 0
+	})
+	finalResults := make([]ResponseItem, len(temp))
+	for i, v := range temp {
+		finalResults[i] = v.item
+	}
+	return finalResults
 }
 
 // containsMatch recursively checks if "matched": true exists in the JSON data.
