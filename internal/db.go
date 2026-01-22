@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.etcd.io/bbolt"
@@ -38,6 +39,9 @@ type Database interface {
 	UpdateCase(c Case) error
 	DeleteCase(id string) error
 	SearchCases(query string) ([]Case, error)
+	RecordSearchBatch(values []string, email string) error
+	GetSearchHistory(value string) (SearchRecord, error)
+	CleanSearchHistory(days int) error
 }
 
 type BboltDB struct {
@@ -59,6 +63,13 @@ type Case struct {
 type Comment struct {
 	User      string    `json:"user"`
 	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type SearchRecord struct {
+	ID        string    `json:"id"`
+	Value     string    `json:"value"`
+	Emails    []string  `json:"emails"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -117,6 +128,21 @@ func (db *BboltDB) UpdateCase(c Case) error {
 
 func (db *BboltDB) DeleteCase(id string) error {
 	fmt.Println("not implemented: BboltDB DeleteCase")
+	return nil
+}
+
+func (db *BboltDB) RecordSearch(value string, email string) error {
+	fmt.Println("not implemented: BboltDB RecordSearch")
+	return nil
+}
+
+func (db *BboltDB) GetSearchHistory(value string) (SearchRecord, error) {
+	fmt.Println("not implemented: BboltDB GetSearchHistory")
+	return SearchRecord{}, nil
+}
+
+func (db *BboltDB) CleanSearchHistory(days int) error {
+	fmt.Println("not implemented: BboltDB CleanSearchHistory")
 	return nil
 }
 
@@ -395,7 +421,14 @@ func (db *PostgresDB) createTables() error {
             status TEXT,
             iocs JSONB,
             comments JSONB
-        );`)
+        );
+		CREATE TABLE IF NOT EXISTS search_history (
+			id TEXT PRIMARY KEY,
+			value TEXT UNIQUE,
+			emails JSONB DEFAULT '[]'::jsonb,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_search_history_value ON search_history(value);`)
 	if err != nil {
 		return err
 	}
@@ -789,4 +822,45 @@ func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
 		cases = append(cases, c)
 	}
 	return cases, nil
+}
+
+func (db *PostgresDB) RecordSearchBatch(values []string, email string) error {
+	batch := &pgx.Batch{}
+	sql := `
+		INSERT INTO search_history (id, value, emails, created_at)
+		VALUES ($1, $2, jsonb_build_array($3::text), NOW())
+		ON CONFLICT (value) DO UPDATE SET
+			emails = (
+				SELECT jsonb_agg(DISTINCT e)
+				FROM jsonb_array_elements_text(search_history.emails || EXCLUDED.emails) AS e
+			),
+			created_at = NOW();`
+
+	for _, val := range values {
+		batch.Queue(sql, uuid.New().String(), val, email)
+	}
+
+	results := db.Pool.SendBatch(context.Background(), batch)
+	return results.Close()
+}
+
+// Implement a no-op for BboltDB to satisfy the interface if necessary
+func (db *BboltDB) RecordSearchBatch(values []string, email string) error { return nil }
+
+func (db *PostgresDB) GetSearchHistory(value string) (SearchRecord, error) {
+	var sr SearchRecord
+	// We query the search_history table created earlier to see who else
+	// looked for this specific IP, domain, or hash.
+	query := `SELECT id, value, emails, created_at FROM search_history WHERE value = $1`
+
+	err := db.Pool.QueryRow(context.Background(), query, value).Scan(
+		&sr.ID, &sr.Value, &sr.Emails, &sr.CreatedAt,
+	)
+	return sr, err
+}
+
+func (db *PostgresDB) CleanSearchHistory(days int) error {
+	_, err := db.Pool.Exec(context.Background(),
+		"DELETE FROM search_history WHERE created_at < NOW() - ($1 || ' days')::interval", days)
+	return err
 }

@@ -461,6 +461,11 @@ func (s *Server) ProcessTransientResponses() {
 				}
 			}
 			s.Memory.Unlock()
+			go func() {
+				if err := s.DB.CleanSearchHistory(60); err != nil { //
+					s.Log.Printf("ERROR: search history cleanup failed: %v", err) //
+				}
+			}()
 		}
 	}
 }

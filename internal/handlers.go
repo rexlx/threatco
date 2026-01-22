@@ -78,37 +78,54 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	first := true
 	ignoreList := []string{"nullferatu.com"}
 	var mu sync.Mutex
-	// defer s.addStat("parser_requests", 1)
 	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
+
 	var pr ParserRequest
-	err := json.NewDecoder(r.Body).Decode(&pr)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	defer func(start time.Time, req ParserRequest) {
-		reqOut, err := json.Marshal(req)
-		if err != nil {
-			s.Log.Println("ProxyHandler error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		reqOut, _ := json.Marshal(req)
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
 
+	email, ok := r.Context().Value("email").(string)
+	logIt := !ok
 	out := cx.ExtractAll(pr.Blob)
+
+	// Deduplicate unique values for efficient batch history recording
+	uniqueValues := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, results := range out {
+		for _, res := range results {
+			if _, exists := seen[res.Value]; !exists {
+				seen[res.Value] = struct{}{}
+				uniqueValues = append(uniqueValues, res.Value)
+			}
+		}
+	}
+
+	// Record all search history in a single batch operation
+	if email != "" && len(uniqueValues) > 0 {
+		go func(vals []string, user string) {
+			if err := s.DB.RecordSearchBatch(vals, user); err != nil {
+				s.Log.Printf("Batch search history update failed: %v", err)
+			}
+		}(uniqueValues, email)
+	}
+
 	promptRequest := PromptRequest{
 		TransactinID: uuid.New().String(),
 		MatchList:    make([]interface{}, 0),
 		Mu:           &sync.RWMutex{},
 	}
+
 	for k, v := range out {
 		for _, svc := range s.Details.SupportedServices {
 			for _, t := range svc.Type {
 				if t == k && len(v) > 0 {
-					// if svc.RateLimited {
-					// 	continue
-					// }
 					for _, value := range v {
 						var proxyReq ProxyRequest
 						if len(svc.RouteMap) > 0 {
@@ -126,59 +143,45 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 						proxyReq.From = "api parser"
 						uid := uuid.New().String()
 						proxyReq.TransactionID = uid
+
 						wg.Add(1)
-						go func(name string, id string, first *bool, proxyReq ProxyRequest) {
+						go func(name string, id string, firstPtr *bool, req ProxyRequest) {
 							defer wg.Done()
 							op, ok := s.ProxyOperators[name]
-							if !ok {
-								fmt.Println("no operator for service", name)
+							ep, ok2 := s.Targets[name]
+							if !ok || !ok2 {
 								return
 							}
-							ep, ok := s.Targets[name]
-							if !ok {
-								fmt.Println("no endpoint for service", name)
+
+							out, err := op(s.RespCh, *ep, req)
+							if err != nil || len(out) == 0 {
 								return
 							}
-							out, err := op(s.RespCh, *ep, proxyReq)
-							if err != nil {
-								fmt.Println("error", err)
-								// continue
-							}
+
 							mu.Lock()
-							if len(out) == 0 {
-								return
-							}
-							if !*first {
+							if !*firstPtr {
 								allBytes = append(allBytes, ',')
 							}
 							allBytes = append(allBytes, out...)
-							*first = false
+							*firstPtr = false
 							mu.Unlock()
+
+							// StoreResponse is removed; handled by ProcessTransientResponses via RespCh
 							s.RespCh <- ResponseItem{
 								ID:     id,
 								Vendor: name,
 								Data:   out,
 								Time:   time.Now(),
 							}
-							go s.DB.StoreResponse(false, id, out, proxyReq.To)
+
 							var se SummarizedEvent
-							err = json.Unmarshal(out, &se)
-							if err != nil {
-								fmt.Println("error unmarshaling response", err)
-								return
-							}
-							if se.Matched {
-								var tmp struct {
+							if err := json.Unmarshal(out, &se); err == nil && se.Matched {
+								promptRequest.Mu.Lock()
+								promptRequest.MatchList = append(promptRequest.MatchList, struct {
 									Info  string `json:"info"`
 									Value string `json:"value"`
 									Score int    `json:"score"`
-								}
-								tmp.Info = se.Info
-								tmp.Value = se.Value
-								tmp.Score = se.ThreatLevelID
-								// promptRequest.Mu.Lock()
-								promptRequest.Mu.Lock()
-								promptRequest.MatchList = append(promptRequest.MatchList, tmp)
+								}{se.Info, se.Value, se.ThreatLevelID})
 								promptRequest.Mu.Unlock()
 							}
 						}(svc.Kind, uid, &first, proxyReq)
@@ -187,16 +190,13 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	wg.Wait()
 	allBytes = append(allBytes, ']')
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(allBytes)
-	var logIt bool
+
 	fullPrompt, _ := promptRequest.BuildJSONPrompt(optional.LlmToolsBasicPrompt)
-	email, ok := r.Context().Value("email").(string)
-	if !ok {
-		logIt = true
-	}
 	s.RespCh <- ResponseItem{
 		Log:    logIt,
 		Email:  email,
@@ -833,61 +833,74 @@ func (s *Server) GenerateAPIKeyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	// var written int
 	var req ProxyRequest
 	defer s.addStat("proxy_requests", 1)
 	start := time.Now()
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		s.Log.Println("ProxyHandler decoder error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	uid := uuid.New().String()
 	req.TransactionID = uid
 	req.FQDN = s.Details.FQDN
+
 	defer func(start time.Time, req ProxyRequest) {
 		reqOut, err := json.Marshal(req)
 		if err != nil {
-			s.Log.Println("ProxyHandler error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			s.Log.Println("ProxyHandler marshal error", err)
 			return
 		}
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, req)
-	// s.Log.Println("ProxyHandler", req)
+
 	s.Memory.RLock()
-	defer s.Memory.RUnlock()
 	op, ok := s.ProxyOperators[req.To]
-	if !ok {
-		s.Log.Printf("no proxy operator for service %s, skipping", req.To)
-		http.Error(w, fmt.Sprintf("no proxy operator for service %s", req.To), http.StatusBadRequest)
+	ep, ok2 := s.Targets[req.To]
+	s.Memory.RUnlock()
+
+	if !ok || !ok2 {
+		msg := fmt.Sprintf("service %s not found or has no operator", req.To)
+		s.Log.Println(msg)
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	ep, ok := s.Targets[req.To]
-	if !ok {
-		s.Log.Printf("no endpoint for service %s, skipping", req.To)
-		http.Error(w, fmt.Sprintf("no endpoint for service %s", req.To), http.StatusBadRequest)
-		return
-	}
+
+	// Execute the vendor-specific proxy operator
 	resp, err := op(s.RespCh, *ep, req)
 	if err != nil {
-		r, err := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
-		if err != nil {
-			s.Log.Println("bigtime error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		// cant remember why we dont call storeresponse here
-		w.Write(r)
+		// Create a failure event to return to the UI
+		failResp, _ := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
+		w.Write(failResp)
 		return
 	}
+
+	// Centralize search history recording using the new batch method
+	email, _ := r.Context().Value("email").(string)
+	if email != "" && req.Value != "" {
+		go func(val string, user string) {
+			// Even for a single search, using the batch interface ensures
+			// consistent logic for appending emails to the history table.
+			if err := s.DB.RecordSearchBatch([]string{val}, user); err != nil {
+				s.Log.Printf("Failed to record search history: %v", err)
+			}
+		}(req.Value, email)
+	}
+
+	// Send to RespCh for centralized Caching, Merging, and StoreResponse
+	// This allows you to avoid calling s.DB.StoreResponse directly here.
 	s.RespCh <- ResponseItem{
 		ID:     uid,
 		Vendor: req.To,
 		Data:   resp,
 		Time:   time.Now(),
+		Email:  email, // Pass email if you want notification logic to trigger
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
 }
 
@@ -2052,95 +2065,41 @@ type previousResponseQuery struct {
 }
 
 func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Request) {
-	var matches []SummarizedEvent
-	defer func(start time.Time) {
-		s.Log.Println("GetPreviousResponsesHandler took", time.Since(start))
-	}(time.Now())
-	s.Memory.RLock()
-	defer s.Memory.RUnlock()
-	var prq previousResponseQuery
-	fmt.Println("GetPreviousResponsesHandler called")
-	err := json.NewDecoder(r.Body).Decode(&prq)
-	if err != nil {
+	var prq struct {
+		Value string `json:"value"`
+	}
+
+	// Decode the incoming request from the frontend
+	if err := json.NewDecoder(r.Body).Decode(&prq); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if prq.Value == "" {
-		http.Error(w, "missing 'value' field", http.StatusBadRequest)
-		return
-	}
-	fmt.Println("GetPreviousResponsesHandler value", prq.Value)
-	// Get all responses from the last 144 hours (6 days)
-	responses, err := s.DB.GetResponses(time.Now().Add(-144 * time.Hour))
+
+	// Query the dedicated history table instead of scanning response logs
+	history, err := s.DB.GetSearchHistory(prq.Value)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if len(responses) == 0 {
-		s.Log.Println("GetPreviousResponsesHandler no responses in cache")
-		fmt.Fprint(w, "No responses in cache")
+		// If no history exists, return an empty array rather than a 404/500
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
 		return
 	}
 
-	for _, v := range responses {
-
-		var outerSlice []json.RawMessage
-		err := json.Unmarshal(v.Data, &outerSlice)
-		if err != nil {
-			s.Log.Printf("error unmarshaling outer slice for ID %s: %v", v.ID, err)
-			continue
-		}
-
-		if len(outerSlice) == 0 {
-			s.Log.Printf("outer response data slice is empty for ID %s", v.ID)
-			continue
-		}
-
-		var innerSlice []json.RawMessage
-		err = json.Unmarshal(outerSlice[0], &innerSlice)
-		if err != nil {
-			s.Log.Printf("error unmarshaling inner slice for ID %s: %v", v.ID, err)
-			continue
-		}
-
-		if len(innerSlice) == 0 {
-			s.Log.Printf("inner response data slice is empty for ID %s", v.ID)
-			continue
-		}
-
-		var originalProxyRequest ProxyRequest
-		err = json.Unmarshal(innerSlice[0], &originalProxyRequest)
-		if err != nil {
-			s.Log.Printf("error unmarshaling ProxyRequest from inner slice for ID %s: %v", v.ID, err)
-			continue
-		}
-
-		s.Log.Println("GetPreviousResponsesHandler checking", originalProxyRequest.Value, "against", prq.Value)
-		if originalProxyRequest.Value == prq.Value {
-			matches = append(matches, SummarizedEvent{
-				Timestamp:  v.Time,
-				Matched:    true,
-				Error:      false,
-				Background: "has-background-warning",
-				From:       originalProxyRequest.Username,
-				ID:         v.ID,
-				AttrCount:  len(innerSlice),
-				Link:       v.ID,
-				Value:      originalProxyRequest.Value,
-				Info:       fmt.Sprintf("%v: Matched value %s in response ID %s", originalProxyRequest.Username, originalProxyRequest.Value, v.ID),
-			})
-		}
+	// Convert the history record into the SummarizedEvent format for the UI
+	matches := []SummarizedEvent{}
+	for _, email := range history.Emails {
+		matches = append(matches, SummarizedEvent{
+			Timestamp:  history.CreatedAt,
+			Background: "has-background-info-dark", // Distinguish past searches in UI
+			From:       "Historical Search",
+			Value:      history.Value,
+			Info:       fmt.Sprintf("User %s previously searched for this value.", email),
+			Matched:    true,
+		})
 	}
 
-	out, err := json.Marshal(matches)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	s.Log.Println("GetPreviousResponsesHandler matches", len(matches), "for value", prq.Value)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(out)
-}
+	json.NewEncoder(w).Encode(matches)
+} //
 
 type NottyRequest struct {
 	To      string    `json:"to"`

@@ -816,6 +816,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 		info = "Domain found but no risk detected"
 	}
 
+	tid := GetThreatLevelID("domaintoolsiris", maxRisk, WeightDomainToolsIris)
 	// Determine background color based on risk
 	bg := "has-background-info" // Default (blue)
 	if maxRisk >= 70 {
@@ -832,7 +833,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		AttrCount:     response.Response.ResultsCount,
-		ThreatLevelID: maxRisk,     // Use the actual risk score here
+		ThreatLevelID: tid,         // Use the actual risk score here
 		Matched:       maxRisk > 0, // Only flag as 'Matched' (alerting) if there is actual risk
 		Type:          req.Type,
 		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),

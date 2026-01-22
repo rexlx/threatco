@@ -46,6 +46,7 @@ func init() {
 	RegisterNormalizer("crowdstrike", NormalizeStandardScale)
 	RegisterNormalizer("misp", NormalizeStandardScale)
 	RegisterNormalizer("urlscan", NormalizeStandardScale)
+	RegisterNormalizer("domaintoolsiris", NormalizeStandardScale)
 
 	// virustotal: Malicious count mapping
 	RegisterNormalizer("virustotal", func(maliciousCount int) int {

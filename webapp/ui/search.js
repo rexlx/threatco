@@ -5,11 +5,8 @@ export class SearchController {
         this.container = document.getElementById(containerId);
         this.app = app;
         this.contextualizer = contextualizer;
-        this.isSearching = false; // Track search state
+        this.isSearching = false; 
         
-        // FIX: Attach the listener ONCE here.
-        // Since we use event delegation (this.container.addEventListener), 
-        // it will automatically work for buttons we add/remove later.
         this.attachFormListeners();
     }
 
@@ -53,11 +50,10 @@ export class SearchController {
     }
 
     async handleSearch() {
-        this.isSearching = true; // Set flag to prevent UI loop from overwriting loader
+        this.isSearching = true; 
         this.app.results = [];
         this.app.errors = [];
         
-        // Clear old search notifications
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
         
         const userSearchInput = document.getElementById('userSearch');
@@ -68,14 +64,12 @@ export class SearchController {
         const searchText = userSearchInput.value;
         const dontParse = document.getElementById('dontParseCheckbox').checked;
         
-        // Restored style to is-danger and max=100
         this.container.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-link' max='100'></progress>";
 
         try {
             if (dontParse) {
                 await this.processMatches(null, { value: searchText }, null, true);
             } else {
-                // UPDATED: Pass 'key' (the type) as the second argument to getMatches
                 const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({ 
                     type: key, 
                     matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))] 
@@ -96,7 +90,6 @@ export class SearchController {
 
                         if (svr.type.includes(matchPair.type)) {
                             const route = svr.route_map ? svr.route_map.find(r => r.type === matchPair.type)?.route : "";
-                            // We don't await here so they run in parallel
                             promises.push(this.processMatches(svr.kind, matchPair, route, false));
                         }
                     }
@@ -105,8 +98,6 @@ export class SearchController {
             }
         } finally {
             this.isSearching = false;
-            // Force render at the end to ensure we show "No results" if empty,
-            // or clean up the progress bar if results came in.
             this.renderResultCards(this.app.results);
         }
     }
@@ -166,7 +157,6 @@ export class SearchController {
     }
 
     renderResultCards(resultsArray, isHistoryView = false) {
-        // If searching and no results yet, DO NOT clear the container (keep the progress bar)
         if (this.isSearching && (!resultsArray || resultsArray.length === 0)) {
             return;
         }
@@ -184,7 +174,6 @@ export class SearchController {
         }
 
         if (!isHistoryView) {
-            // resultsArray.sort((a, b) => (b.matched || 0) - (a.matched || 0));
             resultsArray.sort((a, b) => (b.threat_level_id || 0) - (a.threat_level_id || 0));
         }
 
@@ -215,11 +204,21 @@ export class SearchController {
             historyButton.href = '#';
             historyButton.className = 'card-footer-item has-background-black has-text-info';
             historyButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>Past Searches</span></span>`;
+            
             historyButton.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const pastSearches = await this.app.fetchPastSearches(result.value);
-                alert(`Found ${pastSearches.length} past searches. See console.`);
-                console.log(pastSearches);
+                
+                if (!pastSearches || pastSearches.length === 0) {
+                    alert(`No past searches found for: ${result.value}`);
+                    return;
+                }
+
+                const historyReport = pastSearches
+                    .map(search => `• ${search.info}`)
+                    .join('\n');
+
+                alert(`Historical matches for ${result.value}:\n\n${historyReport}`);
             });
 
             const viewButton = document.createElement('a');
