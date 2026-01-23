@@ -66,6 +66,7 @@ type Server struct {
 	ID             string                   `json:"id"`
 	Details        Details                  `json:"details"`
 	Gauges         *prometheus.GaugeVec     `json:"-"`
+	ParserDuration *prometheus.HistogramVec `json:"-"`
 }
 
 type Details struct {
@@ -234,6 +235,16 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		},
 		[]string{"vendor_responses"},
 	)
+	svr.ParserDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "parser_handler_duration_ms",
+			Help:    "Duration of parse handler requests in milliseconds",
+			Buckets: []float64{100, 500, 1000, 2000, 5000, 10000},
+		},
+		[]string{"status"}, // Define at least one label
+	)
+
+	prometheus.MustRegister(svr.ParserDuration)
 
 	// Register it with the default registry
 	prometheus.MustRegister(svr.Gauges)

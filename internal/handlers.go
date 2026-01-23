@@ -87,6 +87,9 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer func(start time.Time, req ParserRequest) {
+		duration := time.Since(start).Seconds() * 1000
+		// Use .WithLabelValues() to satisfy the HistogramVec requirement
+		s.ParserDuration.WithLabelValues("success").Observe(duration)
 		reqOut, _ := json.Marshal(req)
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
