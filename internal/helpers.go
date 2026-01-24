@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -427,28 +428,60 @@ func NewParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRes
 	return json.Marshal(e)
 }
 
-func ExtractThreatLevelID(rawData []byte) (int, error) {
-	// Unmarshal into a slice of maps since the objects are non-uniform
-	var data []map[string]interface{}
-	if err := json.Unmarshal(rawData, &data); err != nil {
-		return 0, err
+func ExtractSummarizedEvent(rawData []byte) (SummarizedEvent, error) {
+	// 1. Unmarshal into a slice of raw messages so we can inspect each element individually
+	var rawList []json.RawMessage
+	if err := json.Unmarshal(rawData, &rawList); err != nil {
+		return SummarizedEvent{}, fmt.Errorf("failed to unmarshal outer array: %w", err)
 	}
 
-	for _, obj := range data {
-		// Check if the key exists in this specific object
-		if val, ok := obj["threat_level_id"]; ok {
-			// JSON numbers are unmarshaled as float64 by default
-			if threatLevel, ok := val.(string); ok {
-				tid, err := strconv.Atoi(threatLevel)
-				if err != nil {
-					fmt.Println("ExtractThreatLevelID error...", val, err)
-					return 0, err
-				}
-				return tid, nil
-			}
+	// 2. Iterate (typically in reverse, as the summary is often the last element appended)
+	for i := len(rawList) - 1; i >= 0; i-- {
+		var se SummarizedEvent
+		if err := json.Unmarshal(rawList[i], &se); err != nil {
+			continue // Skip elements that don't match the schema
+		}
+
+		// 3. Verify this is the actual summary and not a raw vendor object
+		// We check for a required field that raw vendor data likely lacks.
+		if se.From != "" {
+			return se, nil
 		}
 	}
 
+	return SummarizedEvent{}, fmt.Errorf("summarized event not found in data")
+}
+
+func ExtractThreatLevelID(rawData []byte) (int, error) {
+	// Unmarshal into a slice of maps since the responses can contain
+	// non-uniform objects (e.g., raw vendor data and SummarizedEvents).
+	var data []map[string]interface{}
+	if err := json.Unmarshal(rawData, &data); err != nil {
+		fmt.Println("ExtractThreatLevelID: failed to unmarshal data:", err, string(rawData))
+		return 0, fmt.Errorf("failed to unmarshal response data: %w", err)
+	}
+
+	for _, obj := range data {
+		if val, ok := obj["threat_level_id"]; ok {
+			switch v := val.(type) {
+			case float64:
+				// JSON numbers are unmarshaled as float64 by default in interface{} maps.
+				// Since you use "int" in your struct, this is the primary path.
+				return int(v), nil
+			case string:
+				// Fallback: Handle cases where the field is a string (e.g., raw MISP data).
+				tid, err := strconv.Atoi(v)
+				if err != nil {
+					continue // Try next object if string isn't an integer
+				}
+				return tid, nil
+			default:
+				fmt.Println("ExtractThreatLevelID got an unsupported type:", reflect.TypeOf(val))
+				continue // Unsupported type, try next object
+			}
+		}
+	}
+	// fmt.Println("ExtractThreatLevelID: threat_level_id not found in any object", string(rawData))
 	return 0, fmt.Errorf("threat_level_id not found")
 }
 

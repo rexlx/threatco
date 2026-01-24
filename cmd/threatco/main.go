@@ -56,6 +56,7 @@ func main() {
 			case <-healthTicker.C:
 				// fmt.Println("Performing health check")
 				go s.SimpleServiceCheck()
+				go s.AutomatedThreatScan()
 			case <-sigs:
 				s.Log.Println("Shutting down")
 				ticker.Stop()

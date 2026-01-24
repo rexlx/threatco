@@ -464,6 +464,7 @@ func (s *Server) ProcessTransientResponses() {
 			}
 		case <-ticker.C:
 			go s.DB.CleanResponses(s.Cache.ResponseExpiry)
+			go s.CleanupClosedCases()
 			s.Memory.Lock()
 			for k, v := range s.Cache.Responses {
 				if time.Since(v.Time) > s.Cache.ResponseExpiry {
@@ -720,6 +721,109 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
 	go s.Hub.Run()
+}
+
+// internal/server.go
+
+func (s *Server) AutomatedThreatScan() {
+	scanWindow := time.Now().Add(-1 * time.Hour)
+	responses, err := s.DB.GetResponses(scanWindow) //
+	if err != nil {
+		s.Log.Println("AutomatedThreatScan error getting responses:", err)
+		return
+	}
+
+	for _, r := range responses {
+		tid, err := ExtractThreatLevelID(r.Data) //
+		if err != nil {
+			continue
+		}
+
+		// Threshold for critical threats.
+		if tid >= 4 {
+			// Extract full context from the response.
+			se, err := ExtractSummarizedEvent(r.Data)
+			if err != nil {
+				s.Log.Printf("AutomatedThreatScan: found tid %d but failed to extract event for %s: %v", tid, r.ID, err)
+				continue
+			}
+
+			caseName := fmt.Sprintf("Auto-Case: Critical Threat Detected (%s)", r.ID)
+
+			// Duplicate check: search for the response ID in existing cases.
+			existingCases, err := s.DB.SearchCases(r.ID)
+			alreadyExists := false
+			if err == nil {
+				for _, ec := range existingCases {
+					if strings.Contains(ec.Name, r.ID) || strings.Contains(ec.Description, r.ID) {
+						alreadyExists = true
+						break
+					}
+				}
+			}
+
+			if !alreadyExists {
+				newCase := Case{
+					ID:   uuid.New().String(),
+					Name: caseName,
+					// Append se.Info to provide immediate context in the case view.
+					Description: fmt.Sprintf("Automated case for Critical Threat level %d. Vendor: %s. Details: %s", tid, r.Vendor, se.Info),
+					CreatedBy:   "System Automation",
+					CreatedAt:   time.Now(),
+					Status:      "Open",
+					// Auto-populate the IOCs list with the threat value.
+					IOCs:     []string{se.Value},
+					Comments: []Comment{},
+				}
+
+				if err := s.DB.CreateCase(newCase); err != nil { //
+					s.Log.Println("Failed to create auto-case:", err)
+				} else {
+					s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Created Case %s for Response %s (%s)", newCase.ID, r.ID, se.Value)) //
+				}
+			}
+		}
+	}
+}
+
+// internal/server.go
+
+// CleanupClosedCases finds cases with "Closed" status older than 60 days and deletes them.
+func (s *Server) CleanupClosedCases() {
+	cutoff := time.Now().AddDate(0, 0, -60)
+	limit := 100
+	offset := 0
+
+	for {
+		// Use existing GetCases method to fetch a batch of cases
+		cases, err := s.DB.GetCases(limit, offset)
+		if err != nil {
+			s.Log.Printf("ERROR: Failed to fetch cases for cleanup: %v", err)
+			break
+		}
+
+		if len(cases) == 0 {
+			break
+		}
+
+		for _, c := range cases {
+			// Filter logic: Status must be "Closed" and older than 60 days
+			if c.Status == "Closed" && c.CreatedAt.Before(cutoff) {
+				// Use existing DeleteCase method
+				if err := s.DB.DeleteCase(c.ID); err != nil {
+					s.Log.Printf("ERROR: Failed to delete closed case %s: %v", c.ID, err)
+				} else {
+					s.LogInfo(fmt.Sprintf("Cleanup: Deleted closed case %s (%s) older than 60 days", c.ID, c.Name))
+				}
+			}
+		}
+
+		// Move to the next batch if necessary
+		if len(cases) < limit {
+			break
+		}
+		offset += limit
+	}
 }
 
 func (s *Server) UpdateCharts() {
