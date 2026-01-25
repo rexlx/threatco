@@ -3,6 +3,7 @@ a service for enriching indicators of compromise.
 
 ### key features
 - enrich users query by fanning out to all available plugins (third-party APIs)
+- generate ai reports based on query results
 - file analysis (if plugin is configured)
 - parse blobs of text sent over API to extract IOC and enrich
 - frontend with webapp, server management, and a knowledge base
