@@ -6,95 +6,104 @@ export class ResponseController {
     }
 
     render() {
-        this.container.classList.remove('is-hidden');
-        this.container.innerHTML = `
-            <h1 class="title has-text-info" id="responseViewTitle">Responses</h1>
-            <div class="field is-grouped">
-                <p class="control is-expanded"><input class="input" type="text" id="filterVendor" placeholder="Vendor or ID"></p>
-                <p class="control"><input class="input" type="number" id="filterLimit" placeholder="Limit" value="100"></p>
-                <p class="control">
-                    <label class="checkbox">
-                        <input type="checkbox" id="filterMatched"> only matches
-                    </label>
-                </p>
-                <p class="control">
-                    <label class="checkbox">
-                        <input type="checkbox" id="filterArchived"> archived
-                    </label>
-                </p>
-                <p class="control"><button class="button is-info" id="applyResponseFilters" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">filter_list</i></span><span>apply</span></span></button></p>
-                <p class="control"><button class="button is-info" id="exportResponsesBtn" type="button"><span class="icon-text"><span class="icon"><i class="material-icons">file_download</i></span><span>export</span></span></button></p>
-            </div>
-            <hr class="has-background-grey-dark">
-            <div id="responseTableContainer"><p class="has-text-info">Fetching initial responses...</p></div>
-            <nav class="pagination is-centered is-rounded mt-4" role="navigation" aria-label="pagination">
-                <a class="pagination-previous" id="prevPageBtn" disabled>Previous</a>
-                <a class="pagination-next" id="nextPageBtn" disabled>Next</a>
-                <ul class="pagination-list" id="paginationList">
-                    </ul>
-            </nav>`;
+    this.container.classList.remove('is-hidden');
+    this.container.innerHTML = `
+        <h1 class="title has-text-info" id="responseViewTitle">Responses</h1>
+        <div class="field is-grouped">
+            <p class="control is-expanded">
+                <input class="input" type="text" id="filterVendor" placeholder="Vendor or ID">
+            </p>
+            <p class="control">
+                <input class="input" type="number" id="filterLimit" placeholder="Limit" value="100">
+            </p>
+            <p class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="filterMatched"> only matches
+                </label>
+            </p>
+            <p class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="filterArchived"> archived
+                </label>
+            </p>
+            <p class="control">
+                <button class="button is-info" id="applyResponseFilters" type="button">
+                    <span class="icon-text">
+                        <span class="icon"><i class="material-icons">filter_list</i></span>
+                        <span>apply</span>
+                    </span>
+                </button>
+            </p>
+            <p class="control">
+                <button class="button is-info" id="exportResponsesBtn" type="button">
+                    <span class="icon-text">
+                        <span class="icon"><i class="material-icons">file_download</i></span>
+                        <span>export</span>
+                    </span>
+                </button>
+            </p>
+        </div>
+        <hr class="has-background-grey-dark">
+        <div id="responseTableContainer"><p class="has-text-info">Fetching initial responses...</p></div>
+        <nav class="pagination is-centered is-rounded mt-4" role="navigation" aria-label="pagination">
+            <a class="pagination-previous" id="prevPageBtn" disabled>Previous</a>
+            <a class="pagination-next" id="nextPageBtn" disabled>Next</a>
+            <ul class="pagination-list" id="paginationList"></ul>
+        </nav>`;
 
-        // Attach Listener for Filter Button
-        document.getElementById('applyResponseFilters').addEventListener('click', () => {
-            const rawInput = document.getElementById('filterVendor').value.trim();
-            const limitVal = document.getElementById('filterLimit').value;
-            const matched = document.getElementById('filterMatched').checked;
-            const archived = document.getElementById('filterArchived').checked;
+    // Attach Listener for Filter Button
+    document.getElementById('applyResponseFilters').addEventListener('click', () => {
+        const rawInput = document.getElementById('filterVendor').value.trim();
+        const limitVal = document.getElementById('filterLimit').value;
+        const matched = document.getElementById('filterMatched').checked;
+        const archived = document.getElementById('filterArchived').checked;
 
-            // Reset to start 0 on new filter
-            const options = {
-                start: 0,
-                limit: parseInt(limitVal, 10) || 100,
-                matched: matched,     // Passes true or false
-                archived: archived,   // Passes true or false
-                vendor: null,         // Reset vendor
-                id: null              // Reset ID
-            };
+        const options = {
+            start: 0,
+            limit: parseInt(limitVal, 10) || 100,
+            matched: matched,
+            archived: archived,
+            vendor: null,
+            id: null
+        };
 
-            // UUID Regex
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (rawInput) {
-                if (uuidPattern.test(rawInput)) {
-                    options.id = rawInput;
-                } else {
-                    options.vendor = rawInput;
-                }
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (rawInput) {
+            if (uuidPattern.test(rawInput)) {
+                options.id = rawInput;
+            } else {
+                options.vendor = rawInput;
             }
+        }
 
-            // if (matched) options.matched = true;
-            // if (archived) options.archived = true;
+        this.fetch(options);
+    });
 
-            this.fetch(options);
-        });
+    // Attach Listener for Export CSV Button
+    document.getElementById('exportResponsesBtn').addEventListener('click', () => {
+        const rawInput = document.getElementById('filterVendor').value.trim();
+        const matched = document.getElementById('filterMatched').checked;
+        const archived = document.getElementById('filterArchived').checked;
 
-        // Attach Listener for Export CSV Button
-        document.getElementById('exportResponsesBtn').addEventListener('click', () => {
-            const rawInput = document.getElementById('filterVendor').value.trim();
-            const matched = document.getElementById('filterMatched').checked;
-            const archived = document.getElementById('filterArchived').checked;
-
-            const params = new URLSearchParams();
-
-            // Reuse logic to determine if input is UUID or Vendor
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (rawInput) {
-                if (uuidPattern.test(rawInput)) {
-                    params.append('id', rawInput);
-                } else {
-                    params.append('vendor', rawInput);
-                }
+        const params = new URLSearchParams();
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (rawInput) {
+            if (uuidPattern.test(rawInput)) {
+                params.append('id', rawInput);
+            } else {
+                params.append('vendor', rawInput);
             }
+        }
 
-            if (matched) params.append('matched', 'true');
-            if (archived) params.append('archived', 'true');
+        if (matched) params.append('matched', 'true');
+        if (archived) params.append('archived', 'true');
 
-            // Trigger the download by navigating to the URL
-            window.location.href = `/exportresponses?${params.toString()}`;
-        });
+        window.location.href = `/exportresponses?${params.toString()}`;
+    });
 
-        // Initial Fetch
-        this.fetch(this.currentOptions);
-    }
+    // Initial Fetch
+    this.fetch(this.currentOptions);
+}
 
     async fetch(options = {}) {
         // Update local state
@@ -196,21 +205,34 @@ export class ResponseController {
     }
 
     attachTableListeners(container) {
+        // Handle all anchor tags in the table
         container.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', async (event) => {
+                // If the link is meant to open in a new tab (like the AI Report),
+                // or specifically targets the /aireport endpoint, let the browser handle it.
+                if (link.target === '_blank' || link.href.includes('/aireport')) {
+                    return; 
+                }
+
+                // Otherwise, prevent default behavior and trigger the Event Details modal
                 event.preventDefault();
-                const id = new URL(link.href).pathname.split('/').pop();
-                if (id) {
+                const url = new URL(link.href, window.location.origin);
+                const id = url.pathname.split('/').pop();
+                
+                // Ensure we have a valid ID and aren't just capturing the base path
+                if (id && id !== 'events') {
                     const customEvent = new CustomEvent('req-open-details', { detail: id });
                     document.dispatchEvent(customEvent);
                 }
             });
         });
 
+        // Handle delete buttons in the table
         container.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                
                 const id = btn.getAttribute('data-id');
                 if (!confirm(`Are you sure you want to delete response ${id}?`)) return;
 
@@ -219,10 +241,14 @@ export class ResponseController {
                     const resp = await fetch('/deleteresponse', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: id, archived: this.currentOptions.archived || false })
+                        body: JSON.stringify({ 
+                            id: id, 
+                            archived: this.currentOptions.archived || false 
+                        })
                     });
 
                     if (resp.ok) {
+                        // Refresh the table data upon successful deletion
                         await this.fetch(this.currentOptions);
                     } else {
                         alert('Failed to delete: ' + await resp.text());

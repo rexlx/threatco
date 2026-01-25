@@ -5,27 +5,32 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/rexlx/threatco/optional"
 )
 
 type Configuration struct {
-	Cors                []string      `json:"cors"`
-	DatabaseType        string        `json:"database_type"`
-	BindAddress         string        `json:"bind_address"`
-	ServerID            string        `json:"server_id"`
-	FirstUserMode       bool          `json:"first_user_mode"`
-	FQDN                string        `json:"fqdn"`
-	Services            []ServiceType `json:"services"`
-	HTTPPort            string        `json:"http_port"`
-	HTTPsPort           string        `json:"https_port"`
-	HTTPToo             bool          `json:"http_too"`
-	TLSCert             string        `json:"tls_cert"`
-	TLSKey              string        `json:"tls_key"`
-	CertAuth            string        `json:"cert_auth"`
-	DBLocation          string        `json:"db_location"`
-	SessionTokenTTL     int           `json:"session_token_ttl"`
-	ResponseCacheExpiry int           `json:"response_cache_expiry"`
-	StatCacheTickRate   int           `json:"stat_cache_tick_rate"`
+	Cors                []string         `json:"cors"`
+	DatabaseType        string           `json:"database_type"`
+	BindAddress         string           `json:"bind_address"`
+	ServerID            string           `json:"server_id"`
+	FirstUserMode       bool             `json:"first_user_mode"`
+	FQDN                string           `json:"fqdn"`
+	Services            []ServiceType    `json:"services"`
+	HTTPPort            string           `json:"http_port"`
+	HTTPsPort           string           `json:"https_port"`
+	HTTPToo             bool             `json:"http_too"`
+	TLSCert             string           `json:"tls_cert"`
+	TLSKey              string           `json:"tls_key"`
+	CertAuth            string           `json:"cert_auth"`
+	DBLocation          string           `json:"db_location"`
+	SessionTokenTTL     int              `json:"session_token_ttl"`
+	ResponseCacheExpiry int              `json:"response_cache_expiry"`
+	StatCacheTickRate   int              `json:"stat_cache_tick_rate"`
+	LlmConf             LlmConfiguration `json:"llm"`
 }
+
+type LlmConfiguration optional.LlmConfig
 
 func (c *Configuration) PopulateFromJSONFile(fh string) error {
 	if !FileExists(fh) {
@@ -41,7 +46,13 @@ func (c *Configuration) PopulateFromJSONFile(fh string) error {
 	if err := d.Decode(c); err != nil {
 		return fmt.Errorf("could not decode file: %v", err)
 	}
-
+	if c.LlmConf.ApiKey == "" {
+		envVar := "THREATCO_LLM_API_KEY"
+		apiKey := os.Getenv(envVar)
+		if apiKey != "" {
+			c.LlmConf.ApiKey = apiKey
+		}
+	}
 	for i := range c.Services {
 		if c.Services[i].Key == "" && c.Services[i].Kind != "" {
 			envVarName := strings.ToUpper(c.Services[i].Kind) + "_KEY"

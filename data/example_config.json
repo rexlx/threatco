@@ -3,6 +3,12 @@
     "first_user_mode": true,
     "bind_address": "",
     "fqdn": "example.com",
+    "llm": {
+        "enabled": true,
+        "provider": "gemini",
+        "model": "gemini-1.5-flash",
+        "api_key": ""
+    },
     "services": [
         {
             "comment": "this is a simple service example, using misp",

@@ -34,8 +34,17 @@ type LlmToolsLlmMClient interface {
 	CallPrompt(ctx context.Context, prompt string) (string, error)
 }
 
+type LlmConfig struct {
+	ModelType string `json:"model_type"`
+	ApiKey    string `json:"api_key"`
+	Provider  string `json:"provider"`
+	Enabled   bool   `json:"enabled"`
+	RateLimit int    `json:"rate_limit"`
+}
+
 type LlmToolsGeminiModel struct {
 	ApiKey string `json:"api_key"`
+	Model  string `json:"model"`
 }
 
 type LlmToolsPromptRequest struct {
@@ -90,8 +99,8 @@ type geminiResponse struct {
 // CallPrompt sends the provided prompt string to the Gemini API using the native http client.
 func (l *LlmToolsGeminiModel) CallPrompt(ctx context.Context, prompt string) (string, error) {
 	// 1. Define the API endpoint and model
-	model := "gemini-1.5-flash"
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, l.ApiKey)
+	// model := "gemini-1.5-flash"
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", l.Model, l.ApiKey)
 
 	// 2. Construct the JSON request body payload
 	reqBody := geminiRequest{
@@ -131,7 +140,8 @@ func (l *LlmToolsGeminiModel) CallPrompt(ctx context.Context, prompt string) (st
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("api request failed with status %d: %s", resp.StatusCode, string(respBody))
+		fmt.Println("Gemini API response body:", string(respBody))
+		return "", fmt.Errorf("api request failed with status %d: %s", resp.StatusCode, url)
 	}
 
 	// 6. Unmarshal the JSON response and extract the text

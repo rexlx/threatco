@@ -111,8 +111,9 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
 	thisUrl := fmt.Sprintf("%s/search", ep.GetURL())
 	data := struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
+		Kind          string `json:"kind"`
+		Value         string `json:"value"`
+		ThreatLevelID int    `json:"threat_level_id,omitempty"`
 	}{
 		Kind:  req.Type,
 		Value: req.Value,

@@ -76,16 +76,15 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	allBytes := []byte{'['}
 	first := true
-	ignoreList := []string{"nullferatu.com"}
+	ignoreList := []string{"nullferatu.com", "fairlady.nullferatu.com"}
 	var mu sync.Mutex
 	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
-
+	//http://fairlady.nullferatu.com
 	var pr ParserRequest
 	if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	defer func(start time.Time, req ParserRequest) {
 		duration := time.Since(start).Seconds() * 1000
 		// Use .WithLabelValues() to satisfy the HistogramVec requirement
@@ -146,7 +145,10 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 						proxyReq.From = "api parser"
 						uid := uuid.New().String()
 						proxyReq.TransactionID = uid
-
+						if strings.Contains(value.Value, "fairlady.nullferatu.com") {
+							// s.Log.Println("Skipping known ignored value:", value.Value)
+							continue
+						}
 						wg.Add(1)
 						go func(name string, id string, firstPtr *bool, req ProxyRequest) {
 							defer wg.Done()
@@ -1860,6 +1862,73 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 	return finalResults
 }
 
+// internal/handlers.go
+
+func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Mandatory logging with the special string
+	id := r.URL.Query().Get("id")
+	s.Log.Printf("__LLM TOOLS__ Processing AI report request for ID: %s", id)
+	fmt.Printf("__LLM TOOLS__ Processing AI report request for ID: %s", id)
+
+	if id == "" {
+		http.Error(w, "Missing 'id' parameter", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Check if LLM features are enabled in the configuration
+	if !s.Details.LlmConf.Enabled {
+		http.Error(w, "AI features are currently disabled", http.StatusForbidden)
+		return
+	}
+
+	// 3. Retrieve the stored prompt data from the database
+	data, err := s.DB.GetResponse(id)
+	if err != nil {
+		s.LogError(fmt.Errorf("__LLM TOOLS__ database error for %s: %v", id, err))
+		http.Error(w, "Failed to retrieve response data", http.StatusNotFound)
+		return
+	}
+
+	// 4. Unmarshal data assuming a slice of maps as requested
+	var records []map[string]interface{}
+	if err := json.Unmarshal(data, &records); err != nil {
+		s.LogError(fmt.Errorf("__LLM TOOLS__ unmarshal error for %s: %v", id, err))
+		http.Error(w, "Invalid data format in database", http.StatusInternalServerError)
+		return
+	}
+
+	if len(records) == 0 {
+		http.Error(w, "No records found in the response object", http.StatusNotFound)
+		return
+	}
+
+	// 5. Extract the "prompt" field from the data
+	prompt, ok := records[0]["prompt"].(string)
+	if !ok || prompt == "" {
+		s.LogError(fmt.Errorf("__LLM TOOLS__ missing or invalid 'prompt' field in record %s", id))
+		http.Error(w, "Record does not contain a valid prompt", http.StatusBadRequest)
+		return
+	}
+
+	// 6. Execute the LLM call using the Gemini model defined in optional/llm_tools.go
+	model := &optional.LlmToolsGeminiModel{
+		ApiKey: s.Details.LlmConf.ApiKey,
+		Model:  s.Details.LlmConf.ModelType,
+	}
+
+	// CallPrompt sends the extracted string to the Gemini API
+	report, err := model.CallPrompt(r.Context(), prompt)
+	if err != nil {
+		s.LogError(fmt.Errorf("__LLM TOOLS__ Gemini API call failed for %s: %v", id, err))
+		http.Error(w, "AI generation failed", http.StatusBadGateway)
+		return
+	}
+
+	// 7. Write the generated HTML report to the response
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(report))
+}
+
 // containsMatch recursively checks if "matched": true exists in the JSON data.
 func containsMatch(data []byte) bool {
 	if len(data) == 0 {
@@ -1901,6 +1970,7 @@ func isLikelyDomain(s string) bool {
 }
 
 // renderResponseTable writes the HTML table to the writer.
+// renderResponseTable writes the HTML table to the writer.
 func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	tableHeader := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
             <thead>
@@ -1914,7 +1984,6 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
             <tbody>`
 	tableFooter := `</tbody></table>`
 
-	// Updated row template to accept %s for the extra DNS action button
 	rowTmpl := `<tr>
         <td>%v</td>
         <td>%v</td>
@@ -1931,8 +2000,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
                         <span class="icon is-small"><i class="material-icons">delete</i></span>
                     </button>
                 </p>
-                %s
-            </div>
+                %s </div>
         </td>
     </tr>`
 
@@ -1942,16 +2010,25 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	for _, v := range responses {
 		displayValue, matched := extractDisplayValue(v.Data)
 
-		// Determine if we should show the DNS lookup button
-		dnsAction := ""
+		// actions stores the HTML for conditional buttons
+		var actions string
+
+		// 1. DNS Lookup Button: Added if the value is a valid IP or likely domain
 		if net.ParseIP(displayValue) != nil || isLikelyDomain(displayValue) {
-			// FIX: Use data-value attribute and html.EscapeString
-			// We give it a specific class 'dns-lookup-btn' to hook into with JS later
-			dnsAction = fmt.Sprintf(`<p class="control">
+			actions += fmt.Sprintf(`<p class="control">
                     <button class="button is-small is-warning is-light dns-lookup-btn" data-value="%s" title="DNS Lookup">
                         <span class="icon is-small"><i class="material-icons">dns</i></span>
                     </button>
                 </p>`, html.EscapeString(displayValue))
+		}
+
+		// 2. AI Report Button: Added specifically for the llm_tools vendor
+		if v.Vendor == "llm_tools" {
+			actions += fmt.Sprintf(`<p class="control">
+                    <a href="/aireport?id=%s" target="_blank" class="button is-small is-primary is-light" title="Generate AI Report">
+                        <span class="icon is-small"><i class="material-icons">auto_awesome</i></span>
+                    </a>
+                </p>`, v.ID)
 		}
 
 		displayHtml := displayValue
@@ -1959,8 +2036,8 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 			displayHtml = fmt.Sprintf(`<span class="has-text-warning has-text-weight-bold">%s</span>`, displayValue)
 		}
 
-		// Inject the dnsAction string into the template
-		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayHtml, v.ID, v.ID, dnsAction)
+		// Inject the time, vendor, value, and consolidated actions into the row template
+		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayHtml, v.ID, v.ID, actions)
 		buffer.WriteString(row)
 	}
 

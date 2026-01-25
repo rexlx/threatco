@@ -70,6 +70,7 @@ type Server struct {
 }
 
 type Details struct {
+	LlmConf           LlmConfiguration   `json:"llm_config"`
 	CorsOrigins       []string           `json:"cors_origins"`
 	PreviousKey       *cipher.AEAD       `json:"-"`
 	Key               *cipher.AEAD       `json:"-"`
@@ -639,6 +640,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
 	// s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode
+	s.Details.LlmConf = cfg.LlmConf
+	fmt.Println(s.Details.LlmConf)
 	s.Session.Lifetime = time.Duration(cfg.SessionTokenTTL) * time.Hour
 	for name, service := range s.Targets {
 		thisAuth := service.Auth
@@ -665,6 +668,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/user", http.HandlerFunc(s.ValidateSessionToken(s.GetUserHandler)))
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
+	s.Gateway.HandleFunc("/aireport", s.ValidateSessionToken(s.AIReportHandler))
 	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateSessionToken(s.AddServiceHandler)))
 	s.Gateway.HandleFunc("/assisteddeath", http.HandlerFunc(s.ValidateSessionToken(s.KillServerDeadHandler)))
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
