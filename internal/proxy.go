@@ -1068,3 +1068,55 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 
 	return json.Marshal(sum)
 }
+
+func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
+	return func(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+		// 1. Search the database using the optimized SearchCases method
+		cases, err := db.SearchCases(req.Value)
+		if err != nil {
+			// Use the standard failure helper if the DB query fails
+			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("internal search error: %v", err))
+		}
+
+		matched := len(cases) > 0
+		background := "has-background-primary-dark" // Default safe color
+		info := "No open cases match this IOC."
+
+		if matched {
+			background = "has-background-warning-dark" // High-visibility color for internal hits
+			names := make([]string, 0, len(cases))
+			for _, c := range cases {
+				names = append(names, c.Name)
+			}
+			info = fmt.Sprintf("Match found in %d open case(s): %s", len(cases), strings.Join(names, ", "))
+		}
+
+		// 2. Build the SummarizedEvent for the UI
+		sum := SummarizedEvent{
+			Timestamp:  time.Now(),
+			Matched:    matched,
+			Background: background,
+			From:       "Internal Cases",
+			Value:      req.Value,
+			Info:       info,
+			Link:       req.TransactionID,
+			RawLink:    fmt.Sprintf("%s/cases", req.FQDN), // Link to the cases dashboard
+			Type:       req.Type,
+		}
+
+		out, err := json.Marshal(sum)
+		if err != nil {
+			return nil, fmt.Errorf("marshal summary: %w", err)
+		}
+
+		// 3. Send the result to the response channel for caching and UI notifications
+		resch <- ResponseItem{
+			ID:     req.TransactionID,
+			Vendor: "threatco_cases",
+			Data:   out,
+			Time:   time.Now(),
+		}
+
+		return out, nil
+	}
+}

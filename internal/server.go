@@ -653,6 +653,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		}
 		s.ProxyOperators[name] = op
 	}
+	s.ProxyOperators["internal-case"] = ThreatcoInternalCaseSearchBuilder(s.DB)
 	s.Gateway.Handle("/archive", http.HandlerFunc(s.ValidateSessionToken(s.ArchiveResponseHandler)))
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
