@@ -298,9 +298,9 @@ export class CaseController {
                 </div>
                 <div class="box has-background-custom">
                     <div class="level">
-                        <div class="level-left">
+                        <div class="level-left" style="min-width: 0; flex-shrink: 1;">
                             <div style="max-width: 600px;">
-                                <h2 class="title is-3 has-text-white">${escapeHtml(c.name)}</h2>
+                                <h2 class="title is-3 has-text-white" style="word-break: break-word;">${escapeHtml(c.name)}</h2>
                                 <p class="subtitle is-6 has-text-grey-light">Created by ${escapeHtml(c.created_by)} on ${new Date(c.created_at).toLocaleString()}</p>
                             </div>
                         </div>
