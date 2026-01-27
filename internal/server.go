@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bytes"
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -174,7 +173,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		}
 		database = &BboltDB{DB: db}
 	case "postgres":
-		db, err := NewPostgresDB(dbLocation)
+		db, err := NewPostgresDB(dbLocation, *PrepareTable)
 		if err != nil {
 			log.Fatalf("postgres could not open database: %v", err)
 		}
@@ -952,20 +951,20 @@ func CreateFakeResponse() []byte {
 	return out
 }
 
-func (s *Server) PrepareTable(ctx context.Context, tableName string) error {
-	// Type assert to PostgresDB to access the pgxpool
-	pgDB, ok := s.DB.(*PostgresDB)
-	if !ok {
-		return fmt.Errorf("PrepareTable is only supported for PostgresDB")
-	}
+// func (s *Server) PrepareTable(ctx context.Context, tableName string) error {
+// 	// Type assert to PostgresDB to access the pgxpool
+// 	pgDB, ok := s.DB.(*PostgresDB)
+// 	if !ok {
+// 		return fmt.Errorf("PrepareTable is only supported for PostgresDB")
+// 	}
 
-	// Use CASCADE to remove dependent objects like indexes
-	query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName)
-	_, err := pgDB.Pool.Exec(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
-	}
+// 	// Use CASCADE to remove dependent objects like indexes
+// 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName)
+// 	_, err := pgDB.Pool.Exec(ctx, query)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
+// 	}
 
-	s.LogInfo(fmt.Sprintf("Wiped table '%s' per -prepare-table flag", tableName))
-	return nil
-}
+// 	s.LogInfo(fmt.Sprintf("Wiped table '%s' per -prepare-table flag", tableName))
+// 	return nil
+// }

@@ -343,7 +343,7 @@ type PostgresDB struct {
 	Pool *pgxpool.Pool
 }
 
-func NewPostgresDB(dsn string) (*PostgresDB, error) {
+func NewPostgresDB(dsn string, preparedTable string) (*PostgresDB, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
@@ -353,6 +353,16 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 		return nil, err
 	}
 	p := &PostgresDB{Pool: pool}
+	if preparedTable != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", preparedTable)
+		_, err := p.Pool.Exec(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to drop table %s: %w", preparedTable, err)
+		}
+	}
 	if err := p.createTables(); err != nil {
 		return nil, err
 	}
