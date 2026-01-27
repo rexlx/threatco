@@ -30,30 +30,30 @@ func (m *MockDB) StoreResponse(archive bool, id string, data []byte, vendor stri
 }
 
 // Stubs for other interface methods
-func (m *MockDB) Backup(w io.Writer) error                              { return nil }
-func (m *MockDB) Restore(filePath string) error                         { return nil }
-func (m *MockDB) GetUserByEmail(email string) (User, error)             { return User{}, nil }
-func (m *MockDB) DeleteUser(email string) error                         { return nil }
-func (m *MockDB) GetAllUsers() ([]User, error)                          { return nil, nil }
-func (m *MockDB) AddUser(u User) error                                  { return nil }
-func (m *MockDB) GetServiceByKind(kind string) (ServiceType, error)     { return ServiceType{}, nil }
-func (m *MockDB) AddService(st ServiceType) error                       { return nil }
-func (m *MockDB) GetTokenByValue(tk string) (Token, error)              { return Token{}, nil }
-func (m *MockDB) SaveToken(t Token) error                               { return nil }
-func (m *MockDB) GetResponse(id string) ([]byte, error)                 { return nil, nil }
-func (m *MockDB) GetResponses(t time.Time) ([]ResponseItem, error)      { return nil, nil }
-func (m *MockDB) DeleteResponse(id string) error                        { return nil }
-func (m *MockDB) TestAndRecconect() error                               { return nil }
-func (m *MockDB) CleanResponses(t time.Duration) error                  { return nil }
-func (m *MockDB) CreateCase(c Case) error                               { return nil }
-func (m *MockDB) GetCases(limit, offset int) ([]Case, error)            { return nil, nil }
-func (m *MockDB) GetCase(id string) (Case, error)                       { return Case{}, nil }
-func (m *MockDB) UpdateCase(c Case) error                               { return nil }
-func (m *MockDB) DeleteCase(id string) error                            { return nil }
-func (m *MockDB) SearchCases(query string) ([]Case, error)              { return nil, nil }
-func (m *MockDB) RecordSearchBatch(values []string, email string) error { return nil }
-func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)   { return SearchRecord{}, nil }
-func (m *MockDB) CleanSearchHistory(days int) error                     { return nil }
+func (m *MockDB) Backup(w io.Writer) error                                  { return nil }
+func (m *MockDB) Restore(filePath string) error                             { return nil }
+func (m *MockDB) GetUserByEmail(email string) (User, error)                 { return User{}, nil }
+func (m *MockDB) DeleteUser(email string) error                             { return nil }
+func (m *MockDB) GetAllUsers() ([]User, error)                              { return nil, nil }
+func (m *MockDB) AddUser(u User) error                                      { return nil }
+func (m *MockDB) GetServiceByKind(kind string) (ServiceType, error)         { return ServiceType{}, nil }
+func (m *MockDB) AddService(st ServiceType) error                           { return nil }
+func (m *MockDB) GetTokenByValue(tk string) (Token, error)                  { return Token{}, nil }
+func (m *MockDB) SaveToken(t Token) error                                   { return nil }
+func (m *MockDB) GetResponse(id string) ([]byte, error)                     { return nil, nil }
+func (m *MockDB) GetResponses(t time.Time) ([]ResponseItem, error)          { return nil, nil }
+func (m *MockDB) DeleteResponse(id string) error                            { return nil }
+func (m *MockDB) TestAndRecconect() error                                   { return nil }
+func (m *MockDB) CleanResponses(t time.Duration) error                      { return nil }
+func (m *MockDB) CreateCase(c Case) error                                   { return nil }
+func (m *MockDB) GetCases(limit, offset int, filter string) ([]Case, error) { return nil, nil }
+func (m *MockDB) GetCase(id string) (Case, error)                           { return Case{}, nil }
+func (m *MockDB) UpdateCase(c Case) error                                   { return nil }
+func (m *MockDB) DeleteCase(id string) error                                { return nil }
+func (m *MockDB) SearchCases(query string) ([]Case, error)                  { return nil, nil }
+func (m *MockDB) RecordSearchBatch(values []string, email string) error     { return nil }
+func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)       { return SearchRecord{}, nil }
+func (m *MockDB) CleanSearchHistory(days int) error                         { return nil }
 
 func setupTestServer() *Server {
 	// Generate a random key for the test server to support Encryption tests

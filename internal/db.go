@@ -34,7 +34,7 @@ type Database interface {
 	DeleteResponse(id string) error
 	TestAndRecconect() error
 	CreateCase(c Case) error
-	GetCases(limit int, offset int) ([]Case, error)
+	GetCases(limit int, offset int, filter string) ([]Case, error)
 	GetCase(id string) (Case, error)
 	UpdateCase(c Case) error
 	DeleteCase(id string) error
@@ -58,6 +58,7 @@ type Case struct {
 	IOCs        []string  `json:"iocs"`
 	Comments    []Comment `json:"comments"`
 	IOCCount    int       `json:"ioc_count"`
+	IsAuto      bool      `json:"is_auto"`
 }
 
 type Comment struct {
@@ -101,7 +102,7 @@ func (db *BboltDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
 	return responses, err
 }
 
-func (db *BboltDB) GetCases(limit int, offset int) ([]Case, error) {
+func (db *BboltDB) GetCases(limit int, offset int, filter string) ([]Case, error) {
 	fmt.Println("not implemented: BboltDB GetCases")
 	return nil, nil
 }
@@ -430,7 +431,8 @@ func (db *PostgresDB) createTables() error {
             created_at TIMESTAMP,
             status TEXT,
             iocs JSONB,
-            comments JSONB
+            comments JSONB,
+			is_auto BOOLEAN DEFAULT FALSE
         );
 		CREATE TABLE IF NOT EXISTS search_history (
 			id TEXT PRIMARY KEY,
@@ -740,24 +742,38 @@ func (db *PostgresDB) SaveToken(t Token) error {
 
 func (db *PostgresDB) CreateCase(c Case) error {
 	_, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments,
+		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto,
 	)
 	return err
 }
 
 // Optimized GetCases with Pagination and Column Selection
-func (db *PostgresDB) GetCases(limit, offset int) ([]Case, error) {
-	// Optimized query: fetches the count instead of the full array
-	sql := `
-        SELECT id, name, description, created_by, created_at, status, 
-               jsonb_array_length(iocs) as ioc_count 
-        FROM cases 
-        ORDER BY created_at DESC 
-        LIMIT $1 OFFSET $2
-    `
-	rows, err := db.Pool.Query(context.Background(), sql, limit, offset)
+// internal/db.go
+
+func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error) {
+	var query string
+	var args []interface{}
+
+	// 1. Base Query (Selecting 8 columns total)
+	query = `SELECT id, name, description, created_by, created_at, status, 
+                    COALESCE(jsonb_array_length(iocs), 0) as ioc_count, 
+                    is_auto 
+             FROM cases`
+
+	// 2. Apply Filtering
+	if filter == "user" {
+		query += " WHERE is_auto = FALSE"
+	} else if filter == "auto" {
+		query += " WHERE is_auto = TRUE"
+	}
+
+	// 3. Apply Pagination (Ensuring the 50-per-page limit is preserved)
+	query += " ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+	args = append(args, limit, offset)
+
+	rows, err := db.Pool.Query(context.Background(), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -766,8 +782,17 @@ func (db *PostgresDB) GetCases(limit, offset int) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		// SCAN directly into c.IOCCount
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCCount); err != nil {
+		err := rows.Scan(
+			&c.ID,
+			&c.Name,
+			&c.Description,
+			&c.CreatedBy,
+			&c.CreatedAt,
+			&c.Status,
+			&c.IOCCount,
+			&c.IsAuto,
+		)
+		if err != nil {
 			return nil, err
 		}
 		cases = append(cases, c)
@@ -778,7 +803,7 @@ func (db *PostgresDB) GetCases(limit, offset int) ([]Case, error) {
 func (db *PostgresDB) GetCase(id string) (Case, error) {
 	var c Case
 	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM cases WHERE id = $1", id).Scan(
-		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments,
+		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto,
 	)
 	return c, err
 }

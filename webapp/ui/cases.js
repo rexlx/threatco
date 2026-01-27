@@ -6,15 +6,16 @@ export class CaseController {
         this.app = app;
         this.currentCase = null;
         
-        // Pagination State
+        // Pagination & Filter State
         this.currentPage = 1;
         this.itemsPerPage = 50;
+        this.currentFilter = 'all'; // Default to showing all cases
     }
 
     async render() {
         this.container.classList.remove('is-hidden');
         this.container.innerHTML = `
-            <div class="columns is-vcentered mb-5">
+            <div class="columns is-vcentered mb-2">
                 <div class="column is-narrow">
                     <h1 class="title has-text-info">Case Management</h1>
                 </div>
@@ -38,9 +39,38 @@ export class CaseController {
                 </div>
             </div>
 
+            <div class="tabs is-boxed mb-4">
+                <ul>
+                    <li class="${this.currentFilter === 'all' ? 'is-active' : ''}" data-filter="all">
+                        <a><span class="icon is-small"><i class="material-icons">list</i></span><span>All Cases</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'user' ? 'is-active' : ''}" data-filter="user">
+                        <a><span class="icon is-small"><i class="material-icons">person</i></span><span>User Cases</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'auto' ? 'is-active' : ''}" data-filter="auto">
+                        <a><span class="icon is-small"><i class="material-icons">smart_toy</i></span><span>Auto Cases</span></a>
+                    </li>
+                </ul>
+            </div>
+
             <div class="level mb-4">
                 <div class="level-left">
                     <div class="level-item">
+                        <div class="field has-addons">
+                            <p class="control">
+                                <button class="button is-small is-info is-light" id="btnExportCases">
+                                    <span class="icon is-small"><i class="material-icons">file_download</i></span>
+                                    <span>Export CSV</span>
+                                </button>
+                            </p>
+                            <p class="control">
+                                <label class="checkbox button is-small has-background-black has-text-grey" title="Delete these cases from the database after a successful export">
+                                    <input type="checkbox" id="checkClearAfterExport" class="mr-1"> Clear after export
+                                </label>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="level-item ml-4">
                         <span class="has-text-grey-light mr-2">Show</span>
                         <div class="select is-small is-dark">
                             <select id="itemsPerPageSelect">
@@ -98,6 +128,32 @@ export class CaseController {
     }
 
     attachMainListeners() {
+        // --- Tab Filtering Logic ---
+        this.container.querySelectorAll('.tabs li').forEach(tab => {
+            tab.onclick = () => {
+                this.currentFilter = tab.dataset.filter;
+                this.currentPage = 1;
+                this.render(); // Re-render to update UI state
+            };
+        });
+
+        // --- Export Logic ---
+        document.getElementById('btnExportCases').onclick = () => {
+            const clear = document.getElementById('checkClearAfterExport').checked;
+            if (clear && !confirm("Warning: This will PERMANENTLY DELETE all cases in the current view after downloading. Proceed?")) {
+                return;
+            }
+            
+            // Redirecting to the handler URL triggers the browser download
+            const exportUrl = `/cases/export?type=${this.currentFilter}&clear=${clear}`;
+            window.location.href = exportUrl;
+
+            // If we cleared the cases, refresh the list after a short delay
+            if (clear) {
+                setTimeout(() => this.loadCases(), 2000);
+            }
+        };
+
         // --- Create Case Modal Logic ---
         const modal = document.getElementById('newCaseModal');
         const closeModal = () => modal.classList.remove('is-active');
@@ -148,7 +204,7 @@ export class CaseController {
             try {
                 const res = await this.app._fetch('/cases/create', {
                     method: 'POST',
-                    body: JSON.stringify({ name, description: desc })
+                    body: JSON.stringify({ name, description: desc, is_auto: false })
                 });
                 if (!res.ok) throw new Error(await res.text());
                 closeModal();
@@ -163,8 +219,6 @@ export class CaseController {
     async searchCases(query) {
         const container = document.getElementById('caseListContainer');
         container.innerHTML = '<div class="loader"></div>';
-        
-        // Hide pagination controls during search
         this.updatePaginationControls(0, true); 
 
         try {
@@ -177,20 +231,24 @@ export class CaseController {
     }
 
     async loadCases() {
-        const container = document.getElementById('caseListContainer');
-        container.innerHTML = '<div class="loader"></div>';
+    const container = document.getElementById('caseListContainer');
+    container.innerHTML = '<div class="loader"></div>';
+    
+    try {
+        const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}&type=${this.currentFilter}`);
+        let cases = await res.json();
         
-        try {
-            const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}`);
-            const cases = await res.json();
-            
-            this.renderCaseList(cases);
-            this.updatePaginationControls(cases.length);
-
-        } catch (e) {
-            container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
+        if (cases === null) {
+            cases = [];
         }
+        
+        this.renderCaseList(cases);
+        this.updatePaginationControls(cases.length); // This will now receive 0 instead of crashing
+
+    } catch (e) {
+        container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
     }
+}
 
     updatePaginationControls(resultCount, isSearch = false) {
         const prevBtn = document.getElementById('btnPrevPage');
@@ -217,7 +275,7 @@ export class CaseController {
         container.innerHTML = '';
 
         if (!cases || cases.length === 0) {
-            container.innerHTML = '<div class="notification is-dark has-text-centered">No cases found.</div>';
+            container.innerHTML = '<div class="notification is-dark has-text-centered">No cases found in this category.</div>';
             return;
         }
 
@@ -234,11 +292,12 @@ export class CaseController {
             box.style.cursor = 'pointer';
             box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid #900420ff';
             
-            // We pass the summary object 'c' here, but openCase will now fetch the full details
             box.onclick = () => this.openCase(c);
 
-            // Use c.ioc_count if available (from optimized query), fallback to array length
             const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
+            
+            // Add a badge for Automated cases
+            const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2"><span class="icon is-small mr-1"><i class="material-icons" style="font-size:14px;">smart_toy</i></span>AUTO</span>' : '';
 
             box.innerHTML = `
                 <article class="media is-vcentered">
@@ -249,6 +308,7 @@ export class CaseController {
                         <div class="content">
                             <p>
                                 <strong class="has-text-info is-size-5">${escapeHtml(c.name)}</strong> 
+                                ${autoBadge}
                                 <span class="has-text-info-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
                                 <br>
                                 <span class="has-text-light is-size-7" style="word-break: break-word; display: block; margin-top: 4px;">
@@ -269,7 +329,6 @@ export class CaseController {
     }
 
     async openCase(cSummary) {
-        // Show loading spinner while fetching full details
         this.container.innerHTML = `
             <div class="mb-4">
                 <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
@@ -282,8 +341,6 @@ export class CaseController {
         document.getElementById('btnBackList').onclick = () => this.render();
 
         try {
-            // FETCH FULL DETAILS HERE
-            // We use the ID from the summary object to get the full case with IOCs and Comments
             const res = await this.app._fetch(`/cases/get?id=${cSummary.id}`);
             if (!res.ok) throw new Error(await res.text());
             
@@ -291,7 +348,6 @@ export class CaseController {
             this.currentCase = c;
             const isClosed = c.status === 'Closed';
 
-            // Now render the Detail View using the fully populated 'c' object
             this.container.innerHTML = `
                 <div class="mb-4">
                     <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
@@ -301,7 +357,7 @@ export class CaseController {
                         <div class="level-left" style="min-width: 0; flex-shrink: 1;">
                             <div style="max-width: 600px;">
                                 <h2 class="title is-3 has-text-white" style="word-break: break-word;">${escapeHtml(c.name)}</h2>
-                                <p class="subtitle is-6 has-text-grey-light">Created by ${escapeHtml(c.created_by)} on ${new Date(c.created_at).toLocaleString()}</p>
+                                <p class="subtitle is-6 has-text-grey-light">Created by ${escapeHtml(c.created_by)} on ${new Date(c.created_at).toLocaleString()} ${c.is_auto ? '(Automated)' : ''}</p>
                             </div>
                         </div>
                         <div class="level-right">
@@ -400,6 +456,7 @@ export class CaseController {
                                 <p class="has-text-grey-light block">${escapeHtml(c.description)}</p>
                                 <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
                                 <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
+                                <p><strong>Type:</strong> ${c.is_auto ? 'Automated System Case' : 'User Created'}</p>
                             </div>
                         </div>
                     </div>
@@ -457,20 +514,17 @@ export class CaseController {
     attachDetailListeners(c) {
         document.getElementById('btnBackList').onclick = () => this.render();
 
-        // --- MISP Modal Handlers (Close) ---
         const mispModal = document.getElementById('mispModal');
         const closeMisp = () => mispModal.classList.remove('is-active');
         document.getElementById('btnCancelMisp').onclick = closeMisp;
         mispModal.querySelector('.delete').onclick = closeMisp;
 
-        // TOGGLE STATUS
         document.getElementById('btnToggleStatus').onclick = async () => {
             const newStatus = this.currentCase.status === 'Open' ? 'Closed' : 'Open';
             this.currentCase.status = newStatus;
             await this.updateCase();
         };
 
-        // DELETE CASE
         document.getElementById('btnDeleteCase').onclick = async () => {
             if (!confirm("Are you sure you want to permanently delete this case?")) return;
             try {
@@ -480,7 +534,6 @@ export class CaseController {
             } catch (e) { alert("Delete failed: " + e.message); }
         };
 
-        // ADD IOC
         document.getElementById('btnAddIOC').onclick = () => {
             const val = document.getElementById('inputAddIOC').value.trim();
             if (!val) return;
@@ -491,12 +544,10 @@ export class CaseController {
             }
         };
 
-        // TOGGLE ALL CHECKBOXES
         document.getElementById('checkAllIOCs').onchange = (e) => {
             document.querySelectorAll('.ioc-checkbox').forEach(cb => cb.checked = e.target.checked);
         };
 
-        // DELETE IOC
         document.getElementById('iocListContainer').onclick = (e) => {
             if (e.target.classList.contains('delete-ioc')) {
                 const val = e.target.dataset.val;
@@ -505,7 +556,6 @@ export class CaseController {
             }
         };
 
-        // POST COMMENT
         document.getElementById('btnPostComment').onclick = async () => {
             const text = document.getElementById('inputComment').value.trim();
             if (!text) return;
@@ -515,29 +565,22 @@ export class CaseController {
             await this.updateCase();
         };
 
-        // OPEN MISP MODAL
         document.getElementById('btnOpenMispModal').onclick = () => {
             const selected = Array.from(document.querySelectorAll('.ioc-checkbox:checked')).map(cb => cb.value);
             if (selected.length === 0) return alert("No IOCs selected.");
 
-            // Populate Modal
             document.getElementById('mispCountDisplay').textContent = selected.length;
             document.getElementById('mispEventTitle').value = `Case: ${this.currentCase.name}`;
             document.getElementById('mispPreviewList').innerHTML = selected.map(s => `<span class="tag is-dark m-1">${escapeHtml(s)}</span>`).join('');
 
-            // Show Modal
             document.getElementById('mispModal').classList.add('is-active');
 
-            // Wire up the CONFIRM button inside the modal
             const confirmBtn = document.getElementById('btnConfirmMisp');
-            // Remove old listeners to prevent double-firing if opened multiple times
             const newBtn = confirmBtn.cloneNode(true);
             confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-
             newBtn.onclick = () => this.sendToMisp(selected);
         };
     }
-
 
     async sendToMisp(selectedIOCs) {
         const title = document.getElementById('mispEventTitle').value;
@@ -545,22 +588,17 @@ export class CaseController {
         const btn = document.getElementById('btnConfirmMisp');
 
         if (!title) return alert("Event Title is required.");
-
         btn.classList.add('is-loading');
 
-        // 1. Prepare Attributes List
         const attributes = selectedIOCs.map(ioc => {
-            // Heuristic for type detection
             let type = "other";
             if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ioc)) type = "ip-src";
             else if (/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/.test(ioc)) type = "domain";
             else if (ioc.length === 32) type = "md5";
             else if (ioc.length === 64) type = "sha256";
-
             return { value: ioc, type: type };
         });
 
-        // 2. Construct Payload
         const payload = {
             event_info: title,
             tag_name: tagsVal,
@@ -568,19 +606,14 @@ export class CaseController {
         };
 
         try {
-            // 3. Send Batch Request
             const res = await this.app._fetch('/misp/workflow/batch', {
                 method: 'POST',
                 body: JSON.stringify(payload)
             });
-
             if (!res.ok) throw new Error(await res.text());
-
             const json = await res.json();
             alert(`Success! Created MISP Event: ${json.message}`);
-
             document.getElementById('mispModal').classList.remove('is-active');
-
         } catch (e) {
             console.error(e);
             alert("Failed to send batch to MISP: " + e.message);
@@ -596,10 +629,6 @@ export class CaseController {
                 body: JSON.stringify(this.currentCase)
             });
             if (!res.ok) throw new Error(await res.text());
-            
-            // Re-render details to show updated data
-            // We can just re-call openCase with the current object or fetch again.
-            // Since we just updated, let's just re-fetch to be safe and consistent.
             this.openCase({ id: this.currentCase.id }); 
         } catch (e) {
             alert("Update failed: " + e.message);

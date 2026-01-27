@@ -780,6 +780,7 @@ func (s *Server) AutomatedThreatScan() {
 					// Auto-populate the IOCs list with the threat value.
 					IOCs:     []string{se.Value},
 					Comments: []Comment{},
+					IsAuto:   true,
 				}
 
 				if err := s.DB.CreateCase(newCase); err != nil { //
@@ -802,7 +803,7 @@ func (s *Server) CleanupClosedCases() {
 
 	for {
 		// Use existing GetCases method to fetch a batch of cases
-		cases, err := s.DB.GetCases(limit, offset)
+		cases, err := s.DB.GetCases(limit, offset, "")
 		if err != nil {
 			s.Log.Printf("ERROR: Failed to fetch cases for cleanup: %v", err)
 			break

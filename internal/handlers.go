@@ -334,15 +334,13 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetCasesHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Parse 'limit' (default to 50)
-	limit := 50
+	limit := 50 // Default limiting logic
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if val, err := strconv.Atoi(l); err == nil && val > 0 {
 			limit = val
 		}
 	}
 
-	// 2. Parse 'page' (default to 1) to calculate offset
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		if val, err := strconv.Atoi(p); err == nil && val > 0 {
@@ -350,17 +348,43 @@ func (s *Server) GetCasesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	offset := (page - 1) * limit
+	filter := r.URL.Query().Get("type") // "all", "user", or "auto"
 
-	// 3. Call DB with pagination
-	cases, err := s.DB.GetCases(limit, offset)
+	cases, err := s.DB.GetCases(limit, offset, filter)
 	if err != nil {
-		s.Log.Println("Error getting cases:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(cases)
+}
+
+func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
+	filter := r.URL.Query().Get("type")
+	clear := r.URL.Query().Get("clear") == "true"
+
+	// Fetch all matching cases for export (bypassing pagination limit)
+	cases, err := s.DB.GetCases(10000, 0, filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	filename := fmt.Sprintf("threatco_cases_%s.csv", time.Now().Format("20060102"))
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=%s", filename))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	writer.Write([]string{"ID", "Name", "Status", "Date", "Auto-Generated"})
+	for _, c := range cases {
+		writer.Write([]string{c.ID, c.Name, c.Status, c.CreatedAt.String(), strconv.FormatBool(c.IsAuto)})
+		if clear {
+			s.DB.DeleteCase(c.ID) // Optional cleanup after export
+		}
+	}
 }
 
 func (s *Server) DeleteCaseHandler(w http.ResponseWriter, r *http.Request) {
