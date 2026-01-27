@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -41,7 +42,14 @@ func main() {
 		// logger = log.New(os.Stdout, "", log.LstdFlags| log.Lshortfile)
 	}
 	s := internal.NewServer("", ":8080", *internal.DbMode, *internal.DbLocation, logger)
+	if *internal.PrepareTable != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
+		if err := s.PrepareTable(ctx, *internal.PrepareTable); err != nil {
+			log.Fatalf("Critical: failed to prepare table: %v", err)
+		}
+	}
 	s.InitializeFromConfig(&c, true)
 	internal.PassStore(internal.NewUploadStore(&c))
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)

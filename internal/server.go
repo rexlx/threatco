@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -42,6 +43,7 @@ var (
 	SyslogIndex   = flag.String("syslog-index", "threatco", "Syslog index")
 	HealthCheck   = flag.Int("health-check", 60, "Health check interval in seconds")
 	RestoreDB     = flag.String("restore-db", "", "filepath to sql file if one needs to restore")
+	PrepareTable  = flag.String("prepare-table", "", "Table to drop before startup")
 )
 
 const (
@@ -948,4 +950,22 @@ func CreateFakeResponse() []byte {
 		return []byte("could not marshal fake response")
 	}
 	return out
+}
+
+func (s *Server) PrepareTable(ctx context.Context, tableName string) error {
+	// Type assert to PostgresDB to access the pgxpool
+	pgDB, ok := s.DB.(*PostgresDB)
+	if !ok {
+		return fmt.Errorf("PrepareTable is only supported for PostgresDB")
+	}
+
+	// Use CASCADE to remove dependent objects like indexes
+	query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName)
+	_, err := pgDB.Pool.Exec(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
+	}
+
+	s.LogInfo(fmt.Sprintf("Wiped table '%s' per -prepare-table flag", tableName))
+	return nil
 }

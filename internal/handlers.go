@@ -298,8 +298,6 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ... existing handlers ...
-
 // --- CASE HANDLERS ---
 
 func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
