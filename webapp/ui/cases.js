@@ -290,7 +290,7 @@ export class CaseController {
             const box = document.createElement('div');
             box.className = 'box has-background-black has-text-light mb-3';
             box.style.cursor = 'pointer';
-            box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid #900420ff';
+            box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid rgb(83, 87, 106)';
             
             box.onclick = () => this.openCase(c);
 
