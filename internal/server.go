@@ -676,6 +676,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))
 	s.Gateway.HandleFunc("/cases/create", http.HandlerFunc(s.ValidateSessionToken(s.CreateCaseHandler)))
 	s.Gateway.HandleFunc("/cases/delete", http.HandlerFunc(s.ValidateSessionToken(s.DeleteCaseHandler)))
+	s.Gateway.HandleFunc("/cases/export", http.HandlerFunc(s.ValidateSessionToken(s.ExportCasesCSVHandler)))
 	s.Gateway.HandleFunc("/cases/get", http.HandlerFunc(s.ValidateSessionToken(s.GetCaseHandler)))
 	s.Gateway.HandleFunc("/cases/list", http.HandlerFunc(s.ValidateSessionToken(s.GetCasesHandler)))
 	s.Gateway.HandleFunc("/cases/search", http.HandlerFunc(s.ValidateSessionToken(s.SearchCasesHandler)))
