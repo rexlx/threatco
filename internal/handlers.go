@@ -364,12 +364,26 @@ func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("type")
 	clear := r.URL.Query().Get("clear") == "true"
 
-	// Fetch all matching cases for export (bypassing pagination limit)
-	cases, err := s.DB.GetCases(10000, 0, filter)
+	pgDB, ok := s.DB.(*PostgresDB)
+	if !ok {
+		http.Error(w, "database type not supported for full export", http.StatusInternalServerError)
+		return
+	}
+
+	query := "SELECT id, name, status, created_at, is_auto, iocs FROM cases"
+	if filter == "user" {
+		query += " WHERE is_auto = FALSE"
+	} else if filter == "auto" {
+		query += " WHERE is_auto = TRUE"
+	}
+	query += " ORDER BY created_at DESC"
+
+	rows, err := pgDB.Pool.Query(r.Context(), query)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 
 	filename := fmt.Sprintf("threatco_cases_%s.csv", time.Now().Format("20060102"))
 	w.Header().Set("Content-Type", "text/csv")
@@ -378,11 +392,29 @@ func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
 
-	writer.Write([]string{"ID", "Name", "Status", "Date", "Auto-Generated"})
-	for _, c := range cases {
-		writer.Write([]string{c.ID, c.Name, c.Status, c.CreatedAt.String(), strconv.FormatBool(c.IsAuto)})
+	writer.Write([]string{"ID", "Name", "Status", "Date", "Auto-Generated", "IOCs"})
+
+	for rows.Next() {
+		var id, name, status string
+		var createdAt time.Time
+		var isAuto bool
+		var iocs []string
+
+		if err := rows.Scan(&id, &name, &status, &createdAt, &isAuto, &iocs); err != nil {
+			continue
+		}
+
+		writer.Write([]string{
+			id,
+			name,
+			status,
+			createdAt.String(),
+			strconv.FormatBool(isAuto),
+			strings.Join(iocs, "; "),
+		})
+
 		if clear {
-			s.DB.DeleteCase(c.ID) // Optional cleanup after export
+			s.DB.DeleteCase(id)
 		}
 	}
 }
