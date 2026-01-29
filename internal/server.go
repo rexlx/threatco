@@ -552,6 +552,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		case "key":
 			thisAuthType := &XAPIKeyAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
@@ -561,6 +562,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		case "token":
 			thisAuthType := &KeyAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
@@ -570,6 +572,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		case "basic":
 			thisAuthType := &BasicAuth{Username: svc.Secret, Password: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
@@ -584,6 +587,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 				Expires: svc.Expires,
 			}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
@@ -593,6 +597,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		case "vmray":
 			thisAuthType := &VmRayAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
@@ -602,6 +607,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		case "urlscan":
 			thisAuthType := &URLScanAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
@@ -612,6 +618,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Log.Printf("unsupported auth type: %s, defaulting to bearer\n", svc.AuthType)
 			thisAuthType := &BearerAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
 			thisEndpoint.MaxRequests = svc.MaxRequests
 			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
 			thisEndpoint.UploadService = svc.UploadService
