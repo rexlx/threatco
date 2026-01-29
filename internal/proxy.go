@@ -1072,7 +1072,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 	return func(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 		// 1. Search the database using the optimized SearchCases method
-		cases, err := db.SearchCases(req.Value)
+		cases, err := db.SearchCases(req.Value, 0)
 		if err != nil {
 			// Use the standard failure helper if the DB query fails
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("internal search error: %v", err))

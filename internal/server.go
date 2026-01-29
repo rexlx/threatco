@@ -741,61 +741,69 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 
 func (s *Server) AutomatedThreatScan() {
 	scanWindow := time.Now().Add(-1 * time.Hour)
-	responses, err := s.DB.GetResponses(scanWindow) //
+	responses, err := s.DB.GetResponses(scanWindow)
 	if err != nil {
 		s.Log.Println("AutomatedThreatScan error getting responses:", err)
 		return
 	}
 
 	for _, r := range responses {
-		tid, err := ExtractThreatLevelID(r.Data) //
+		tid, err := ExtractThreatLevelID(r.Data)
 		if err != nil {
 			continue
 		}
 
-		// Threshold for critical threats.
+		// Threshold for critical threats (4 or higher)
 		if tid >= 4 {
-			// Extract full context from the response.
 			se, err := ExtractSummarizedEvent(r.Data)
 			if err != nil {
 				s.Log.Printf("AutomatedThreatScan: found tid %d but failed to extract event for %s: %v", tid, r.ID, err)
 				continue
 			}
 
-			caseName := fmt.Sprintf("Auto-Case: Critical Threat Detected (%s)", r.ID)
-
-			// Duplicate check: search for the response ID in existing cases.
-			existingCases, err := s.DB.SearchCases(r.ID)
+			// 1. Search for existing cases containing this specific IOC value.
+			// We pass a limit of 0 (or a high number) to ensure we find it even in deep history.
+			existingCases, err := s.DB.SearchCases(se.Value, 0)
 			alreadyExists := false
+
 			if err == nil {
 				for _, ec := range existingCases {
-					if strings.Contains(ec.Name, r.ID) || strings.Contains(ec.Description, r.ID) {
-						alreadyExists = true
+					// 2. Check if the case is still "Open" and actually contains the IOC
+					if ec.Status == "Open" {
+						for _, ioc := range ec.IOCs {
+							if ioc == se.Value {
+								alreadyExists = true
+								break
+							}
+						}
+					}
+					if alreadyExists {
 						break
 					}
 				}
 			}
 
 			if !alreadyExists {
+				caseName := fmt.Sprintf("Auto-Case: Critical Threat Detected (%s)", se.Value)
 				newCase := Case{
-					ID:   uuid.New().String(),
-					Name: caseName,
-					// Append se.Info to provide immediate context in the case view.
-					Description: fmt.Sprintf("Automated case for Critical Threat level %d. Vendor: %s. Details: %s", tid, r.Vendor, se.Info),
+					ID:          uuid.New().String(),
+					Name:        caseName,
+					Description: fmt.Sprintf("Automated case for Critical Threat level %d. Vendor: %s. IOC: %s. Source Response: %s", tid, r.Vendor, se.Value, r.ID),
 					CreatedBy:   "System Automation",
 					CreatedAt:   time.Now(),
 					Status:      "Open",
-					// Auto-populate the IOCs list with the threat value.
-					IOCs:     []string{se.Value},
-					Comments: []Comment{},
-					IsAuto:   true,
+					IOCs:        []string{se.Value},
+					Comments:    []Comment{},
+					IsAuto:      true,
 				}
 
-				if err := s.DB.CreateCase(newCase); err != nil { //
+				if err := s.DB.CreateCase(newCase); err != nil {
 					s.Log.Println("Failed to create auto-case:", err)
 				} else {
-					s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Created Case %s for Response %s (%s)", newCase.ID, r.ID, se.Value)) //
+					s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Created Case %s for IOC %s", newCase.ID, se.Value))
 				}
+			} else {
+				s.Log.Printf("AutomatedThreatScan: Open case already exists for IOC %s, skipping creation.", se.Value)
 			}
 		}
 	}

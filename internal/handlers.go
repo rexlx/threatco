@@ -2435,7 +2435,7 @@ func (s *Server) SearchCasesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cases, err := s.DB.SearchCases(query)
+	cases, err := s.DB.SearchCases(query, 100)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

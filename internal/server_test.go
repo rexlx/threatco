@@ -50,7 +50,7 @@ func (m *MockDB) GetCases(limit, offset int, filter string) ([]Case, error) { re
 func (m *MockDB) GetCase(id string) (Case, error)                           { return Case{}, nil }
 func (m *MockDB) UpdateCase(c Case) error                                   { return nil }
 func (m *MockDB) DeleteCase(id string) error                                { return nil }
-func (m *MockDB) SearchCases(query string) ([]Case, error)                  { return nil, nil }
+func (m *MockDB) SearchCases(query string, limit int) ([]Case, error)       { return nil, nil }
 func (m *MockDB) RecordSearchBatch(values []string, email string) error     { return nil }
 func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)       { return SearchRecord{}, nil }
 func (m *MockDB) CleanSearchHistory(days int) error                         { return nil }

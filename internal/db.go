@@ -38,7 +38,7 @@ type Database interface {
 	GetCase(id string) (Case, error)
 	UpdateCase(c Case) error
 	DeleteCase(id string) error
-	SearchCases(query string) ([]Case, error)
+	SearchCases(query string, limit int) ([]Case, error)
 	RecordSearchBatch(values []string, email string) error
 	GetSearchHistory(value string) (SearchRecord, error)
 	CleanSearchHistory(days int) error
@@ -117,7 +117,7 @@ func (db *BboltDB) CreateCase(c Case) error {
 	return nil
 }
 
-func (db *BboltDB) SearchCases(query string) ([]Case, error) {
+func (db *BboltDB) SearchCases(query string, limit int) ([]Case, error) {
 	fmt.Println("not implemented: BboltDB SearchCases")
 	return nil, nil
 }
@@ -822,11 +822,14 @@ func (db *PostgresDB) DeleteCase(id string) error {
 	return err
 }
 
-func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
-	// We select specific columns.
-	// We use ILIKE which will now use the 'gin_trgm_ops' indexes created above.
-	// We LIMIT 100 to protect the app/db from massive result sets.
-	sql := `
+func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
+	// Use a default limit if none provided, or allow -1 for no limit
+	limitStr := ""
+	if limit > 0 {
+		limitStr = fmt.Sprintf("LIMIT %d", limit)
+	}
+
+	sql := fmt.Sprintf(`
         SELECT id, name, description, created_by, created_at, status, iocs, comments 
         FROM cases 
         WHERE (
@@ -835,11 +838,9 @@ func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
             OR iocs::text ILIKE $1
         )
         ORDER BY created_at DESC
-        LIMIT 100
-    `
-	// Add wildcards for "contains" search
-	likeQuery := "%" + query + "%"
+        %s`, limitStr)
 
+	likeQuery := "%" + query + "%"
 	rows, err := db.Pool.Query(context.Background(), sql, likeQuery)
 	if err != nil {
 		return nil, err
@@ -849,7 +850,6 @@ func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		// We still scan iocs/comments, but the LIMIT 100 keeps it safe.
 		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments); err != nil {
 			return nil, err
 		}
