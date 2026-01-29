@@ -829,7 +829,7 @@ func (db *PostgresDB) SearchCases(query string) ([]Case, error) {
 	sql := `
         SELECT id, name, description, created_by, created_at, status, iocs, comments 
         FROM cases 
-        AND (
+        WHERE (
             name ILIKE $1 
             OR description ILIKE $1 
             OR iocs::text ILIKE $1

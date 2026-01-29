@@ -89,15 +89,15 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 				e.InFlight = 0
 				e.RateMark = time.Now()
 			}
-			e.Backlog = append(e.Backlog, req)
+			// e.Backlog = append(e.Backlog, req)
 			e.Memory.Unlock()
 			return []byte{}
 		}
 		e.InFlight++
-		// defer func() {
-		// 	// e.InFlight--
-		// 	e.ProcessQueue(uid)
-		// }()
+		defer func() {
+			e.InFlight--
+			// e.ProcessQueue(uid)
+		}()
 	}
 	resp, err := e.Gateway.Do(req)
 	if err != nil {

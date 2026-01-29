@@ -14,7 +14,7 @@ import (
 	"github.com/rexlx/threatco/vendors"
 )
 
-type ProxyOperator func(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error)
+type ProxyOperator func(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error)
 
 var ProxyOperators = map[string]ProxyOperator{
 	"misp":                MispProxyHelper,
@@ -29,7 +29,7 @@ var ProxyOperators = map[string]ProxyOperator{
 	"cloudflare":          CloudflareProxyHelper,
 }
 
-func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	var output GenericOut
 	output.Type = req.Type
 	output.Value = req.Value
@@ -108,7 +108,7 @@ func MispProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]
 	return resp, nil
 }
 
-func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	thisUrl := fmt.Sprintf("%s/search", ep.GetURL())
 	data := struct {
 		Kind          string `json:"kind"`
@@ -173,7 +173,7 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	return json.Marshal(sum)
 }
 
-func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	var postReq mandiantIndicatorPostReqest
 	postReq.Requests = []struct {
 		Values []string `json:"values"`
@@ -264,7 +264,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest)
 	return json.Marshal(sum)
 }
 
-func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 
 	thisUrl := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
 	request, err := http.NewRequest("GET", thisUrl, nil)
@@ -338,7 +338,7 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 	return json.Marshal(sum)
 }
 
-func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func CrowdstrikeProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	var thisType string
 	switch req.Type {
 	case "domain":
@@ -442,7 +442,7 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReque
 
 }
 
-func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func SplunkProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	// thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs")
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "services/search/jobs/export")
 	// fmt.Println("splunk url", url, req)
@@ -543,7 +543,7 @@ func SplunkProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) (
 	return json.Marshal(sum)
 }
 
-func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	var uname, key, uri, thisUrl, info string
 	var resp []byte
 	myAuth := ep.GetAuth()
@@ -651,7 +651,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep Endpoint, req Pro
 	// return resp, nil
 }
 
-func DomainToolsProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	var uname, key, uri, thisUrl, info string
 	var resp []byte
 	myAuth := ep.GetAuth()
@@ -854,7 +854,7 @@ func uniqueStrings(input []string) []string {
 	return list
 }
 
-func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), "api/v1/search")
 	request, _ := http.NewRequest("GET", thisUrl, nil)
 	query := request.URL.Query()
@@ -943,7 +943,7 @@ func URLScanProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) 
 	return json.Marshal(sum)
 }
 
-func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 	var thisURL string
 	var info string
 	var request *http.Request
@@ -1070,7 +1070,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep Endpoint, req ProxyReques
 }
 
 func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
-	return func(resch chan ResponseItem, ep Endpoint, req ProxyRequest) ([]byte, error) {
+	return func(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
 		// 1. Search the database using the optimized SearchCases method
 		cases, err := db.SearchCases(req.Value)
 		if err != nil {

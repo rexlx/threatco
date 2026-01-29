@@ -158,7 +158,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 								return
 							}
 
-							out, err := op(s.RespCh, *ep, req)
+							out, err := op(s.RespCh, ep, req)
 							if err != nil || len(out) == 0 {
 								return
 							}
@@ -929,7 +929,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute the vendor-specific proxy operator
-	resp, err := op(s.RespCh, *ep, req)
+	resp, err := op(s.RespCh, ep, req)
 	if err != nil {
 		// Create a failure event to return to the UI
 		failResp, _ := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
