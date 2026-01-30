@@ -26,7 +26,7 @@ a service for enriching indicators of compromise.
         - Key Generator: Generate RSA (4096-bit) or ECDSA (P-521) key pairs.
         - Key Trader: Batch deploy public keys to remote authorized_keys files.
         - Remote Execution: Execute a queue of commands across remote targets via password or key-based SSH.
-        - Text Transformer: Perform Base64/URL encoding and decoding, defang/refang URLs/IPs, and manipulate list data with a column-based separator tool.
+    - Text Transformer: Perform Base64/URL encoding and decoding, defang/refang URLs/IPs, and manipulate list data with a column-based separator tool.
 
 
 ## base install dependencies
