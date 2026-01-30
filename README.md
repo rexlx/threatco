@@ -2,7 +2,7 @@
 a service for enriching indicators of compromise.
 
 ### key features
-- enrich users query by fanning out to all available plugins
+- enrich users query by fanning out to all available plugins (all tool response)
 - case management, automated case generation.
 - generate ai reports for select results
 - file analysis (if plugin is configured)
@@ -12,12 +12,29 @@ a service for enriching indicators of compromise.
 - remote logging if desired
 - backup and restore
 - add events to misp
+- convenience tools:
+    - Archive Inspector: Safely inspect ZIP contents up to 500MB; analyzed for threats like Zip Slips and Zip Bombs in a temporary sandbox.
+    - AES256 Encryptor: Server-side encryption and decryption of strings or files using password-based AES256.
+    - File Checksum Generator: Rapidly calculate SHA-256 hashes for local files.
+    - CSV Statistics & Visualization: Generate descriptive statistics (mean, std dev, percentiles) and interactive histograms for CSV data.
+    - DNS Lookup: Perform server-side forward (domain to IP) and reverse (IP to domain) lookups.
+    - Secure Generators: Create Version 4 UUIDs and customizable strong passwords with configurable character sets.
+    - IOC Extractor: Extract potential Indicators of Compromise from uploaded files and perform batch analysis against configured plugins.
+    - NPM Security Auditor: Audit package.json files to identify known malicious or suspicious dependencies.
+    - File Identity Verifier: Compare a file's extension against its true binary "Magic Bytes" signature to detect mismatched or spoofed file types.
+    - SSH Management:
+        - Key Generator: Generate RSA (4096-bit) or ECDSA (P-521) key pairs.
+        - Key Trader: Batch deploy public keys to remote authorized_keys files.
+        - Remote Execution: Execute a queue of commands across remote targets via password or key-based SSH.
+        - Text Transformer: Perform Base64/URL encoding and decoding, defang/refang URLs/IPs, and manipulate list data with a column-based separator tool.
+
 
 ## base install dependencies
 - go programming language installed
 - git
 - *optionally* docker
 - a config.json / .env if secret management is required
+- postgres database
 
 ## containerized deployment
 - docker, podman, or docker-compose
