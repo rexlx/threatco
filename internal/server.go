@@ -788,7 +788,7 @@ func (s *Server) AutomatedThreatScan() {
 				newCase := Case{
 					ID:          uuid.New().String(),
 					Name:        caseName,
-					Description: fmt.Sprintf("Automated case for Critical Threat level %d. Vendor: %s. IOC: %s. Source Response: %s", tid, r.Vendor, se.Value, r.ID),
+					Description: fmt.Sprintf("Automated case for %v. Vendor: %s. IOC: %s. %s", r.ID, r.Vendor, se.Value, se.Info),
 					CreatedBy:   "System Automation",
 					CreatedAt:   time.Now(),
 					Status:      "Open",
