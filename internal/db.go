@@ -749,9 +749,6 @@ func (db *PostgresDB) CreateCase(c Case) error {
 	return err
 }
 
-// Optimized GetCases with Pagination and Column Selection
-// internal/db.go
-
 func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error) {
 	var query string
 	var args []interface{}

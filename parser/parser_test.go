@@ -241,7 +241,6 @@ func TestGetMatches(t *testing.T) {
 			regex: c.Expressions["url"],
 			text:  "URL with slash: http://example.com/path/, URL without: https://google.com/search",
 			expected: []Match{
-				// This expectation is CORRECT. The problem is in parser.go.
 				{Value: "http://example.com/path", Type: "url"},
 				{Value: "https://google.com/search", Type: "url"},
 			},

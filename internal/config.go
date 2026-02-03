@@ -1,6 +1,9 @@
 package internal
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,20 +35,8 @@ type Configuration struct {
 
 type LlmConfiguration optional.LlmConfig
 
-func (c *Configuration) PopulateFromJSONFile(fh string) error {
-	if !FileExists(fh) {
-		return fmt.Errorf("file does not exist: %s", fh)
-	}
-	file, err := os.Open(fh)
-	if err != nil {
-		return fmt.Errorf("could not open file: %v", err)
-	}
-	defer file.Close()
-
-	d := json.NewDecoder(file)
-	if err := d.Decode(c); err != nil {
-		return fmt.Errorf("could not decode file: %v", err)
-	}
+// ApplyEnvOverrides applies environment variable overrides to the configuration.
+func (c *Configuration) ApplyEnvOverrides() {
 	if c.LlmConf.ApiKey == "" {
 		envVar := "THREATCO_LLM_API_KEY"
 		apiKey := os.Getenv(envVar)
@@ -70,7 +61,115 @@ func (c *Configuration) PopulateFromJSONFile(fh string) error {
 			}
 		}
 	}
+}
 
+func (c *Configuration) PopulateFromJSONFile(fh string) error {
+	if !FileExists(fh) {
+		return fmt.Errorf("file does not exist: %s", fh)
+	}
+	file, err := os.Open(fh)
+	if err != nil {
+		return fmt.Errorf("could not open file: %v", err)
+	}
+	defer file.Close()
+
+	d := json.NewDecoder(file)
+	if err := d.Decode(c); err != nil {
+		return fmt.Errorf("could not decode file: %v", err)
+	}
+
+	c.ApplyEnvOverrides()
+
+	return nil
+}
+
+func (c *Configuration) PopulateFromEncryptedFile(fh string, key []byte) error {
+	if !FileExists(fh) {
+		return fmt.Errorf("file does not exist: %s", fh)
+	}
+	content, err := os.ReadFile(fh)
+	if err != nil {
+		return fmt.Errorf("could not read file: %v", err)
+	}
+
+	// Format is expected to be hex-encoded "nonce:ciphertext"
+	parts := strings.Split(string(content), ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid encrypted file format (expected nonce:ciphertext)")
+	}
+
+	nonce, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return fmt.Errorf("failed to decode nonce: %w", err)
+	}
+	ciphertext, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("failed to decode ciphertext: %w", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("failed to create cipher: %w", err)
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt config: %w", err)
+	}
+
+	if err := json.Unmarshal(plaintext, c); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON config: %w", err)
+	}
+
+	c.ApplyEnvOverrides()
+
+	return nil
+}
+
+func (c *Configuration) PopulateFromPasscodeFile(fh string, passcode string) error {
+	if !FileExists(fh) {
+		return fmt.Errorf("file does not exist: %s", fh)
+	}
+	data, err := os.ReadFile(fh)
+	if err != nil {
+		return fmt.Errorf("could not read file: %v", err)
+	}
+
+	// Minimum length: 16 (salt) + 12 (nonce) + ciphertext
+	if len(data) < 29 {
+		return fmt.Errorf("invalid data: encrypted config too short")
+	}
+
+	salt := data[:16]
+	nonce := data[16:28]
+	ciphertext := data[28:]
+
+	// Derive key using the same logic as ToolsDecryptHandler
+	key := DeriveKey(passcode, salt)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("cipher error: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("GCM error: %w", err)
+	}
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return fmt.Errorf("decryption failed (wrong passcode?): %w", err)
+	}
+
+	if err := json.Unmarshal(plaintext, c); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON config: %w", err)
+	}
+
+	c.ApplyEnvOverrides()
 	return nil
 }
 

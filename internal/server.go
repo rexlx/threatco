@@ -29,6 +29,8 @@ import (
 
 var (
 	DeleteConfig  = flag.Bool("delete", false, "Delete configuration file")
+	EncodedConfig = flag.Bool("encoded-config", false, "Is the config encoded?")
+	SeedFile      = flag.String("seedfile", "", "Path to seed file for key generation")
 	Fqdn          = flag.String("fqdn", "http://localhost", "Fully qualified domain name")
 	DbLocation    = flag.String("db", "", "Database location")
 	DbMode        = flag.String("dbmode", "postgres", "Database mode")
@@ -529,10 +531,44 @@ func (s *Server) AddResponse(vendor, uid string, data []byte) {
 
 func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	if fromFile {
-		err := cfg.PopulateFromJSONFile(*ConfigPath)
-		if err != nil {
-			s.Log.Fatalf("could not populate from file: %v", err)
+		if *EncodedConfig {
+			s.Log.Println("Loading encoded configuration...")
+
+			// 1. Get partial key from environment (e.g., provided by AWS Secret Manager)
+			partialKey := os.Getenv("THREATCO_CONFIG_KEY")
+			if partialKey == "" {
+				s.Log.Fatal("THREATCO_CONFIG_KEY environment variable is required when -encoded-config is set")
+			}
+
+			// 2. Get the other half from the seed file hash
+			if *SeedFile == "" {
+				s.Log.Fatal("-seedfile flag is required when -encoded-config is set")
+			}
+			f, err := os.Open(*SeedFile)
+			if err != nil {
+				s.Log.Fatalf("Failed to open seed file: %v", err)
+			}
+			defer f.Close()
+
+			seedHash, err := CalculateSHA256(f)
+			if err != nil {
+				s.Log.Fatalf("Failed to hash seed file: %v", err)
+			}
+
+			// 3. Combine to form the full passcode
+			passcode := partialKey + seedHash
+
+			err = cfg.PopulateFromPasscodeFile(*ConfigPath, passcode)
+			if err != nil {
+				s.Log.Fatalf("Failed to populate from passcode file: %v", err)
+			}
+		} else {
+			err := cfg.PopulateFromJSONFile(*ConfigPath)
+			if err != nil {
+				s.Log.Fatalf("could not populate from file: %v", err)
+			}
 		}
+
 		if *DeleteConfig {
 			err := DeleteConfigFile(*ConfigPath)
 			if err != nil {

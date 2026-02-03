@@ -132,8 +132,6 @@ type Tag struct {
 	Inherited      int    `json:"inherited"`
 }
 
-// Add this to vendors/misp.go
-
 type MispAddAttrSchema struct {
 	EventID      string `json:"event_id"`
 	Category     string `json:"category"`

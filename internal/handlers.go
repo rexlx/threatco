@@ -500,8 +500,6 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok"}`))
 }
 
-// Add to internal/handlers.go
-
 func (s *Server) ToolsInspectArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Increase limit to 500MB for this specific handler
 	// We use MaxBytesReader to prevent the server from accepting infinite streams
@@ -631,11 +629,6 @@ func (s *Server) ToolsInspectArchiveHandler(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
 }
-
-// Add to internal/handlers.go imports:
-// "crypto/x509"
-// "encoding/pem"
-// "golang.org/x/crypto/ssh"
 
 func (s *Server) ToolsGenerateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
 	keyType := r.URL.Query().Get("type") // "rsa" or "ecdsa"
@@ -1916,8 +1909,6 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 	return finalResults
 }
 
-// internal/handlers.go
-
 func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Mandatory logging with the special string
 	id := r.URL.Query().Get("id")
@@ -2445,7 +2436,7 @@ func (s *Server) SearchCasesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(cases)
 }
 
-func deriveKey(password string, salt []byte) []byte {
+func DeriveKey(password string, salt []byte) []byte {
 	key := sha256.Sum256(append([]byte(password), salt...))
 	for i := 0; i < 10000; i++ {
 		key = sha256.Sum256(key[:])
@@ -2483,7 +2474,7 @@ func (s *Server) ToolsEncryptHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Crypto error", http.StatusInternalServerError)
 		return
 	}
-	key := deriveKey(password, salt)
+	key := DeriveKey(password, salt)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		http.Error(w, "Cipher error", http.StatusInternalServerError)
@@ -2541,7 +2532,7 @@ func (s *Server) ToolsDecryptHandler(w http.ResponseWriter, r *http.Request) {
 	salt := data[:16]
 	nonce := data[16:28]
 	ciphertext := data[28:]
-	key := deriveKey(password, salt)
+	key := DeriveKey(password, salt)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		http.Error(w, "Cipher error", http.StatusInternalServerError)
@@ -2588,8 +2579,6 @@ func (s *Server) ToolsChecksumHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(checksum))
 }
-
-// internal/handlers.go
 
 type SSHDeployRequest struct {
 	Hosts      []string `json:"hosts"`
@@ -2682,10 +2671,6 @@ func (s *Server) sendSshNotification(user, host, msg string, isError bool) {
 		Created: time.Now(),
 	})
 }
-
-// internal/handlers.go
-
-// internal/handlers.go
 
 type SSHExecRequest struct {
 	Host       string   `json:"host"`
