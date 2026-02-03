@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"flag"
+	"flag" // Still need this for the types
 	"fmt"
 	"io"
 	"log"
@@ -14,36 +14,72 @@ import (
 )
 
 func main() {
-	inputFile := flag.String("input", "config.json", "Plaintext JSON config file")
-	outputFile := flag.String("output", "config.enc", "Output encrypted file")
-	seedFile := flag.String("seed", "", "Path to the seed file")
-	flag.Parse()
+	// 1. Create a private FlagSet to ignore global noise from internal
+	fs := flag.NewFlagSet("encoder", flag.ExitOnError)
+
+	// 2. Define flags on the private set
+	inputFile := fs.String("input", "config.json", "Plaintext JSON config file")
+	outputFile := fs.String("output", "config.enc", "Output encrypted file")
+	seedFile := fs.String("seed", "", "Path to the seed file")
+
+	// 3. Parse only the arguments passed to this tool
+	fs.Parse(os.Args[1:])
 
 	partialKey := os.Getenv("THREATCO_CONFIG_KEY")
 	if partialKey == "" || *seedFile == "" {
-		log.Fatal("Usage: THREATCO_CONFIG_KEY=xxx go run main.go -seed <file> -input <file> -output <file>")
+		fmt.Println("Usage: THREATCO_CONFIG_KEY=xxx ./encoder -seed <file> [-input <file>] [-output <file>]")
+		os.Exit(1)
 	}
 
-	// 1. Derive Passcode
-	f, _ := os.Open(*seedFile)
-	seedHash, _ := internal.CalculateSHA256(f)
+	// 4. Derive Passcode
+	f, err := os.Open(*seedFile)
+	if err != nil {
+		log.Fatalf("Failed to open seed file: %v", err)
+	}
+	defer f.Close()
+
+	seedHash, err := internal.CalculateSHA256(f)
+	if err != nil {
+		log.Fatalf("Failed to hash seed file: %v", err)
+	}
 	passcode := partialKey + seedHash
 
-	// 2. Prepare Encryption
-	plaintext, _ := os.ReadFile(*inputFile)
+	// 5. Read Plaintext
+	plaintext, err := os.ReadFile(*inputFile)
+	if err != nil {
+		log.Fatalf("Failed to read input file: %v", err)
+	}
+
+	// 6. Prepare Encryption Components
 	salt := make([]byte, 16)
 	nonce := make([]byte, 12)
-	io.ReadFull(rand.Reader, salt)
-	io.ReadFull(rand.Reader, nonce)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		log.Fatal(err)
+	}
 
+	// 7. Derive Key and Initialize Cipher
 	key := internal.DeriveKey(passcode, salt)
-	block, _ := aes.NewCipher(key)
-	gcm, _ := cipher.NewGCM(block)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// 3. Encrypt and Write Binary: [Salt][Nonce][Ciphertext]
+	// 8. Encrypt and Write Binary: [Salt][Nonce][Ciphertext]
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
 
-	out, _ := os.Create(*outputFile)
+	out, err := os.Create(*outputFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
+
 	out.Write(salt)
 	out.Write(nonce)
 	out.Write(ciphertext)
