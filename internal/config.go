@@ -31,6 +31,8 @@ type Configuration struct {
 	ResponseCacheExpiry int              `json:"response_cache_expiry"`
 	StatCacheTickRate   int              `json:"stat_cache_tick_rate"`
 	LlmConf             LlmConfiguration `json:"llm"`
+	EncKey              string           `json:"enc_key"`
+	PreviousEncKey      string           `json:"previous_enc_key"`
 }
 
 type LlmConfiguration optional.LlmConfig
@@ -42,6 +44,22 @@ func (c *Configuration) ApplyEnvOverrides() {
 		apiKey := os.Getenv(envVar)
 		if apiKey != "" {
 			c.LlmConf.ApiKey = apiKey
+		}
+	}
+	if c.EncKey != "" {
+		err := os.Setenv("THREATCO_ENCRYPTION_KEY", c.EncKey)
+		if err != nil {
+			fmt.Printf("Warning: failed to set environment variable for encryption key: %v\n", err)
+		}
+		err = os.Setenv("THREATCO_OLD_ENCRYPTION_KEY", c.PreviousEncKey)
+		if err != nil {
+			fmt.Printf("Warning: failed to set environment variable for previous encryption key: %v\n", err)
+		}
+	}
+	if c.DBLocation != "" {
+		err := os.Setenv("THREATCO_DB_LOCATION", c.DBLocation)
+		if err != nil {
+			fmt.Printf("Warning: failed to set environment variable for DB location: %v\n", err)
 		}
 	}
 	for i := range c.Services {

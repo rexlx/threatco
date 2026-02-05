@@ -122,12 +122,15 @@ type LogItem struct {
 
 var ErrInvalidFormat = errors.New("invalid encrypted data format (might be plaintext)")
 
-func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) *Server {
+func NewServer(id string, address string, dbType string, dbLocation string, logger *log.Logger) (*Server, *Configuration) {
+	c := &Configuration{}
 	keyHex := os.Getenv("THREATCO_ENCRYPTION_KEY")
 	if keyHex == "" {
 		logger.Fatal("THREATCO_ENCRYPTION_KEY environment variable not set")
 	}
 	keyOldHex := os.Getenv("THREATCO_OLD_ENCRYPTION_KEY")
+	svr := &Server{}
+	svr.InitializeFromConfig(c, true)
 	var database Database
 	targets := make(map[string]*Endpoint)
 	operators := make(map[string]ProxyOperator)
@@ -194,28 +197,48 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	if id == "" {
 		id = fmt.Sprintf("%v-%v-%v", time.Now().Unix(), Version, "non-prod")
 	}
-	svr := &Server{
-		Hub:            NewHub(),
-		ProxyOperators: operators,
-		StopCh:         stopCh,
-		Session:        sessionMgr,
-		RespCh:         resch,
-		Cache:          cache,
-		DB:             database,
-		Gateway:        gateway,
-		Log:            logger,
-		Memory:         memory,
-		Targets:        targets,
-		ID:             id,
-		Details: Details{
-			Key:               &aesGCM,
-			FQDN:              *Fqdn,
-			SupportedServices: SupportedServices,
-			Address:           address,
-			StartTime:         time.Now(),
-			Stats:             make(map[string]float64),
-		},
+	svr.Hub = NewHub()
+	svr.ProxyOperators = operators
+	svr.StopCh = stopCh
+	svr.Session = sessionMgr
+	svr.RespCh = resch
+	svr.Cache = cache
+	svr.DB = database
+	svr.Gateway = gateway
+	svr.Memory = memory
+	svr.Targets = targets
+	svr.Log = logger
+	svr.ID = id
+	svr.Details = Details{
+		Key:               &aesGCM,
+		FQDN:              *Fqdn,
+		SupportedServices: SupportedServices,
+		Address:           address,
+		StartTime:         time.Now(),
+		Stats:             make(map[string]float64),
 	}
+	// svr := &Server{
+	// 	Hub:            NewHub(),
+	// 	ProxyOperators: operators,
+	// 	StopCh:         stopCh,
+	// 	Session:        sessionMgr,
+	// 	RespCh:         resch,
+	// 	Cache:          cache,
+	// 	DB:             database,
+	// 	Gateway:        gateway,
+	// 	Log:            logger,
+	// 	Memory:         memory,
+	// 	Targets:        targets,
+	// 	ID:             id,
+	// 	Details: Details{
+	// 		Key:               &aesGCM,
+	// 		FQDN:              *Fqdn,
+	// 		SupportedServices: SupportedServices,
+	// 		Address:           address,
+	// 		StartTime:         time.Now(),
+	// 		Stats:             make(map[string]float64),
+	// 	},
+	// }
 	if keyOldHex != "" {
 		logger.Println("Old encryption key detected, will attempt to support decryption with old key")
 		oldKey, err := hex.DecodeString(keyOldHex)
@@ -254,7 +277,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	prometheus.MustRegister(svr.Gauges)
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	fmt.Println("Server initialized with ID:", svr.ID)
-	return svr
+	return svr, c
 }
 
 func (s *Server) Encrypt(plaintext string) (string, error) {

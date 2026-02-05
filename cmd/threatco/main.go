@@ -19,7 +19,7 @@ import (
 func main() {
 	var logger *log.Logger
 	flag.Parse()
-	var c internal.Configuration
+	// var c internal.Configuration
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
@@ -40,9 +40,9 @@ func main() {
 		logger = log.New(file, "", log.LstdFlags)
 		// logger = log.New(os.Stdout, "", log.LstdFlags| log.Lshortfile)
 	}
-	s := internal.NewServer("", ":8080", *internal.DbMode, *internal.DbLocation, logger)
-	s.InitializeFromConfig(&c, true)
-	internal.PassStore(internal.NewUploadStore(&c))
+	s, c := internal.NewServer("", ":8080", *internal.DbMode, *internal.DbLocation, logger)
+	// s.InitializeFromConfig(&c, true)
+	internal.PassStore(internal.NewUploadStore(c))
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	healthTicker := time.NewTicker(time.Duration(*internal.HealthCheck) * time.Second)
 	go func() {
