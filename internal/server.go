@@ -138,7 +138,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	memory := &sync.RWMutex{}
 	svr.Memory = memory
 	svr.Targets = targets
-	svr.InitializeFromConfig(c, true)
+
 	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
@@ -148,6 +148,9 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		Responses:    make(map[string]ResponseItem),
 		Charts:       []byte(views.NoDataView),
 	}
+	svr.Hub = NewHub()
+	svr.Cache = cache
+	svr.Gateway = gateway
 	stopCh := make(chan bool)
 	resch := make(chan ResponseItem, 200)
 	sessionMgr := scs.New()
@@ -158,9 +161,13 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
 	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
-	if dbLocation == "" {
-		dbLocation = os.Getenv("THREATCO_DB_LOCATION")
-	}
+	svr.ProxyOperators = operators
+	svr.StopCh = stopCh
+	svr.Session = sessionMgr
+	svr.RespCh = resch
+	svr.Cache = cache
+	svr.DB = database
+	svr.ID = id
 	key, err := hex.DecodeString(keyHex)
 	if err != nil {
 		log.Fatalf("Failed to decode ENCRYPTION_KEY: %v", err)
@@ -170,9 +177,20 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		log.Fatalf("Failed to create cipher block: %v", err)
 	}
 	aesGCM, err := cipher.NewGCM(block)
-
 	if err != nil {
 		log.Fatalf("Failed to create GCM: %v", err)
+	}
+	svr.Details = Details{
+		Key:               &aesGCM,
+		FQDN:              *Fqdn,
+		SupportedServices: SupportedServices,
+		Address:           address,
+		StartTime:         time.Now(),
+		Stats:             make(map[string]float64),
+	}
+	svr.InitializeFromConfig(c, true)
+	if dbLocation == "" {
+		dbLocation = os.Getenv("THREATCO_DB_LOCATION")
 	}
 	switch dbType {
 	case "bbolt":
@@ -200,23 +218,6 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	}
 	if id == "" {
 		id = fmt.Sprintf("%v-%v-%v", time.Now().Unix(), Version, "non-prod")
-	}
-	svr.Hub = NewHub()
-	svr.ProxyOperators = operators
-	svr.StopCh = stopCh
-	svr.Session = sessionMgr
-	svr.RespCh = resch
-	svr.Cache = cache
-	svr.DB = database
-	svr.Gateway = gateway
-	svr.ID = id
-	svr.Details = Details{
-		Key:               &aesGCM,
-		FQDN:              *Fqdn,
-		SupportedServices: SupportedServices,
-		Address:           address,
-		StartTime:         time.Now(),
-		Stats:             make(map[string]float64),
 	}
 	// svr := &Server{
 	// 	Hub:            NewHub(),
