@@ -281,6 +281,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	prometheus.MustRegister(svr.Gauges)
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	fmt.Println("Server initialized with ID:", svr.ID)
+	svr.ProxyOperators["internal-case"] = ThreatcoInternalCaseSearchBuilder(svr.DB)
 	return svr, c
 }
 
@@ -724,7 +725,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		}
 		s.ProxyOperators[name] = op
 	}
-	s.ProxyOperators["internal-case"] = ThreatcoInternalCaseSearchBuilder(s.DB)
+
 	s.Gateway.Handle("/archive", http.HandlerFunc(s.ValidateSessionToken(s.ArchiveResponseHandler)))
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))
