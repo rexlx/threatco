@@ -132,11 +132,12 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	svr := &Server{
 		Log: logger,
 	}
-	svr.InitializeFromConfig(c, true)
 	var database Database
 	targets := make(map[string]*Endpoint)
 	operators := make(map[string]ProxyOperator)
 	memory := &sync.RWMutex{}
+	svr.Memory = memory
+	svr.InitializeFromConfig(c, true)
 	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
@@ -207,7 +208,6 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	svr.Cache = cache
 	svr.DB = database
 	svr.Gateway = gateway
-	svr.Memory = memory
 	svr.Targets = targets
 	svr.ID = id
 	svr.Details = Details{
