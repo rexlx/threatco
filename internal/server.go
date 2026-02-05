@@ -137,6 +137,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	operators := make(map[string]ProxyOperator)
 	memory := &sync.RWMutex{}
 	svr.Memory = memory
+	svr.Targets = targets
 	svr.InitializeFromConfig(c, true)
 	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
@@ -208,7 +209,6 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	svr.Cache = cache
 	svr.DB = database
 	svr.Gateway = gateway
-	svr.Targets = targets
 	svr.ID = id
 	svr.Details = Details{
 		Key:               &aesGCM,
