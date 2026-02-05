@@ -166,7 +166,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	svr.Session = sessionMgr
 	svr.RespCh = resch
 	svr.Cache = cache
-	svr.DB = database
+
 	svr.ID = id
 	key, err := hex.DecodeString(keyHex)
 	if err != nil {
@@ -216,6 +216,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		}
 		fmt.Printf("database restored from %s successfully", *RestoreDB)
 	}
+	svr.DB = database
 	if id == "" {
 		id = fmt.Sprintf("%v-%v-%v", time.Now().Unix(), Version, "non-prod")
 	}
