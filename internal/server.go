@@ -129,7 +129,9 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		logger.Fatal("THREATCO_ENCRYPTION_KEY environment variable not set")
 	}
 	keyOldHex := os.Getenv("THREATCO_OLD_ENCRYPTION_KEY")
-	svr := &Server{}
+	svr := &Server{
+		Log: logger,
+	}
 	svr.InitializeFromConfig(c, true)
 	var database Database
 	targets := make(map[string]*Endpoint)
@@ -207,7 +209,6 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	svr.Gateway = gateway
 	svr.Memory = memory
 	svr.Targets = targets
-	svr.Log = logger
 	svr.ID = id
 	svr.Details = Details{
 		Key:               &aesGCM,
