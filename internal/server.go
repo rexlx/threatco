@@ -129,15 +129,11 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		logger.Fatal("THREATCO_ENCRYPTION_KEY environment variable not set")
 	}
 	keyOldHex := os.Getenv("THREATCO_OLD_ENCRYPTION_KEY")
-	svr := &Server{
-		Log: logger,
-	}
+
 	var database Database
 	targets := make(map[string]*Endpoint)
 	operators := make(map[string]ProxyOperator)
 	memory := &sync.RWMutex{}
-	svr.Memory = memory
-	svr.Targets = targets
 
 	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
@@ -148,9 +144,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		Responses:    make(map[string]ResponseItem),
 		Charts:       []byte(views.NoDataView),
 	}
-	svr.Hub = NewHub()
-	svr.Cache = cache
-	svr.Gateway = gateway
+
 	stopCh := make(chan bool)
 	resch := make(chan ResponseItem, 200)
 	sessionMgr := scs.New()
@@ -161,13 +155,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
 	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
-	svr.ProxyOperators = operators
-	svr.StopCh = stopCh
-	svr.Session = sessionMgr
-	svr.RespCh = resch
-	svr.Cache = cache
 
-	svr.ID = id
 	key, err := hex.DecodeString(keyHex)
 	if err != nil {
 		log.Fatalf("Failed to decode ENCRYPTION_KEY: %v", err)
@@ -179,6 +167,19 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
 		log.Fatalf("Failed to create GCM: %v", err)
+	}
+	svr := &Server{
+		Hub:            NewHub(),
+		Log:            logger,
+		Session:        sessionMgr,
+		RespCh:         resch,
+		StopCh:         stopCh,
+		Cache:          cache,
+		Targets:        targets,
+		ProxyOperators: operators,
+		Memory:         memory,
+		Gateway:        gateway,
+		ID:             id,
 	}
 	svr.Details = Details{
 		Key:               &aesGCM,
