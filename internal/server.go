@@ -674,7 +674,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 		default:
-			s.Log.Printf("unsupported auth type: %s, defaulting to bearer\n", svc.AuthType)
+			fmt.Printf("unsupported auth type: %s, defaulting to bearer\n", svc.AuthType)
 			thisAuthType := &BearerAuth{Token: svc.Key}
 			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
 			thisEndpoint.RateLimited = svc.RateLimited
@@ -684,7 +684,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
-			s.Log.Printf("added service %s with bearer auth", svc.Kind)
+			fmt.Printf("added service %s with bearer auth", svc.Kind)
 
 		}
 	}
@@ -715,7 +715,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		go thisAuth.GetAndStoreToken(s.StopCh)
 		op, ok := ProxyOperators[name]
 		if !ok {
-			s.Log.Printf("no proxy operator for service %s, skipping", name)
+			fmt.Printf("no proxy operator for service %s, skipping", name)
 			continue
 		}
 		s.ProxyOperators[name] = op
