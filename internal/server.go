@@ -280,6 +280,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	// Register it with the default registry
 	prometheus.MustRegister(svr.Gauges)
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
+	svr.ID = id
 	fmt.Println("Server initialized with ID:", svr.ID)
 	svr.ProxyOperators["internal-case"] = ThreatcoInternalCaseSearchBuilder(svr.DB)
 	return svr, c
