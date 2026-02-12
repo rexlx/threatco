@@ -187,12 +187,9 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 <div class="column is-3"> 
 	<div class="card has-background-custom service-card">
 		<div class="card-content">
-			<p class="title has-text-primary is-4">%s</p>
+			<p class="title has-text-primary is-4 open-modal" data-modal-id="%s" style="cursor: pointer">%s</p>
 			<div class="content">
 				<p class="has-text-white">%v</p>
-			</div>
-			<div class="has-text-centered">
-				<button class="button open-modal is-primary" data-modal-id="%s">View Details</button>
 			</div>
 		</div>
 	</div>
@@ -206,7 +203,7 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 			</header>
 			<section class="modal-card-body has-background-custom">
 				<ul>
-`, service.Kind, service.Description, modalID, modalID, service.Kind)
+`, modalID, service.Kind, service.Description, modalID, service.Kind) //
 
 		// Loop through service types
 		for _, t := range service.Type {

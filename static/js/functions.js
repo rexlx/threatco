@@ -63,7 +63,7 @@ function deleteResponse(id) {
  * @param {string} email - The email of the user to generate a key for.
  */
 function generateNewKey(email) {
-    const endpoint = '/generatekey'; 
+    const endpoint = '/generatekey';
     const resultsDiv = document.getElementById('userResults');
 
     if (resultsDiv) {
@@ -73,24 +73,24 @@ function generateNewKey(email) {
     fetch(endpoint, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json' 
+            'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email: email }) 
+        body: JSON.stringify({ email: email })
     })
-    .then(response => {
-        if (response.ok) {
-            return response.json(); 
-        }
-        return response.text().then(text => {
-            throw new Error(`Server error: ${text}`);
-        });
-    })
-    .then(user => {
-        // Successfully got the user object
-        if (user && user.key) {
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            return response.text().then(text => {
+                throw new Error(`Server error: ${text}`);
+            });
+        })
+        .then(user => {
+            // Successfully got the user object
+            if (user && user.key) {
 
-            if (resultsDiv) {
-                resultsDiv.innerHTML = `
+                if (resultsDiv) {
+                    resultsDiv.innerHTML = `
                     <div class="notification is-success">
                         <strong style="display: block; margin-bottom: 8px;">New API Key Generated</strong>
                         <p style="margin-bottom: 12px;">Click the key below to select it, then press Ctrl+C or Cmd+C to copy. You will not be able to see this key again.</p>
@@ -101,22 +101,22 @@ function generateNewKey(email) {
                                style="width: 100%; cursor: pointer;">
                     </div>
                 `;
+                } else {
+                    console.error("Could not find 'userResults' div to display API key.");
+                    prompt("New API Key. Press Ctrl+C to copy:", user.key);
+                }
+
+
             } else {
-                console.error("Could not find 'userResults' div to display API key.");
-                prompt("New API Key. Press Ctrl+C to copy:", user.key);
+                throw new Error('Invalid user data received from server.');
             }
-
-
-        } else {
-            throw new Error('Invalid user data received from server.');
-        }
-    })
-    .catch(error => {
-        console.error('There was a problem with the generate key operation:', error);
-        if (resultsDiv) {
-            resultsDiv.innerHTML = `<div class="notification is-danger">Error generating key: ${error.message}</div>`;
-        }
-    });
+        })
+        .catch(error => {
+            console.error('There was a problem with the generate key operation:', error);
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `<div class="notification is-danger">Error generating key: ${error.message}</div>`;
+            }
+        });
 }
 
 function thislogout() {
@@ -406,23 +406,34 @@ function isValid32ByteBase64Key(key) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-
     document.body.addEventListener('click', (e) => {
+        // Handle Delete User Button
+        const deleteBtn = e.target.closest('.delete-user-btn');
+        if (deleteBtn) {
+            const email = deleteBtn.getAttribute('data-email');
+            deleteUser(email);
+            return;
+        }
+
+        // Handle Generate New Key Button
+        const keyBtn = e.target.closest('.generate-key-btn');
+        if (keyBtn) {
+            const email = keyBtn.getAttribute('data-email');
+            generateNewKey(email);
+            return;
+        }
+
+        // Handle Logout Button
         if (e.target.closest('.logout-btn')) {
             console.log("Logout button clicked");
-            // We use a direct POST request to /logout
             fetch('/logout', { method: 'POST' })
                 .then(() => {
-                    // Force redirect to root (Login page)
                     window.location.href = '/';
                 })
                 .catch(err => {
                     console.error("Logout failed", err);
-                    // Fallback: Redirect anyway, session might be dead
                     window.location.href = '/';
                 });
-            return;
         }
-       
     });
 });
