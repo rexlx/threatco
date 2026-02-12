@@ -28,6 +28,23 @@ a service for enriching indicators of compromise.
         - Remote Execution: Execute a queue of commands across remote targets via password or key-based SSH.
     - Text Transformer: Perform Base64/URL encoding and decoding, defang/refang URLs/IPs, and manipulate list data with a column-based separator tool.
 
+## with companion apps
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Servers as Generic Servers
+    participant Teller as Syslog Server (teller)
+    participant Rider as Rider Server (rider)
+    participant Threatco as Threatco Server (threatco)
+
+    Servers->>Teller: UDP/TCP 514 (Syslog)
+    Note over Teller: Buffer & Batch Logs
+    Teller->>Rider: QUIC Stream (Encrypted)
+    Rider->>Threatco: POST /v1/query (HTTPS/JSON)
+    Threatco-->>Rider: 200 OK (Enrichment Data)
+    Rider-->>Teller: ACK
+```
 
 ## base install dependencies
 - go programming language installed
@@ -103,7 +120,5 @@ backup and restore is limited to the postgresql database type at this time.
 - vmray (*limited to file upload*)
 
 companion application: [insights](https://github.com/rexlx/insights) [extension](https://chromewebstore.google.com/detail/insights/ahjeboeknahakdlhjilhhjlddijbcooi).
-
-
 
 
