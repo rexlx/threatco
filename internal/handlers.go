@@ -738,63 +738,60 @@ func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
-	// defer s.addStat("add_user_requests", 1)
-	defer func(start time.Time) {
-		s.Log.Println("AddUserHandler took", time.Since(start))
-	}(time.Now())
+	callerEmail := r.Context().Value("email").(string)
+
 	var nur NewUserRequest
-	err := json.NewDecoder(r.Body).Decode(&nur)
-	if err != nil {
-		s.Log.Println("error", err)
+	if err := json.NewDecoder(r.Body).Decode(&nur); err != nil {
+		s.Log.Println("error decoding request:", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	if nur.Email == "" {
-		s.Log.Println("error", err)
 		http.Error(w, "missing 'email' field", http.StatusBadRequest)
 		return
 	}
-	//
-	var b bool
-	if nur.Admin == "on" || nur.Admin == "true" {
-		b = true
+
+	caller, _ := s.DB.GetUserByEmail(callerEmail)
+	existingUser, err := s.DB.GetUserByEmail(nur.Email)
+
+	if err == nil && existingUser.Email != "" {
+		if !caller.Admin && caller.Email != existingUser.Email {
+			http.Error(w, "you do not have permission to modify this user", http.StatusForbidden)
+			return
+		}
 	}
-	user, err := NewUser(nur.Email, b, s.Details.SupportedServices)
+
+	isAdmin := nur.Admin == "on" || nur.Admin == "true"
+	user, err := NewUser(nur.Email, isAdmin, s.Details.SupportedServices)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	if nur.Password != "" {
-		err = user.SetPassword(nur.Password)
-		if err != nil {
+		if err := user.SetPassword(nur.Password); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
+
 	enc, err := s.Encrypt(user.Key)
 	if err != nil {
-		s.Log.Println("error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmp := user.Key
+
+	tmpKey := user.Key
 	user.Key = enc
-	err = s.DB.AddUser(*user)
-	if err != nil {
-		s.Log.Println("error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		// s.Memory.Unlock()
-		return
-	}
-	user.Key = tmp
-	// s.Memory.Unlock()
-	out, err := json.Marshal(user)
-	if err != nil {
-		s.Log.Println("error", err)
+	if err := s.DB.AddUser(*user); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(out)
+
+	user.Key = tmpKey // Return raw key to user for their reference
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }
 
 func (s *Server) NewApiKeyGeneratorHandler(w http.ResponseWriter, r *http.Request) {
