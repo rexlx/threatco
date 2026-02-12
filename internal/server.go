@@ -793,7 +793,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	appDir := http.Dir(*WebApp)
 	s.Gateway.Handle("/app/", http.StripPrefix("/app/", s.ProtectedFileServer(appDir)))
 	if s.Details.FirstUserMode {
-		s.Gateway.HandleFunc("/adduser", s.AddUserHandler)
+		s.Gateway.HandleFunc("/adduser", s.FirstUseHandler)
 	} else {
 		s.Gateway.Handle("/adduser", http.HandlerFunc(s.ValidateSessionToken(s.AddUserHandler)))
 	}

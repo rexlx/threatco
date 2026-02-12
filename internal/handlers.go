@@ -737,6 +737,63 @@ func (s *Server) GetStatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+// internal/handlers.go
+
+func (s *Server) FirstUseHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Safety check: Is the server flag actually set?
+	if !s.Details.FirstUserMode {
+		http.Error(w, "First use mode is not enabled on this server", http.StatusForbidden)
+		return
+	}
+
+	var nur NewUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&nur); err != nil {
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	if nur.Email == "" || nur.Password == "" {
+		http.Error(w, "Email and password are required for initial setup", http.StatusBadRequest)
+		return
+	}
+
+	// 3. Create the initial Admin user
+	// We force Admin = true here because it's the first use
+	user, err := NewUser(nur.Email, true, s.Details.SupportedServices)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := user.SetPassword(nur.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Encrypt and save
+	enc, err := s.Encrypt(user.Key)
+	if err != nil {
+		http.Error(w, "Encryption failed", http.StatusInternalServerError)
+		return
+	}
+
+	tmp := user.Key
+	user.Key = enc
+	if err := s.DB.AddUser(*user); err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	user.Key = tmp
+	s.LogInfo(fmt.Sprintf("Initial admin user created: %s", user.Email))
+
+	// Optional: Disable first use mode in memory so the route stops working immediately
+	s.Details.FirstUserMode = false
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 	callerEmail := r.Context().Value("email").(string)
 
