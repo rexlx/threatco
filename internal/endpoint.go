@@ -77,26 +77,28 @@ func (e *Endpoint) GetURL() string {
 func (e *Endpoint) Do(req *http.Request) []byte {
 	e.Auth.Apply(req)
 	if e.RateLimited {
-		// uid := uuid.New().String()
+		e.Memory.Lock()
+		// Check if we need to refill first
+		if !e.RateMark.IsZero() && time.Since(e.RateMark) > e.RefillRate {
+			fmt.Println("--------------------------------------------Refilling")
+			e.InFlight = 0
+			e.RateMark = time.Time{}
+		}
+		// Now check if we're at capacity
 		if e.InFlight >= e.MaxRequests {
-			e.Memory.Lock()
 			if e.RateMark.IsZero() {
 				e.RateMark = time.Now()
 			}
-			// log.Println("--------------------------------------------Rate limited")
-			if time.Since(e.RateMark) > e.RefillRate {
-				// log.Println("--------------------------------------------Refilling")
-				e.InFlight = 0
-				e.RateMark = time.Now()
-			}
-			// e.Backlog = append(e.Backlog, req)
+			fmt.Println("--------------------------------------------Rate limited")
 			e.Memory.Unlock()
 			return []byte{}
 		}
 		e.InFlight++
+		e.Memory.Unlock()
 		defer func() {
+			e.Memory.Lock()
 			e.InFlight--
-			// e.ProcessQueue(uid)
+			e.Memory.Unlock()
 		}()
 	}
 	resp, err := e.Gateway.Do(req)
