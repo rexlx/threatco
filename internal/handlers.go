@@ -78,6 +78,8 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 	first := true
 	ignoreList := []string{"nullferatu.com", "fairlady.nullferatu.com"}
 	var mu sync.Mutex
+	email, ok := r.Context().Value("email").(string)
+	logIt := !ok
 	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
 	//http://fairlady.nullferatu.com
 	var pr ParserRequest
@@ -85,6 +87,10 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if email != "" {
+		pr.Username = email
+	}
+
 	defer func(start time.Time, req ParserRequest) {
 		duration := time.Since(start).Seconds() * 1000
 		// Use .WithLabelValues() to satisfy the HistogramVec requirement
@@ -93,8 +99,6 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
 
-	email, ok := r.Context().Value("email").(string)
-	logIt := !ok
 	out := cx.ExtractAll(pr.Blob)
 
 	// Deduplicate unique values for efficient batch history recording
@@ -942,14 +946,16 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	var req ProxyRequest
 	defer s.addStat("proxy_requests", 1)
 	start := time.Now()
-
+	email, _ := r.Context().Value("email").(string)
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		s.Log.Println("ProxyHandler decoder error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
+	if email != "" {
+		req.Username = email
+	}
 	uid := uuid.New().String()
 	req.TransactionID = uid
 	req.FQDN = s.Details.FQDN
@@ -985,7 +991,7 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Centralize search history recording using the new batch method
-	email, _ := r.Context().Value("email").(string)
+
 	if email != "" && req.Value != "" {
 		go func(val string, user string) {
 			// Even for a single search, using the batch interface ensures
@@ -2961,6 +2967,7 @@ type ProxyRequest struct {
 }
 
 type SummarizedEvent struct {
+	SearchedBy    string    `json:"searched_by"`
 	Timestamp     time.Time `json:"timestamp"`
 	Matched       bool      `json:"matched"`
 	Error         bool      `json:"error"`

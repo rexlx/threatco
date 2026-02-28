@@ -854,7 +854,7 @@ func (s *Server) AutomatedThreatScan() {
 					ID:          uuid.New().String(),
 					Name:        caseName,
 					Description: fmt.Sprintf("Automated case for %v. Vendor: %s. IOC: %s. %s", r.ID, r.Vendor, se.Value, se.Info),
-					CreatedBy:   "System Automation",
+					CreatedBy:   fmt.Sprintf("%v bot", se.SearchedBy),
 					CreatedAt:   time.Now(),
 					Status:      "Open",
 					IOCs:        []string{se.Value},

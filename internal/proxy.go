@@ -102,6 +102,7 @@ func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([
 			AttrCount:     0,
 			ThreatLevelID: 0,
 			Type:          req.Type,
+			SearchedBy:    req.Username,
 		}
 		return json.Marshal(badNews)
 	}
@@ -168,6 +169,7 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 		Matched:    true,
 		Type:       req.Type,
 		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		SearchedBy: req.Username,
 	}
 
 	return json.Marshal(sum)
@@ -256,6 +258,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		From:          req.To,
 		Value:         req.Value,
 		Link:          req.TransactionID,
+		SearchedBy:    req.Username,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
 		Matched: len(associations) > 0,
 		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
@@ -334,6 +337,7 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		Value:         displayValue,
 		Link:          req.TransactionID,
 		Matched:       matched, // Use the calculated boolean
+		SearchedBy:    req.Username,
 	}
 	return json.Marshal(sum)
 }
@@ -437,6 +441,7 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		Link:          req.TransactionID,
 		ThreatLevelID: threatID,
 		Matched:       len(resc.Reports) > 0,
+		SearchedBy:    req.Username,
 	}
 	return json.Marshal(event)
 
@@ -532,6 +537,7 @@ func SplunkProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) 
 	resch <- resItem
 
 	sum := SummarizedEvent{
+		SearchedBy: req.Username,
 		Timestamp:  time.Now(),
 		Background: "has-background-warning",
 		Info:       fmt.Sprintf("found %d results for value", len(results)),
@@ -617,6 +623,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 				From:       req.To,
 				Value:      req.Value,
 				Link:       req.TransactionID,
+				SearchedBy: req.Username,
 				Matched:    int(results.(float64)) > 0,
 				AttrCount:  int(results.(float64)),
 				Type:       req.Type,
@@ -627,6 +634,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 				Timestamp:  time.Now(),
 				Background: "has-background-primary-dark",
 				Matched:    false,
+				SearchedBy: req.Username,
 				Info:       "domaintools returned a bad response",
 				From:       req.To,
 				Value:      req.Value,
@@ -642,6 +650,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 		Timestamp:  time.Now(),
 		Background: "has-background-warning",
 		Info:       info,
+		SearchedBy: req.Username,
 		From:       req.To,
 		Value:      req.Value,
 		Link:       req.TransactionID,
@@ -742,6 +751,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 				Matched:    int(results.(float64)) > 0,
 				Type:       req.Type,
 				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+				SearchedBy: req.Username,
 			})
 		default:
 			return json.Marshal(SummarizedEvent{
@@ -753,6 +763,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 				Value:      req.Value,
 				Link:       req.TransactionID,
 				Type:       req.Type,
+				SearchedBy: req.Username,
 				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 			})
 		}
@@ -766,6 +777,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		return json.Marshal(SummarizedEvent{
 			Timestamp:  time.Now(),
 			Background: "has-background-info",
+			SearchedBy: req.Username,
 			Info:       info,
 			From:       req.To,
 			Value:      req.Value,
@@ -781,6 +793,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		return json.Marshal(SummarizedEvent{
 			Timestamp:  time.Now(),
 			Background: "has-background-primary-dark",
+			SearchedBy: req.Username,
 			Info:       info,
 			From:       req.To,
 			Value:      req.Value,
@@ -830,6 +843,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		Timestamp:     time.Now(),
 		Background:    bg,
 		Info:          info,
+		SearchedBy:    req.Username,
 		From:          req.To,
 		Value:         req.Value,
 		Link:          req.TransactionID,
@@ -931,6 +945,7 @@ func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 		Background:    bg,
 		Info:          truncateString(info, 150),
 		From:          req.To,
+		SearchedBy:    req.Username,
 		Value:         req.Value,
 		ID:            res.ID,
 		Link:          req.TransactionID,
@@ -1060,6 +1075,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		From:       req.To,
 		Value:      req.Value,
 		Link:       req.TransactionID,
+		SearchedBy: req.Username,
 		Matched:    matched,
 		AttrCount:  attrCount,
 		Type:       req.Type,
@@ -1096,6 +1112,7 @@ func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 			Timestamp:  time.Now(),
 			Matched:    matched,
 			Background: background,
+			SearchedBy: req.Username,
 			From:       "Internal Cases",
 			Value:      req.Value,
 			Info:       info,

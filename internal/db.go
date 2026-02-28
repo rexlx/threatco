@@ -892,6 +892,6 @@ func (db *PostgresDB) GetSearchHistory(value string) (SearchRecord, error) {
 
 func (db *PostgresDB) CleanSearchHistory(days int) error {
 	_, err := db.Pool.Exec(context.Background(),
-		"DELETE FROM search_history WHERE created_at < NOW() - ($1 || ' days')::interval", days)
+		"DELETE FROM search_history WHERE created_at < NOW() - make_interval(days => $1)", days)
 	return err
 }

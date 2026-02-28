@@ -11,6 +11,8 @@ export class ModalManager {
         this.archiveButton = document.getElementById('archiveButton');
         this.copyButton = document.getElementById('copyButton');
         this.mispButton = document.getElementById('mispButton');
+        // New Button for Case Management
+        this.addToCaseButton = document.getElementById('addToCaseButton');
         
         this.attachListeners();
     }
@@ -49,6 +51,11 @@ export class ModalManager {
         if (this.mispButton) {
             this.mispButton.addEventListener('click', () => this.renderMispForm());
         }
+
+        // Add to Case Button listener
+        if (this.addToCaseButton) {
+            this.addToCaseButton.addEventListener('click', () => this.renderCaseForm());
+        }
     }
 
     show(result, details) {
@@ -76,12 +83,146 @@ export class ModalManager {
         this.content.style.fontFamily = '';
     }
 
+    async renderCaseForm() {
+        const currentData = this.app.focus;
+        let eventSource = null;
+
+        // Identify the IOC value to add from the current focused data
+        if (Array.isArray(currentData)) {
+            eventSource = currentData.find(item => item && item.value);
+        } else if (currentData && currentData.value) {
+            eventSource = currentData;
+        }
+
+        if (!eventSource) {
+            this.content.innerHTML = `<div class="notification is-warning">No valid IOC value found to add to a case.</div>`;
+            return;
+        }
+
+        const iocValue = eventSource.value;
+
+        // Fetch existing open cases to populate a dropdown
+        let cases = [];
+        try {
+            const res = await this.app._fetch('/cases/list?limit=100&type=user');
+            cases = await res.json() || [];
+        } catch (e) {
+            console.error("Failed to load cases", e);
+        }
+
+        this.content.style.whiteSpace = 'normal';
+        this.content.style.fontFamily = 'sans-serif';
+
+        // Render Case Addition Form
+        this.content.innerHTML = `
+            <div class="box" style="box-shadow: none; padding: 0.5rem;">
+                <h3 class="title is-5 has-text-dark mb-4">
+                    <span class="icon-text">
+                        <span class="icon has-text-info"><i class="material-icons">work_outline</i></span>
+                        <span>Add IOC to Case</span>
+                    </span>
+                </h3>
+                <p class="subtitle is-6">IOC: <strong>${iocValue}</strong></p>
+                
+                <form id="addToCaseForm">
+                    <div class="field">
+                        <label class="label">Select Existing Case</label>
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                <select id="targetCaseId">
+                                    <option value="">-- Create New Case --</option>
+                                    ${cases.filter(c => c.status === 'Open').map(c => `
+                                        <option value="${c.id}">${c.name}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="newCaseFields">
+                        <div class="field">
+                            <label class="label">New Case Name</label>
+                            <div class="control">
+                                <input class="input" type="text" id="newCaseName" placeholder="Investigation Name">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="caseFormResult" class="mt-3"></div>
+
+                    <div class="buttons is-right mt-5">
+                        <button type="button" class="button" id="caseCancelBtn">Cancel</button>
+                        <button type="submit" class="button is-info" id="caseSubmitBtn">
+                            <span>Add to Case</span>
+                            <span class="icon is-small"><i class="material-icons">add</i></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        // Toggle "New Case Name" field based on selection
+        const select = document.getElementById('targetCaseId');
+        const newFields = document.getElementById('newCaseFields');
+        select.addEventListener('change', () => {
+            newFields.style.display = select.value ? 'none' : 'block';
+        });
+
+        document.getElementById('caseCancelBtn').addEventListener('click', () => this.resetStylesAndShowDetails());
+
+        document.getElementById('addToCaseForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('caseSubmitBtn');
+            submitBtn.classList.add('is-loading');
+
+            const selectedCaseId = select.value;
+            try {
+                if (selectedCaseId) {
+                    // Update existing case
+                    const caseRes = await this.app._fetch(`/cases/get?id=${selectedCaseId}`);
+                    const caseData = await caseRes.json();
+                    
+                    if (!caseData.iocs) caseData.iocs = [];
+                    if (!caseData.iocs.includes(iocValue)) {
+                        caseData.iocs.push(iocValue);
+                    }
+
+                    await this.app._fetch('/cases/update', {
+                        method: 'POST',
+                        body: JSON.stringify(caseData)
+                    });
+                } else {
+                    // Create new case
+                    const name = document.getElementById('newCaseName').value;
+                    if (!name) throw new Error("Case name is required for new cases.");
+                    
+                    await this.app._fetch('/cases/create', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            name: name,
+                            description: `Created from event investigation.`,
+                            iocs: [iocValue]
+                        })
+                    });
+                }
+
+                document.getElementById('caseFormResult').innerHTML = `<div class="notification is-success is-light">Successfully added to case!</div>`;
+                setTimeout(() => {
+                    this.resetStylesAndShowDetails();
+                    this.close();
+                }, 1500);
+            } catch (err) {
+                document.getElementById('caseFormResult').innerHTML = `<div class="notification is-danger is-light">${err.message}</div>`;
+                submitBtn.classList.remove('is-loading');
+            }
+        });
+    }
+
     renderMispForm() {
         const currentData = this.app.focus;
         let eventSource = null;
 
         // 1. Validate Data & Find SummarizedEvent
-        // We look for an object that matches the SummarizedEvent struct signature (matched, value, from)
         if (Array.isArray(currentData)) {
             eventSource = currentData.find(item => 
                 item && 
@@ -129,7 +270,7 @@ export class ModalManager {
         this.content.style.whiteSpace = 'normal';
         this.content.style.fontFamily = 'sans-serif';
 
-        // 4. Render Form
+        // 4. Render MISP Form
         this.content.innerHTML = `
             <div class="box" style="box-shadow: none; padding: 0.5rem;">
                 <h3 class="title is-5 has-text-dark mb-4">
@@ -200,7 +341,7 @@ export class ModalManager {
             </div>
         `;
 
-        // 5. Attach Listeners
+        // 5. Attach MISP Form Listeners
         document.getElementById('mispCancelBtn').addEventListener('click', () => {
             this.resetStylesAndShowDetails();
         });

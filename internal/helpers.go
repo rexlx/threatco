@@ -874,6 +874,7 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 			Error:      true,
 			Type:       req.Type,
 			RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+			SearchedBy: req.Username,
 		})
 	}
 	return json.Marshal(SummarizedEvent{
@@ -886,6 +887,7 @@ func CreateAndWriteSummarizedEvent(req ProxyRequest, e bool, info string) ([]byt
 		Timestamp:  time.Now(),
 		Type:       req.Type,
 		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		SearchedBy: req.Username,
 	})
 
 }

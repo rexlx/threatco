@@ -22,7 +22,7 @@ export class TransformerTool {
         const sep = document.getElementById('col-sep').value || ',';
         const gridDiv = document.getElementById('col-grid-output');
 
-        let html = `<table class="table is-narrow has-background-black has-text-white"><thead><tr>`;
+        let html = `<table class="table is-narrow has-background-black has-text-white" style="width: max-content; min-width: 100%;"><thead><tr>`;
 
         // Create header with "Remove" buttons for each column
         this.activeColumns.forEach((isActive, idx) => {
@@ -119,12 +119,12 @@ export class TransformerTool {
                 <span>Copy Output</span>
             </button>
 
-            <div id="column-grid-container" class="is-hidden mt-4 p-4 has-background-dark-ter" style="border-radius: 6px;">
+            <div id="column-grid-container" class="is-hidden mt-4 p-4 has-background-dark-ter" style="border-radius: 6px; width: 100%; box-sizing: border-box;">
                 <div class="field has-addons mb-4">
                     <div class="control"><input id="col-sep" class="input is-small" type="text" placeholder="Separator (e.g. , or |)" value=","></div>
                     <div class="control"><button id="btn-apply-sep" class="button is-small is-info">Apply</button></div>
                 </div>
-                <div id="col-grid-output" style="max-height: 400px; overflow-y: auto; overflow-x: auto;"></div>
+                <div id="col-grid-output" style="max-height: 400px; max-width: 100%; overflow: auto; display: block;"></div>
                 <button class="button is-small is-success is-fullwidth mt-3" id="btn-save-grid">Commit Changes to Output</button>
             </div>
         </div>`;
