@@ -818,57 +818,78 @@ func (s *Server) AutomatedThreatScan() {
 			continue
 		}
 
-		// Threshold for critical threats (4 or higher)
 		if tid >= 4 {
 			se, err := ExtractSummarizedEvent(r.Data)
 			if err != nil {
-				s.Log.Printf("AutomatedThreatScan: found tid %d but failed to extract event for %s: %v", tid, r.ID, err)
+				s.Log.Printf("AutomatedThreatScan: failed to extract event: %v", err)
 				continue
 			}
 
-			// 1. Search for existing cases containing this specific IOC value.
-			// We pass a limit of 0 (or a high number) to ensure we find it even in deep history.
+			botUser := fmt.Sprintf("%v bot", se.SearchedBy)
+			// throttleWindow := 24 * time.Hour
+
 			existingCases, err := s.DB.SearchCases(se.Value, 0)
-			alreadyExists := false
+			caseAlreadyExists := false
 
 			if err == nil {
 				for _, ec := range existingCases {
-					// 2. Check if the case is still "Open" and actually contains the IOC
 					if ec.Status == "Open" {
 						for _, ioc := range ec.IOCs {
 							if ioc == se.Value {
-								alreadyExists = true
+								caseAlreadyExists = true
+
+								// If this bot didn't create the case, check if it needs to comment
+								if ec.CreatedBy != botUser {
+									botCommentedRecently := false
+									for _, comment := range ec.Comments {
+										// Check if this bot has already commented within the throttle window
+										if comment.User == botUser {
+											botCommentedRecently = true
+											break
+										}
+									}
+
+									// ONLY add the comment if the bot hasn't commented recently
+									if !botCommentedRecently {
+										newComment := Comment{
+											User:      botUser,
+											Text:      fmt.Sprintf("Automated scan detected this IOC again. Vendor: %s.", r.Vendor),
+											CreatedAt: time.Now(),
+										}
+										ec.Comments = append(ec.Comments, newComment)
+
+										if err := s.DB.UpdateCase(ec); err != nil {
+											s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
+										} else {
+											s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
+										}
+									}
+								}
 								break
 							}
 						}
 					}
-					if alreadyExists {
+					if caseAlreadyExists {
 						break
 					}
 				}
 			}
 
-			if !alreadyExists {
-				caseName := fmt.Sprintf("Auto-Case: Critical Threat Detected (%s)", se.Value)
+			if !caseAlreadyExists {
 				newCase := Case{
 					ID:          uuid.New().String(),
-					Name:        caseName,
-					Description: fmt.Sprintf("Automated case for %v. Vendor: %s. IOC: %s. %s", r.ID, r.Vendor, se.Value, se.Info),
-					CreatedBy:   fmt.Sprintf("%v bot", se.SearchedBy),
+					Name:        fmt.Sprintf("Auto-Case: Critical Threat (%s)", se.Value),
+					Description: fmt.Sprintf("Automated case for %v. Info: %s.", r.ID, se.Info),
+					CreatedBy:   botUser,
 					CreatedAt:   time.Now(),
 					Status:      "Open",
 					IOCs:        []string{se.Value},
 					Comments:    []Comment{},
 					IsAuto:      true,
 				}
-
 				if err := s.DB.CreateCase(newCase); err != nil {
 					s.Log.Println("Failed to create auto-case:", err)
-				} else {
-					s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Created Case %s for IOC %s", newCase.ID, se.Value))
 				}
-			} else {
-				s.Log.Printf("AutomatedThreatScan: Open case already exists for IOC %s, skipping creation.", se.Value)
 			}
 		}
 	}

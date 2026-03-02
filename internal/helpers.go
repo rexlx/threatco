@@ -352,7 +352,7 @@ func (s *Server) SimpleServiceCheck() error {
 				s.Log.Printf("SimpleServiceCheck: %s is not reachable: %v", name, err)
 				resch <- CheckResponse{Name: name, Value: 0.0}
 			} else {
-				s.Log.Printf("SimpleServiceCheck: %s is reachable", name)
+				// s.Log.Printf("SimpleServiceCheck: %s is reachable", name)
 				resch <- CheckResponse{Name: name, Value: 1.0}
 			}
 		}(service.Kind, service.URL)

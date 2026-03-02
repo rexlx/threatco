@@ -212,7 +212,7 @@ export class ModalManager {
                     this.close();
                 }, 1500);
             } catch (err) {
-                document.getElementById('caseFormResult').innerHTML = `<div class="notification is-danger is-light">${err.message}</div>`;
+                document.getElementById('caseFormResult').innerHTML = `<div class="notification is-danger is-dark">${err.message}</div>`;
                 submitBtn.classList.remove('is-loading');
             }
         });
@@ -332,7 +332,7 @@ export class ModalManager {
 
                     <div class="buttons is-right mt-5">
                         <button type="button" class="button" id="mispCancelBtn">Cancel</button>
-                        <button type="submit" class="button is-danger" id="mispSubmitBtn">
+                        <button type="submit" class="button is-danger is-dark" id="mispSubmitBtn">
                             <span>Create Event</span>
                             <span class="icon is-small"><i class="material-icons">send</i></span>
                         </button>
@@ -373,7 +373,7 @@ export class ModalManager {
                     this.close(); 
                 }, 1500);
             } catch (err) {
-                resultBox.innerHTML = `<div class="notification is-danger is-light">
+                resultBox.innerHTML = `<div class="notification is-danger is-dark">
                     <button class="delete"></button>
                     <strong>Failed:</strong> ${err.message}
                 </div>`;

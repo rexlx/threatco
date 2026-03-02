@@ -366,7 +366,7 @@ export class CaseController {
                                     <span class="icon"><i class="material-icons">${isClosed ? 'unarchive' : 'archive'}</i></span>
                                     <span>${isClosed ? 'Reopen Case' : 'Close Case'}</span>
                                 </button>
-                                <button class="button is-danger" id="btnDeleteCase">
+                                <button class="button is-danger is-dark has-text-black" id="btnDeleteCase">
                                     <span class="icon"><i class="material-icons">delete</i></span>
                                     <span>Delete Case</span>
                                 </button>

@@ -148,14 +148,6 @@ func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification No
 				go func(c *Client) { h.unregister <- c }(client)
 			}
 		}
-	} else {
-		log.Printf("No active clients found for user: %s", userID)
-		// resch <- ResponseItem{
-		// 	Email:  userID,
-		// 	ID:     notification.Info,
-		// 	Vendor: "system",
-		// 	Time:   notification.Created,
-		// }
 	}
 }
 

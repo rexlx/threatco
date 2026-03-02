@@ -28,7 +28,7 @@ function deleteUser(email) {
         })
         .catch(error => {
             console.error('There was a problem with the fetch operation', error);
-            document.getElementById('userResults').innerHTML = '<div class="notification is-danger">There was a problem deleting the user</div>';
+            document.getElementById('userResults').innerHTML = '<div class="notification is-danger is-dark">There was a problem deleting the user</div>';
         });
 }
 
@@ -114,7 +114,7 @@ function generateNewKey(email) {
         .catch(error => {
             console.error('There was a problem with the generate key operation:', error);
             if (resultsDiv) {
-                resultsDiv.innerHTML = `<div class="notification is-danger">Error generating key: ${error.message}</div>`;
+                resultsDiv.innerHTML = `<div class="notification is-danger is-dark">Error generating key: ${error.message}</div>`;
             }
         });
 }
@@ -157,7 +157,7 @@ function logToArticle2(log) {
     const messageHeader = document.createElement('div');
     const messageBody = document.createElement('div');
     if (log.error) {
-        newArticle.className = 'message is-danger';
+        newArticle.className = 'message is-danger is-dark';
     }
     messageHeader.className = 'message-header';
     messageBody.className = 'message-body';
@@ -173,7 +173,7 @@ function logToArticle(log) {
         return;
     }
     if (log.error) {
-        return `<article class="message is-danger">
+        return `<article class="message is-danger is-dark">
                 <div class="message-header">
                     <p>${log.time}</p>
                 </div>
@@ -299,7 +299,7 @@ window.onload = () => {
             const userResults = document.getElementById('userResults');
             const email = document.getElementById('email').value
             const key = document.getElementById('password').value
-            const admin = document.getElementById('admin').value
+            const admin = document.getElementById('admin').checked;
             const userData = {
                 "email": email,
                 "password": key,
@@ -307,10 +307,8 @@ window.onload = () => {
             };
             fetch('/adduser', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': ''
-                },
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify(userData),
             })
                 .then(response => {
