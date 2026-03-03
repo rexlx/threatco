@@ -104,6 +104,8 @@ document.getElementById("sidebarRecentActivity").addEventListener('click', (e) =
 document.getElementById("sidebarServices").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
+    mainSection.classList.remove('is-hidden'); 
+    
     serviceCtrl.render();
 });
 

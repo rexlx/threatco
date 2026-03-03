@@ -853,7 +853,7 @@ func (s *Server) AutomatedThreatScan() {
 									if !botCommentedRecently {
 										newComment := Comment{
 											User:      botUser,
-											Text:      fmt.Sprintf("Automated scan detected this IOC again. Vendor: %s.", r.Vendor),
+											Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s.", se.Value, r.Vendor),
 											CreatedAt: time.Now(),
 										}
 										ec.Comments = append(ec.Comments, newComment)

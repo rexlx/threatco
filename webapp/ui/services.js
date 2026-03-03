@@ -3,103 +3,113 @@ import { escapeHtml } from './utils.js';
 export class ServiceController {
     constructor(viewId, app) {
         this.view = document.getElementById(viewId);
-        this.listContainer = document.getElementById('cardList');
         this.app = app;
-        
-        this.initListeners();
-    }
-    
-    initListeners() {
-        const backBtn = document.getElementById('backButtonServices');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                document.dispatchEvent(new Event('req-show-home'));
-            });
-        }
-
-        const rectifyBtn = document.getElementById('rectifyServicesButton');
-        if (rectifyBtn) {
-            rectifyBtn.addEventListener('click', async () => {
-                 await this.app.rectifyServices();
-                 await this.render();
-            });
-        }
     }
 
     async render() {
         await this.app.getServices();
         this.view.classList.remove('is-hidden');
-        this.listContainer.innerHTML = '';
         
+        let html = `
+            <div class="block">
+                <h1 class="title has-text-info">Services</h1>
+            </div>
+            <div class="block mb-4">
+                <div class="buttons">
+                    <button class="button is-info" id="rectifyServicesButton" type="button">
+                        <span class="icon-text">
+                            <span class="icon"><i class="material-icons">sync</i></span>
+                            <span>Rectify</span>
+                        </span>
+                    </button>
+                </div>
+            </div>
+        `;
+
         if (this.app.servers.length === 0) {
-            this.listContainer.innerHTML = '<p class="has-text-white">No services available.</p>';
+            html += '<p class="has-text-white">No services available.</p>';
+            this.view.innerHTML = html;
+            this.initListeners();
             return;
         }
 
-        this.app.servers.forEach(data => {
-            // Determine if this service is already active in the user's profile
-            data.checked = this.app.user.services?.some(s => s.kind === data.kind) || false;
-            this.listContainer.appendChild(this.createCard(data));
+        html += `
+            <table class="table is-fullwidth is-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Types</th>
+                        <th class="has-text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        this.app.servers.forEach((data, index) => {
+            const isChecked = this.app.user.services?.some(s => s.kind === data.kind) || false;
+            data.checked = isChecked;
+            const types = Array.isArray(data.type) ? data.type.map(escapeHtml).join(', ') : "Invalid Type";
+            
+            const btnClass = isChecked ? 'is-warning' : 'is-success';
+            const btnIcon = isChecked ? 'remove_circle' : 'add_circle';
+            const btnText = isChecked ? 'Remove' : 'Add';
+
+            html += `
+                <tr>
+                    <td class="is-vcentered"><strong>${escapeHtml(data.kind)}</strong></td>
+                    <td class="is-vcentered" style="word-break: break-all;">${types}</td>
+                    <td class="is-vcentered">
+                        <div class="field is-grouped is-grouped-right">
+                            <p class="control">
+                                <button class="button is-small ${btnClass} is-light toggle-service-btn" data-index="${index}">
+                                    <span class="icon-text">
+                                        <span class="icon is-small"><i class="material-icons">${btnIcon}</i></span>
+                                        <span>${btnText}</span>
+                                    </span>
+                                </button>
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+            `;
         });
+
+        html += `
+                </tbody>
+            </table>
+        `;
+
+        this.view.innerHTML = html;
+        this.initListeners();
     }
 
-    createCard(service) {
-        const column = document.createElement('div');
-        column.className = 'column is-one-third-desktop is-half-tablet';
-        
-        const card = document.createElement('div');
-        card.className = 'card has-background-dark is-flex is-flex-direction-column';
-        card.style.height = '100%';
-        
-        // Header
-        const header = document.createElement('header');
-        header.className = 'card-header';
-        const title = document.createElement('p');
-        title.className = 'card-header-title has-text-white';
-        title.textContent = escapeHtml(service.kind);
-        header.appendChild(title);
-        
-        // Content
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'card-content has-background-black';
-        contentDiv.style.flexGrow = '1';
-        
-        const content = document.createElement('div');
-        content.className = 'content has-text-link-light';
-        content.textContent = Array.isArray(service.type) ? service.type.map(escapeHtml).join(', ') : "Invalid Type";
-        contentDiv.appendChild(content);
-        
-        // Footer
-        const footer = document.createElement('footer');
-        footer.className = 'card-footer';
-        
-        const addButton = document.createElement('a');
-        addButton.href = '#';
-        addButton.className = 'card-footer-item has-text-white';
-        addButton.textContent = service.checked ? 'Remove' : 'Add';
-        addButton.classList.add(service.checked ? 'has-background-warning' : 'has-background-success');
-        
-        // Add/Remove Logic
-        addButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            service.checked = !service.checked;
-            if (service.checked) {
-                this.app.addService(service);
-                addButton.textContent = 'Remove';
-                addButton.classList.replace('has-background-success', 'has-background-warning');
-            } else {
-                this.app.removeService(service);
-                addButton.textContent = 'Add';
-                addButton.classList.replace('has-background-warning', 'has-background-success');
-            }
+    initListeners() {
+        const rectifyBtn = document.getElementById('rectifyServicesButton');
+        if (rectifyBtn) {
+            rectifyBtn.addEventListener('click', async () => {
+                 rectifyBtn.classList.add('is-loading');
+                 await this.app.rectifyServices();
+                 await this.render();
+            });
+        }
+
+        const toggleBtns = this.view.querySelectorAll('.toggle-service-btn');
+        toggleBtns.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const index = btn.getAttribute('data-index');
+                const service = this.app.servers[index];
+                
+                service.checked = !service.checked;
+                if (service.checked) {
+                    this.app.addService(service);
+                } else {
+                    this.app.removeService(service);
+                }
+                
+                // Re-render to update the table state immediately
+                this.render();
+            });
         });
-        
-        footer.appendChild(addButton);
-        card.appendChild(header);
-        card.appendChild(contentDiv);
-        card.appendChild(footer);
-        
-        column.appendChild(card);
-        return column;
     }
 }

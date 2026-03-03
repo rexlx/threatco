@@ -1238,8 +1238,11 @@ func (s *Server) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) RectifyServicesHandler(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.Header.Get("Authorization"), ":")
-	email := parts[0]
+	email, ok := r.Context().Value("email").(string)
+	if !ok || email == "" {
+		http.Error(w, "Unauthorized: user email not found in session", http.StatusUnauthorized)
+		return
+	}
 	u, err := s.DB.GetUserByEmail(email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

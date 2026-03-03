@@ -259,10 +259,9 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		SearchedBy:    req.Username,
-		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched: len(associations) > 0,
-		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
-		Type:    req.Type,
+		Matched:       mscore > 50,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		Type:          req.Type,
 	}
 	return json.Marshal(sum)
 }
