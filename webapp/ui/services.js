@@ -1,3 +1,4 @@
+// webapp/ui/services.js
 import { escapeHtml } from './utils.js';
 
 export class ServiceController {
@@ -46,17 +47,18 @@ export class ServiceController {
         `;
 
         this.app.servers.forEach((data, index) => {
-            const isChecked = this.app.user.services?.some(s => s.kind === data.kind) || false;
+            const isChecked = this.app.user.services?.some(s => Array.isArray(s.kind) ? s.kind.includes(data.kind) : s.kind === data.kind) || false;
             data.checked = isChecked;
             const types = Array.isArray(data.type) ? data.type.map(escapeHtml).join(', ') : "Invalid Type";
             
             const btnClass = isChecked ? 'is-warning' : 'is-success';
             const btnIcon = isChecked ? 'remove_circle' : 'add_circle';
             const btnText = isChecked ? 'Remove' : 'Add';
+            const nameDisplay = Array.isArray(data.kind) ? data.kind.map(escapeHtml).join(', ') : escapeHtml(data.kind);
 
             html += `
                 <tr>
-                    <td class="is-vcentered"><strong>${escapeHtml(data.kind)}</strong></td>
+                    <td class="is-vcentered"><strong>${nameDisplay}</strong></td>
                     <td class="is-vcentered" style="word-break: break-all;">${types}</td>
                     <td class="is-vcentered">
                         <div class="field is-grouped is-grouped-right">
@@ -107,7 +109,6 @@ export class ServiceController {
                     this.app.removeService(service);
                 }
                 
-                // Re-render to update the table state immediately
                 this.render();
             });
         });

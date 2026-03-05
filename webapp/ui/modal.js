@@ -143,7 +143,7 @@ export class ModalManager {
                         <div class="field">
                             <label class="label">New Case Name</label>
                             <div class="control">
-                                <input class="input" type="text" id="newCaseName" placeholder="Investigation Name">
+                                <input class="input" type="text" id="modalNewCaseName" placeholder="Investigation Name">
                             </div>
                         </div>
                     </div>
@@ -193,7 +193,7 @@ export class ModalManager {
                     });
                 } else {
                     // Create new case
-                    const name = document.getElementById('newCaseName').value;
+                    const name = document.getElementById('modalNewCaseName').value;
                     if (!name) throw new Error("Case name is required for new cases.");
                     
                     await this.app._fetch('/cases/create', {

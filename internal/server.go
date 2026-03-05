@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -281,6 +282,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	prometheus.MustRegister(svr.Gauges)
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	svr.ID = id
+	svr.ManageCases()
 	fmt.Println("Server initialized with ID:", svr.ID)
 	svr.ProxyOperators["internal-case"] = ThreatcoInternalCaseSearchBuilder(svr.DB)
 	return svr, c
@@ -890,6 +892,14 @@ func (s *Server) AutomatedThreatScan() {
 				if err := s.DB.CreateCase(newCase); err != nil {
 					s.Log.Println("Failed to create auto-case:", err)
 				}
+				go func() {
+					out, err := json.Marshal(newCase)
+					if err != nil {
+						s.Log.Printf("Failed to marshal new case for notification: %v", err)
+						return
+					}
+					s.Log.Println("__case__: AutomatedThreatScan: Created new case:", newCase.ID, string(out))
+				}()
 			}
 		}
 	}
@@ -1054,20 +1064,44 @@ func CreateFakeResponse() []byte {
 	return out
 }
 
-// func (s *Server) PrepareTable(ctx context.Context, tableName string) error {
-// 	// Type assert to PostgresDB to access the pgxpool
-// 	pgDB, ok := s.DB.(*PostgresDB)
-// 	if !ok {
-// 		return fmt.Errorf("PrepareTable is only supported for PostgresDB")
-// 	}
+func (s *Server) ManageCases() {
+	fmt.Println("Running case management routine...")
+	query := "SELECT * FROM cases"
+	pgDB, ok := s.DB.(*PostgresDB)
+	if !ok {
+		fmt.Println("DB is not Postgres, cannot run case management")
+		return
+	}
+	rows, err := pgDB.Pool.Query(context.Background(), query)
+	if err != nil {
+		fmt.Printf("Error querying cases: %v\n", err)
+		return
+	}
+	defer rows.Close()
 
-// 	// Use CASCADE to remove dependent objects like indexes
-// 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName)
-// 	_, err := pgDB.Pool.Exec(ctx, query)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
-// 	}
-
-// 	s.LogInfo(fmt.Sprintf("Wiped table '%s' per -prepare-table flag", tableName))
-// 	return nil
-// }
+	for rows.Next() {
+		var c Case
+		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto)
+		if err != nil {
+			fmt.Printf("Error scanning case row: %v\n", err)
+			continue
+		}
+		if c.Status == "Open" && c.IsAuto && time.Since(c.CreatedAt) > 30*24*time.Hour {
+			c.Status = "Closed"
+			err := s.DB.UpdateCase(c)
+			if err != nil {
+				s.Log.Println(fmt.Sprintf("Error updating case %s: %v\n", c.ID, err))
+			} else {
+				s.Log.Println(fmt.Sprintf("Auto-closed case %s (%s) due to age\n", c.ID, c.Name))
+			}
+		}
+		if c.Status == "Closed" && time.Since(c.CreatedAt) > 60*24*time.Hour {
+			err := s.DB.DeleteCase(c.ID)
+			if err != nil {
+				s.Log.Println(fmt.Sprintf("Error deleting case %s: %v\n", c.ID, err))
+			} else {
+				s.Log.Println(fmt.Sprintf("Deleted case %s (%s) due to being closed and old\n", c.ID, c.Name))
+			}
+		}
+	}
+}

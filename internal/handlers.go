@@ -331,7 +331,14 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.LogInfo(fmt.Sprintf("User %s created case: %s", email, c.Name))
+	go func() {
+		out, err := json.Marshal(c)
+		if err != nil {
+			s.Log.Printf("Failed to marshal new case for notification: %v", err)
+			return
+		}
+		s.Log.Println("__case__: AutomatedThreatScan: Created new case:", c.ID, string(out))
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(c)

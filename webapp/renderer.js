@@ -1,3 +1,4 @@
+// webapp/renderer.js
 import { Application } from "./app.js";
 import { Contextualizer } from "./parser.js";
 import { NotificationManager } from "./ui/notifications.js";
@@ -8,6 +9,7 @@ import { HealthController } from "./ui/health.js";
 import { ResponseController } from "./ui/responses.js";
 import { ToolsController } from "./ui/tools.js";
 import { CaseController } from './ui/cases.js';
+import { ProfileController } from './ui/profile.js';
 
 const application = new Application();
 const contextualizer = new Contextualizer();
@@ -15,16 +17,13 @@ const contextualizer = new Contextualizer();
 const notifyMgr = new NotificationManager('notificationContainer', application);
 const modalMgr = new ModalManager('detailsModal', application);
 const searchCtrl = new SearchController('matchBox', application, contextualizer);
-const serviceCtrl = new ServiceController('servicesView', application);
+const serviceCtrl = new ServiceController('servicesContainer', application);
 const healthCtrl = new HealthController('healthStatusContainer', application);
 const responseCtrl = new ResponseController('matchBox', application);
 const toolsCtrl = new ToolsController('toolsContainer', application);
 const caseCtrl = new CaseController('casesContainer', application);
+const profileCtrl = new ProfileController('profileContainer', application);
 
-const mainSection = document.getElementById("mainSection");
-const serviceView = document.getElementById("servicesView");
-const profileView = document.getElementById("profileView");
-const toolsContainer = document.getElementById("toolsContainer");
 const errorBox = document.getElementById("errors");
 const sidebarLinks = document.querySelectorAll('.menu-list a');
 
@@ -40,21 +39,16 @@ async function main() {
 }
 
 function hideAll() {
-    [mainSection, serviceView, profileView].forEach(el => { 
-        if(el) el.classList.add('is-hidden'); 
-    });
-    
     document.getElementById('healthStatusContainer').classList.add('is-hidden');
     document.getElementById('matchBox').classList.add('is-hidden');
-    if (toolsContainer) toolsContainer.classList.add('is-hidden');
-    
-    const casesContainer = document.getElementById('casesContainer');
-    if (casesContainer) casesContainer.classList.add('is-hidden');
+    document.getElementById('toolsContainer').classList.add('is-hidden');
+    document.getElementById('casesContainer').classList.add('is-hidden');
+    document.getElementById('servicesContainer').classList.add('is-hidden');
+    document.getElementById('profileContainer').classList.add('is-hidden');
 }
 
 function showMainView() {
     hideAll();
-    mainSection.classList.remove('is-hidden');
     document.getElementById('matchBox').classList.remove('is-hidden');
     searchCtrl.renderForm();
 }
@@ -88,7 +82,6 @@ if (sidebarCases) {
     sidebarCases.addEventListener('click', (e) => {
         setActiveSidebar(e.currentTarget);
         hideAll();
-        mainSection.classList.remove('is-hidden');
         caseCtrl.render();
     });
 }
@@ -96,7 +89,6 @@ if (sidebarCases) {
 document.getElementById("sidebarRecentActivity").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
-    mainSection.classList.remove('is-hidden');
     document.getElementById('matchBox').classList.remove('is-hidden');
     responseCtrl.render();
 });
@@ -104,37 +96,25 @@ document.getElementById("sidebarRecentActivity").addEventListener('click', (e) =
 document.getElementById("sidebarServices").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
-    mainSection.classList.remove('is-hidden'); 
-    
     serviceCtrl.render();
 });
 
 document.getElementById("sidebarTools").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
-    mainSection.classList.remove('is-hidden');
     toolsCtrl.render();
 });
 
 document.getElementById("sidebarHealth").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
-    mainSection.classList.remove('is-hidden');
     healthCtrl.render();
 });
 
 document.getElementById("sidebarProfile").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
-    profileView.classList.remove('is-hidden');
-    document.getElementById("editUserEmail").value = application.user.email || '';
-});
-
-document.getElementById("backButtonProfile").addEventListener('click', showMainView);
-
-document.getElementById("updateUserButton").addEventListener("click", async () => {
-    await application.fetchUser();
-    alert('User profile re-synced!');
+    profileCtrl.render();
 });
 
 let previousResults = [];
