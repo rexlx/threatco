@@ -2959,6 +2959,23 @@ func (s *Server) ToolsGeneratePasswordHandler(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(map[string]string{"password": string(password)})
 }
 
+func (s *Server) UserNamesHandler(w http.ResponseWriter, r *http.Request) {
+	// s.Memory.RLock()
+	// defer s.Memory.RUnlock()
+	var allEmails []string
+	_users, err := s.DB.GetAllUsers()
+	if err != nil {
+		s.Log.Println("UserNamesHandler", err)
+		http.Error(w, "Error fetching users", http.StatusInternalServerError)
+		return
+	}
+	for _, u := range _users {
+		allEmails = append(allEmails, u.Email)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(allEmails)
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
