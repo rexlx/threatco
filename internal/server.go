@@ -564,14 +564,10 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	if fromFile {
 		if *EncodedConfig {
 			fmt.Println("Loading encoded configuration...")
-
-			// 1. Get partial key from environment (e.g., provided by AWS Secret Manager)
 			partialKey := os.Getenv("THREATCO_CONFIG_KEY")
 			if partialKey == "" {
 				log.Fatal("THREATCO_CONFIG_KEY environment variable is required when -encoded-config is set")
 			}
-
-			// 2. Get the other half from the seed file hash
 			if *SeedFile == "" {
 				log.Fatal("-seedfile flag is required when -encoded-config is set")
 			}
@@ -580,15 +576,11 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 				log.Fatalf("Failed to open seed file: %v", err)
 			}
 			defer f.Close()
-
 			seedHash, err := CalculateSHA256(f)
 			if err != nil {
 				log.Fatalf("Failed to hash seed file: %v", err)
 			}
-
-			// 3. Combine to form the full passcode
 			passcode := partialKey + seedHash
-
 			err = cfg.PopulateFromPasscodeFile(*ConfigPath, passcode)
 			if err != nil {
 				log.Fatalf("Failed to populate from passcode file: %v", err)
@@ -599,7 +591,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 				log.Fatalf("could not populate from file: %v", err)
 			}
 		}
-
 		if *DeleteConfig {
 			err := DeleteConfigFile(*ConfigPath)
 			if err != nil {
@@ -681,6 +672,26 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Memory.Lock()
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
+		case "abuseipdb":
+			thisAuthType := &AbuseIPDBAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
+		case "otx":
+			thisAuthType := &OTXAuth{Token: svc.Key}
+			thisEndpoint := NewEndpoint(svc.URL, thisAuthType, svc.Insecure, s.RespCh, svc.Kind)
+			thisEndpoint.RateLimited = svc.RateLimited
+			thisEndpoint.MaxRequests = svc.MaxRequests
+			thisEndpoint.RefillRate = time.Duration(svc.RefillRate) * time.Second
+			thisEndpoint.UploadService = svc.UploadService
+			s.Memory.Lock()
+			s.Targets[svc.Kind] = thisEndpoint
+			s.Memory.Unlock()
 		default:
 			fmt.Printf("unsupported auth type: %s, defaulting to bearer\n", svc.AuthType)
 			thisAuthType := &BearerAuth{Token: svc.Key}
@@ -693,7 +704,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 			s.Targets[svc.Kind] = thisEndpoint
 			s.Memory.Unlock()
 			fmt.Printf("added service %s with bearer auth", svc.Kind)
-
 		}
 	}
 	if *FirstUserMode {
@@ -702,7 +712,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Details.SupportedServices = cfg.Services
 	s.Details.FQDN = cfg.FQDN
 	if len(cfg.Cors) == 0 {
-		// Fallback: If no origins defined, default to the FQDN and localhost
 		s.Details.CorsOrigins = []string{
 			cfg.FQDN,
 			"http://localhost:8080",
@@ -713,7 +722,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 	s.Details.Address = fmt.Sprintf("%s:%s", cfg.BindAddress, cfg.HTTPPort)
 	s.Cache.ResponseExpiry = time.Duration(cfg.ResponseCacheExpiry) * time.Second
-	// s.ID = cfg.ServerID
 	s.Details.FirstUserMode = cfg.FirstUserMode
 	s.Details.LlmConf = cfg.LlmConf
 	fmt.Println(s.Details.LlmConf)
@@ -728,7 +736,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 		}
 		s.ProxyOperators[name] = op
 	}
-
 	s.Gateway.Handle("/archive", http.HandlerFunc(s.ValidateSessionToken(s.ArchiveResponseHandler)))
 	s.Gateway.Handle("/deleteuser", http.HandlerFunc(s.ValidateSessionToken(s.DeleteUserHandler)))
 	s.Gateway.Handle("/events/", http.HandlerFunc(s.ValidateSessionToken(s.EventHandler)))

@@ -294,3 +294,25 @@ func (b *BasicAuth) GetAndStoreToken(stop chan bool) {
 func (b *BasicAuth) Apply(req *http.Request) {
 	req.SetBasicAuth(b.Username, b.Password)
 }
+
+// AbuseIPDBAuth for the AbuseIPDB "Key" header
+type AbuseIPDBAuth struct {
+	Token string `json:"token"`
+}
+
+func (a *AbuseIPDBAuth) GetAndStoreToken(stop chan bool) {}
+func (a *AbuseIPDBAuth) Apply(req *http.Request) {
+	req.Header.Set("Key", a.Token)
+	req.Header.Set("Accept", "application/json")
+}
+
+// OTXAuth for the AlienVault "X-OTX-API-KEY" header
+type OTXAuth struct {
+	Token string `json:"token"`
+}
+
+func (o *OTXAuth) GetAndStoreToken(stop chan bool) {}
+func (o *OTXAuth) Apply(req *http.Request) {
+	req.Header.Set("X-OTX-API-KEY", o.Token)
+	req.Header.Set("Accept", "application/json")
+}

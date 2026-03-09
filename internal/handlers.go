@@ -806,13 +806,26 @@ func (s *Server) FirstUseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
+	var isAdmin bool
 	callerEmail := r.Context().Value("email").(string)
 
 	var nur NewUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&nur); err != nil {
-		s.Log.Println("error decoding request:", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		var pls struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+			Admin    bool   `json:"admin"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&pls); err != nil {
+			http.Error(w, "Invalid request format", http.StatusBadRequest)
+			return
+		}
+		nur.Email = pls.Email
+		nur.Password = pls.Password
+		nur.Admin = strconv.FormatBool(pls.Admin)
+		// s.Log.Println("error decoding request:", err)
+		// http.Error(w, err.Error(), http.StatusBadRequest)
+		// return
 	}
 
 	if nur.Email == "" {
@@ -830,7 +843,7 @@ func (s *Server) AddUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	isAdmin := nur.Admin == "on" || nur.Admin == "true"
+	isAdmin = nur.Admin == "on" || nur.Admin == "true"
 	user, err := NewUser(nur.Email, isAdmin, s.Details.SupportedServices)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -27,6 +27,8 @@ var ProxyOperators = map[string]ProxyOperator{
 	"domaintools-classic": DomainToolsClassicProxyHelper,
 	"urlscan":             URLScanProxyHelper,
 	"cloudflare":          CloudflareProxyHelper,
+	"otx":                 OTXProxyHelper,
+	"abuseipdb":           AbuseIPDBProxyHelper,
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
@@ -1079,6 +1081,162 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		AttrCount:  attrCount,
 		Type:       req.Type,
 		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+	}
+
+	return json.Marshal(sum)
+}
+
+// AbuseIPDBProxyHelper handles IP reputation lookups
+func AbuseIPDBProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
+	// AbuseIPDB typically uses /api/v2/check
+	thisUrl := fmt.Sprintf("%s/check?ipAddress=%s&maxAgeInDays=90", ep.GetURL(), req.Value)
+
+	request, err := http.NewRequest("GET", thisUrl, nil)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+
+	// AbuseIPDB uses a "Key" header for the API key
+	// This assumes your Endpoint/Auth logic handles this, or you can set it explicitly:
+	// request.Header.Set("Key", ep.GetAuthToken())
+	request.Header.Set("Accept", "application/json")
+
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+
+	// Standard threatco result storage
+	out, _ := json.Marshal(req)
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, _ := MergeJSONData(resItem.Data, resp)
+	resItem.Data = mergedData
+	resch <- resItem
+
+	// Parse the response
+	var response struct {
+		Data struct {
+			AbuseConfidenceScore int    `json:"abuseConfidenceScore"`
+			UsageType            string `json:"usageType"`
+			ISP                  string `json:"isp"`
+			TotalReports         int    `json:"totalReports"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(resp, &response); err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+
+	matched := response.Data.AbuseConfidenceScore > 0
+	bg := "has-background-primary-dark"
+	if response.Data.AbuseConfidenceScore >= 75 {
+		bg = "has-background-warning-dark"
+	} else if matched {
+		bg = "has-background-warning"
+	}
+
+	info := fmt.Sprintf("Score: %d%% | Reports: %d | ISP: %s",
+		response.Data.AbuseConfidenceScore, response.Data.TotalReports, response.Data.ISP)
+	threatID := GetThreatLevelID("abuseipdb", response.Data.AbuseConfidenceScore, WeightAbuseIPDB)
+	sum := SummarizedEvent{
+		Timestamp:     time.Now(),
+		Background:    bg,
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		Matched:       matched,
+		SearchedBy:    req.Username,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		ThreatLevelID: threatID,
+	}
+
+	return json.Marshal(sum)
+}
+
+// OTXProxyHelper handles AlienVault OTX indicator lookups
+func OTXProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
+	// Map threatco types to OTX indicator types
+	otxType := "IPv4"
+	switch req.Type {
+	case "ipv4":
+		otxType = "IPv4"
+	case "ipv6":
+		otxType = "IPv6"
+	case "domain":
+		otxType = "domain"
+	case "hostname":
+		otxType = "hostname"
+	case "url":
+		otxType = "url"
+	case "md5", "sha1", "sha256":
+		otxType = "file"
+	case "cve":
+		otxType = "cve"
+	default:
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unsupported OTX type: %s", req.Type))
+	}
+
+	thisUrl := fmt.Sprintf("%s/indicators/%s/%s/general", ep.GetURL(), otxType, req.Value)
+
+	request, err := http.NewRequest("GET", thisUrl, nil)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+
+	// OTX uses X-OTX-API-KEY header
+	resp := ep.Do(request)
+	if len(resp) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+
+	out, _ := json.Marshal(req)
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, _ := MergeJSONData(resItem.Data, resp)
+	resItem.Data = mergedData
+	resch <- resItem
+
+	var response struct {
+		PulseInfo struct {
+			Count int `json:"count"`
+		} `json:"pulse_info"`
+	}
+
+	if err := json.Unmarshal(resp, &response); err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+
+	matched := response.PulseInfo.Count > 0
+	bg := "has-background-primary-dark"
+	if matched {
+		bg = "has-background-warning"
+	}
+
+	info := fmt.Sprintf("Found in %d OTX Pulses", response.PulseInfo.Count)
+	threatID := GetThreatLevelID("otx", response.PulseInfo.Count, WeightOTX)
+	sum := SummarizedEvent{
+		Timestamp:     time.Now(),
+		Background:    bg,
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		Matched:       matched,
+		SearchedBy:    req.Username,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		ThreatLevelID: threatID,
 	}
 
 	return json.Marshal(sum)

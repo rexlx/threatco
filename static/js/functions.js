@@ -299,7 +299,7 @@ window.onload = () => {
             const userResults = document.getElementById('userResults');
             const email = document.getElementById('email').value
             const key = document.getElementById('password').value
-            const admin = document.getElementById('admin').checked;
+            const admin = document.getElementById('admin').checked ? "true" : "false";
             const userData = {
                 "email": email,
                 "password": key,

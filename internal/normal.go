@@ -25,6 +25,8 @@ const (
 	WeightURLScan         = 0.9
 	WeightDeepfry         = 0.5
 	WeightDomainToolsIris = 1.0
+	WeightOTX             = 1.0
+	WeightAbuseIPDB       = 1.0
 )
 
 // NormalizerFunc defines the signature for logic that converts a vendor-specific
@@ -47,6 +49,8 @@ func init() {
 	RegisterNormalizer("misp", NormalizeStandardScale)
 	RegisterNormalizer("urlscan", NormalizeStandardScale)
 	RegisterNormalizer("domaintoolsiris", NormalizeStandardScale)
+	RegisterNormalizer("abuseipdb", NormalizeStandardScale)
+	RegisterNormalizer("otx", NormalizeStandardScale)
 
 	// virustotal: Malicious count mapping
 	RegisterNormalizer("virustotal", func(maliciousCount int) int {
