@@ -66,6 +66,21 @@ func init() {
 		}
 	})
 
+	RegisterNormalizer("misp", func(score int) int {
+		switch score {
+		case 1: // High
+			return 90 // Maps to Critical/High
+		case 2: // Medium
+			return 50 // Maps to Medium
+		case 3: // Low
+			return 20 // Maps to Low
+		case 4: // Undefined
+			return 0
+		default:
+			return 0
+		}
+	})
+
 	// Example: A vendor where 1 is Critical and 10 is Safe (Inverted Small Scale)
 	RegisterNormalizer("rank_vendor", func(score int) int {
 		if score <= 1 {

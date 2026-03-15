@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -114,7 +115,7 @@ type jsonNotification struct {
 }
 
 // SendToUser sends a notification to all active connections for a specific user.
-func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification Notification) {
+func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification Notification) error {
 	jsonMsg := jsonNotification{
 		Created: notification.Created.Format(time.RFC3339),
 		Info:    notification.Info,
@@ -123,7 +124,8 @@ func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification No
 	message, err := json.Marshal(jsonMsg)
 	if err != nil {
 		log.Printf("Error marshalling notification for user %s: %v", userID, err)
-		return
+		// only return if we fail to send
+		return nil
 	}
 
 	h.mu.RLock()
@@ -148,7 +150,10 @@ func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification No
 				go func(c *Client) { h.unregister <- c }(client)
 			}
 		}
+	} else {
+		return fmt.Errorf("user not logged in, storing")
 	}
+	return nil
 }
 
 // ServeWs handles websocket requests from the peer.

@@ -259,10 +259,9 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 			info := "received multiple hits: "
 			var maxScore int
 			for _, r := range response {
-				// Use ScoreMispThreat to convert MISP's 1-4 scale to 0-100
-				normalizedScore := ScoreMispThreat(r.ThreatLevelID)
-				if normalizedScore > maxScore {
-					maxScore = normalizedScore
+				rawScore, _ := strconv.Atoi(r.ThreatLevelID)
+				if rawScore > maxScore {
+					maxScore = rawScore
 				}
 				info += fmt.Sprintf("ID %s: %s; ", r.ID, r.Info)
 			}
@@ -291,8 +290,8 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				attrs = 0
 			}
 			// Use ScoreMispThreat to convert MISP's 1-4 scale to 0-100, then map to 1-5
-			normalizedScore := ScoreMispThreat(response[0].ThreatLevelID)
-			tid := GetThreatLevelID("misp", normalizedScore, WeightMISP)
+			rawScore, _ := strconv.Atoi(response[0].ThreatLevelID)
+			tid := GetThreatLevelID("misp", rawScore, WeightMISP)
 			return json.Marshal(SummarizedEvent{
 				Matched:       true,
 				Timestamp:     time.Now(),
@@ -385,14 +384,15 @@ func NewParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRes
 
 	for _, r := range response.Response {
 		// 1. Calculate the raw 0-100 score
-		normalizedScore := ScoreMispThreat(r.Event.ThreatLevelID)
+		// normalizedScore := ScoreMispThreat(r.Event.ThreatLevelID)
+		rawScore, _ := strconv.Atoi(r.Event.ThreatLevelID)
 
 		// 2. Track the highest score found (Worst Case Strategy)
-		if normalizedScore > maxScore {
-			maxScore = normalizedScore
+		if rawScore > maxScore {
+			maxScore = rawScore
 		}
 
-		info += fmt.Sprintf("ID %s (Score: %d); ", r.Event.ID, normalizedScore)
+		info += fmt.Sprintf("ID %s (Score: %d); ", r.Event.ID, rawScore)
 		attrs += len(r.Event.Attribute)
 
 		// 3. Handle ID label cleanly

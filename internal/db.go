@@ -42,6 +42,9 @@ type Database interface {
 	RecordSearchBatch(values []string, email string) error
 	GetSearchHistory(value string) (SearchRecord, error)
 	CleanSearchHistory(days int) error
+	AddNotification(email string, notification Notification) error
+	GetNotifications(email string) ([]Notification, error)
+	ClearNotifications(email string) error
 }
 
 type BboltDB struct {
@@ -440,6 +443,10 @@ func (db *PostgresDB) createTables() error {
 			emails JSONB DEFAULT '[]'::jsonb,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE TABLE IF NOT EXISTS user_notifications (
+            email TEXT PRIMARY KEY,
+            notifications JSONB DEFAULT '[]'::jsonb
+        );
 		CREATE INDEX IF NOT EXISTS idx_search_history_value ON search_history(value);`)
 	if err != nil {
 		return err
@@ -896,3 +903,38 @@ func (db *PostgresDB) CleanSearchHistory(days int) error {
 		"DELETE FROM search_history WHERE created_at < NOW() - make_interval(days => $1)", days)
 	return err
 }
+
+func (db *PostgresDB) AddNotification(email string, n Notification) error {
+	// Atomic append to the JSONB array
+	_, err := db.Pool.Exec(context.Background(), `
+        INSERT INTO user_notifications (email, notifications)
+        VALUES ($1, jsonb_build_array($2::jsonb))
+        ON CONFLICT (email) DO UPDATE SET
+            notifications = user_notifications.notifications || EXCLUDED.notifications
+    `, email, n)
+	return err
+}
+
+func (db *PostgresDB) GetNotifications(email string) ([]Notification, error) {
+	var notifications []Notification
+	err := db.Pool.QueryRow(context.Background(),
+		"SELECT notifications FROM user_notifications WHERE email = $1",
+		email).Scan(&notifications)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return []Notification{}, nil
+	}
+	return notifications, err
+}
+
+func (db *PostgresDB) ClearNotifications(email string) error {
+	_, err := db.Pool.Exec(context.Background(),
+		"UPDATE user_notifications SET notifications = '[]'::jsonb WHERE email = $1",
+		email)
+	return err
+}
+
+// Implement no-ops for BboltDB to satisfy the interface
+func (db *BboltDB) AddNotification(email string, n Notification) error    { return nil }
+func (db *BboltDB) GetNotifications(email string) ([]Notification, error) { return nil, nil }
+func (db *BboltDB) ClearNotifications(email string) error                 { return nil }

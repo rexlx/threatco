@@ -401,6 +401,32 @@ func (s *Server) UpdateCache() {
 	s.Cache.StatsHistory = append(s.Cache.StatsHistory, stat)
 }
 
+func (s *Server) CleanUsers() {
+	var allErrs []error
+	users, err := s.DB.GetAllUsers()
+	if err != nil {
+		s.Log.Printf("ERROR: could not retrieve users for cleanup: %v", err)
+		return
+	}
+	for _, user := range users {
+		s.CleanUserServices(&user)
+		err := s.DB.AddUser(user)
+		if err != nil {
+			allErrs = append(allErrs, fmt.Errorf("failed to update user %s during cleanup: %w", user.Email, err))
+			continue
+		}
+	}
+	if len(allErrs) > 0 {
+		out := ""
+		for _, err := range allErrs {
+			out += err.Error() + "; "
+		}
+
+		s.Log.Printf("ERROR: encountered errors during user cleanup: %s", out)
+	}
+
+}
+
 func (s *Server) LogError(err error) {
 	s.Log.Println(err)
 	s.Memory.Lock()
@@ -487,11 +513,18 @@ func (s *Server) ProcessTransientResponses() {
 				s.Log.Printf("ERROR: could not store response ID %s: %v", resp.ID, err)
 			}
 			if resp.Notify {
-				s.Hub.SendToUser(s.RespCh, resp.Email, Notification{
+				err := s.Hub.SendToUser(s.RespCh, resp.Email, Notification{
 					Created: resp.Time,
 					Info:    fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
 					Error:   false,
 				})
+				if err != nil {
+					s.DB.AddNotification(resp.ID, Notification{
+						Created: resp.Time,
+						Info:    fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
+						Error:   false,
+					})
+				}
 			}
 			if resp.Log {
 				info := fmt.Sprintf("New response from %s with ID %s from %v", resp.Vendor, resp.ID, resp.Email)
@@ -842,7 +875,7 @@ func (s *Server) AutomatedThreatScan() {
 
 			if err == nil {
 				for _, ec := range existingCases {
-					if ec.Status == "Open" {
+					if ec.Status != "" {
 						for _, ioc := range ec.IOCs {
 							if ioc == se.Value {
 								caseAlreadyExists = true
