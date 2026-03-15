@@ -64,6 +64,7 @@ func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -141,6 +142,7 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -210,6 +212,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
+		Email:  req.Username,
 		Time:   time.Now(),
 	}
 	mergedData, err := MergeJSONData(resItem.Data, resp)
@@ -289,6 +292,7 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -387,6 +391,7 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -525,6 +530,7 @@ func SplunkProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) 
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   _out,
@@ -587,6 +593,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -711,6 +718,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 	}
 
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -883,7 +891,7 @@ func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 	}
 
 	out, _ := json.Marshal(req)
-	resch <- ResponseItem{ID: req.TransactionID, Vendor: req.To, Data: out, Time: time.Now()}
+	resch <- ResponseItem{ID: req.TransactionID, Vendor: req.To, Data: out, Time: time.Now(), Email: req.Username}
 
 	var response vendors.URLScanSearchResponse
 	if err := json.Unmarshal(resp, &response); err != nil {
@@ -1003,6 +1011,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error marshalling request: %v", err))
 	}
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -1109,6 +1118,7 @@ func AbuseIPDBProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReques
 	// Standard threatco result storage
 	out, _ := json.Marshal(req)
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -1198,6 +1208,7 @@ func OTXProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]
 
 	out, _ := json.Marshal(req)
 	resItem := ResponseItem{
+		Email:  req.Username,
 		ID:     req.TransactionID,
 		Vendor: req.To,
 		Data:   out,
@@ -1289,6 +1300,7 @@ func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 			Vendor: "threatco_cases",
 			Data:   out,
 			Time:   time.Now(),
+			Email:  req.Username,
 		}
 
 		return out, nil

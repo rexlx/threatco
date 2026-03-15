@@ -519,7 +519,7 @@ func (s *Server) ProcessTransientResponses() {
 					Error:   false,
 				})
 				if err != nil {
-					s.DB.AddNotification(resp.ID, Notification{
+					s.DB.AddNotification(resp.Email, Notification{
 						Created: resp.Time,
 						Info:    fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
 						Error:   false,
@@ -809,6 +809,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/logs", http.HandlerFunc(s.ValidateSessionToken(s.GetLogsHandler)))
 	s.Gateway.HandleFunc("/misp-workflow", http.HandlerFunc(s.ValidateSessionToken(s.TriggerMispWorkflowHandler)))
 	s.Gateway.HandleFunc("/misp/workflow/batch", http.HandlerFunc(s.ValidateSessionToken(s.TriggerMispBatchWorkflowHandler)))
+	s.Gateway.HandleFunc("/notifications", http.HandlerFunc(s.ValidateSessionToken(s.GetNotificationsHandler)))
 	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
 	s.Gateway.HandleFunc("/previous-results", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
 	s.Gateway.HandleFunc("/rectify", http.HandlerFunc(s.ValidateSessionToken(s.RectifyServicesHandler)))

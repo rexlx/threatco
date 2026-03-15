@@ -72,13 +72,17 @@ func (s *Server) LogHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
+	email, ok := r.Context().Value("email").(string)
+	if !ok || email == "" {
+		http.Error(w, "Unauthorized: user email not found in session", http.StatusUnauthorized)
+		return
+	}
 	start := time.Now()
 	var wg sync.WaitGroup
 	allBytes := []byte{'['}
 	first := true
 	ignoreList := []string{"nullferatu.com", "fairlady.nullferatu.com"}
 	var mu sync.Mutex
-	email, ok := r.Context().Value("email").(string)
 	logIt := !ok
 	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
 	//http://fairlady.nullferatu.com
@@ -175,8 +179,8 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 							*firstPtr = false
 							mu.Unlock()
 
-							// StoreResponse is removed; handled by ProcessTransientResponses via RespCh
 							s.RespCh <- ResponseItem{
+								Email:  email,
 								ID:     id,
 								Vendor: name,
 								Data:   out,
@@ -1022,14 +1026,12 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}(req.Value, email)
 	}
 
-	// Send to RespCh for centralized Caching, Merging, and StoreResponse
-	// This allows you to avoid calling s.DB.StoreResponse directly here.
 	s.RespCh <- ResponseItem{
 		ID:     uid,
 		Vendor: req.To,
 		Data:   resp,
 		Time:   time.Now(),
-		Email:  email, // Pass email if you want notification logic to trigger
+		Email:  email,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -2987,6 +2989,25 @@ func (s *Server) UserNamesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(allEmails)
+}
+
+func (s *Server) GetNotificationsHandler(w http.ResponseWriter, r *http.Request) {
+	email, ok := r.Context().Value("email").(string)
+	if !ok || email == "" {
+		http.Error(w, "Unauthorized: user email not found in session", http.StatusUnauthorized)
+		return
+	}
+	notifications, err := s.DB.GetNotifications(email)
+	if err != nil {
+		s.Log.Println("GetNotificationsHandler", err)
+		http.Error(w, "Error fetching notifications", http.StatusInternalServerError)
+		return
+	}
+	var out = make(map[string]any)
+	out["count"] = len(notifications)
+	out["notifications"] = notifications
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
 
 type NewUserRequest struct {

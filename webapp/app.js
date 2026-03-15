@@ -31,7 +31,8 @@ export class Application {
         if (this.user && this.user.email) {
             await this.fetchHistory();
             await this.getServices();
-            this.initWebSocket(); // <-- Initialize WebSocket connection
+            await this.fetchNotifications();
+            this.initWebSocket();
             this.initialized = true;
         }
     }
@@ -104,6 +105,31 @@ export class Application {
         }
 
         return fetch(this.apiUrl + url, finalOptions);
+    }
+
+    async fetchNotifications() {
+        const thisURL = `/notifications`;
+        try {
+            const response = await this._fetch(thisURL, { method: 'GET' });
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data && data.notifications && Array.isArray(data.notifications)) {
+                // Ensure each notification has a unique ID for the frontend renderer
+                const fetchedNotifs = data.notifications.map((notif, index) => {
+                    return {
+                        ...notif,
+                        id: notif.id || `notif-db-${Date.now()}-${index}` // Assign ID if missing
+                    };
+                });
+                
+                // Prepend or append to existing notifications array
+                this.notifications = [...fetchedNotifs, ...this.notifications];
+            }
+        } catch (error) {
+            this.errors.push(`Error fetching notifications: ${error.message}`);
+        }
     }
 
     /**

@@ -45,6 +45,7 @@ function hideAll() {
     document.getElementById('casesContainer').classList.add('is-hidden');
     document.getElementById('servicesContainer').classList.add('is-hidden');
     document.getElementById('profileContainer').classList.add('is-hidden');
+    document.getElementById('notificationContainer').classList.add('is-hidden');
 }
 
 function showMainView() {
@@ -111,6 +112,13 @@ document.getElementById("sidebarHealth").addEventListener('click', (e) => {
     healthCtrl.render();
 });
 
+document.getElementById("sidebarNotifications").addEventListener('click', (e) => {
+    setActiveSidebar(e.currentTarget);
+    hideAll();
+    document.getElementById('notificationContainer').classList.remove('is-hidden');
+    notifyMgr.render();
+});
+
 document.getElementById("sidebarProfile").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     hideAll();
@@ -136,6 +144,20 @@ function updateUI() {
     if (JSON.stringify(application.notifications) !== JSON.stringify(previousNotifications)) {
         previousNotifications = [...application.notifications];
         notifyMgr.render();
+        
+        const notifIcon = document.getElementById('sidebarNotificationIcon');
+        const notifText = document.getElementById('sidebarNotificationText');
+        if (notifIcon && notifText) {
+            if (application.notifications.length > 0) {
+                notifIcon.classList.remove('has-text-grey');
+                notifIcon.classList.add('has-text-warning');
+                notifText.innerHTML = `Notifications (${application.notifications.length})`;
+            } else {
+                notifIcon.classList.remove('has-text-warning');
+                notifIcon.classList.add('has-text-grey');
+                notifText.innerHTML = `Notifications`;
+            }
+        }
     }
 
     requestAnimationFrame(updateUI);
