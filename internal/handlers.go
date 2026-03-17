@@ -3010,6 +3010,53 @@ func (s *Server) GetNotificationsHandler(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(out)
 }
 
+type DashboardSummary struct {
+	OpenCases         int                `json:"open_cases"`
+	TotalCases        int                `json:"total_cases"`
+	ActiveResponses   int                `json:"active_responses"`
+	ArchivedResponses int                `json:"archived_responses"`
+	TotalUsers        int                `json:"total_users"`
+	Uptime            string             `json:"uptime"`
+	ServerMetrics     map[string]float64 `json:"server_metrics"`
+}
+
+func (s *Server) GetDashboardStatsHandler(w http.ResponseWriter, r *http.Request) {
+	summary := DashboardSummary{
+		Uptime:        time.Since(s.Details.StartTime).String(),
+		ServerMetrics: make(map[string]float64),
+	}
+
+	// Use Postgres-specific queries if available for efficiency
+	if pgDB, ok := s.DB.(*PostgresDB); ok {
+		ctx := r.Context()
+
+		// Count Open Cases
+		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM cases WHERE status = 'Open'").Scan(&summary.OpenCases)
+
+		// Count Total Cases
+		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM cases").Scan(&summary.TotalCases)
+
+		// Count Active Responses
+		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM responses").Scan(&summary.ActiveResponses)
+
+		// Count Archived Responses
+		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM archived_responses").Scan(&summary.ArchivedResponses)
+
+		// Count Total Users
+		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&summary.TotalUsers)
+	}
+
+	// Incorporate real-time server stats (logins, proxy requests, memory usage)
+	s.Memory.RLock()
+	for k, v := range s.Details.Stats {
+		summary.ServerMetrics[k] = v
+	}
+	s.Memory.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

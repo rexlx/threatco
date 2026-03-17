@@ -5,7 +5,7 @@ export class CaseController {
         this.container = document.getElementById(containerId);
         this.app = app;
         this.currentCase = null;
-        
+
         // Pagination & Filter State
         this.currentPage = 1;
         this.itemsPerPage = 50;
@@ -143,7 +143,7 @@ export class CaseController {
             if (clear && !confirm("Warning: This will PERMANENTLY DELETE all cases in the current view after downloading. Proceed?")) {
                 return;
             }
-            
+
             // Redirecting to the handler URL triggers the browser download
             const exportUrl = `/cases/export?type=${this.currentFilter}&clear=${clear}`;
             window.location.href = exportUrl;
@@ -219,7 +219,7 @@ export class CaseController {
     async searchCases(query) {
         const container = document.getElementById('caseListContainer');
         container.innerHTML = '<div class="loader"></div>';
-        this.updatePaginationControls(0, true); 
+        this.updatePaginationControls(0, true);
 
         try {
             const res = await this.app._fetch(`/cases/search?q=${encodeURIComponent(query)}`);
@@ -231,24 +231,24 @@ export class CaseController {
     }
 
     async loadCases() {
-    const container = document.getElementById('caseListContainer');
-    container.innerHTML = '<div class="loader"></div>';
-    
-    try {
-        const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}&type=${this.currentFilter}`);
-        let cases = await res.json();
-        
-        if (cases === null) {
-            cases = [];
-        }
-        
-        this.renderCaseList(cases);
-        this.updatePaginationControls(cases.length); // This will now receive 0 instead of crashing
+        const container = document.getElementById('caseListContainer');
+        container.innerHTML = '<div class="loader"></div>';
 
-    } catch (e) {
-        container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
+        try {
+            const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}&type=${this.currentFilter}`);
+            let cases = await res.json();
+
+            if (cases === null) {
+                cases = [];
+            }
+
+            this.renderCaseList(cases);
+            this.updatePaginationControls(cases.length); // This will now receive 0 instead of crashing
+
+        } catch (e) {
+            container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
+        }
     }
-}
 
     updatePaginationControls(resultCount, isSearch = false) {
         const prevBtn = document.getElementById('btnPrevPage');
@@ -257,11 +257,11 @@ export class CaseController {
         const select = document.getElementById('itemsPerPageSelect');
 
         if (isSearch) {
-             prevBtn.disabled = true;
-             nextBtn.disabled = true;
-             select.disabled = true;
-             indicator.textContent = "Search Results";
-             return;
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+            select.disabled = true;
+            indicator.textContent = "Search Results";
+            return;
         }
 
         select.disabled = false;
@@ -281,21 +281,28 @@ export class CaseController {
 
         cases.forEach(c => {
             const statusColor = c.status === 'Open' ? 'is-primary' : 'is-warning';
-            
+
             let desc = c.description || 'No description';
             if (desc.length > 250) {
                 desc = desc.substring(0, 250) + '...';
             }
 
             const box = document.createElement('div');
-            box.className = 'box has-background-black has-text-light mb-3';
+            box.className = 'box has-background-black has-text-light mb-2';
             box.style.cursor = 'pointer';
-            box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid rgb(83, 87, 106)';
-            
+            // box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid rgb(83, 87, 106)';
+            if (c.status === 'Open') {
+                box.style.border = '1px solid rgba(21, 140, 149, 0.3)';
+                box.style.boxShadow = '0 0 15px rgba(21, 140, 149, 0.15)';
+            } else {
+                box.style.border = '1px solid rgba(83, 87, 106, 0.3)';
+                box.style.boxShadow = 'none';
+            }
+
             box.onclick = () => this.openCase(c);
 
             const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
-            
+
             // Add a badge for Automated cases
             const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2"><span class="icon is-small mr-1"><i class="material-icons" style="font-size:14px;">smart_toy</i></span>AUTO</span>' : '';
 
@@ -343,7 +350,7 @@ export class CaseController {
         try {
             const res = await this.app._fetch(`/cases/get?id=${cSummary.id}`);
             if (!res.ok) throw new Error(await res.text());
-            
+
             const c = await res.json();
             this.currentCase = c;
             const isClosed = c.status === 'Closed';
@@ -629,7 +636,7 @@ export class CaseController {
                 body: JSON.stringify(this.currentCase)
             });
             if (!res.ok) throw new Error(await res.text());
-            this.openCase({ id: this.currentCase.id }); 
+            this.openCase({ id: this.currentCase.id });
         } catch (e) {
             alert("Update failed: " + e.message);
         }

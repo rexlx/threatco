@@ -5,32 +5,70 @@ export class SearchController {
         this.container = document.getElementById(containerId);
         this.app = app;
         this.contextualizer = contextualizer;
-        this.isSearching = false; 
-        
+        this.isSearching = false;
+
         this.attachFormListeners();
     }
 
-    renderForm() {
+    async renderForm() {
         this.container.classList.remove('is-hidden');
+
+        // Fetch dashboard data
+        let stats = { open_cases: 0, active_responses: 0, archived_responses: 0, total_users: 0 };
+        try {
+            const resp = await fetch('/dashboard/stats');
+            if (resp.ok) stats = await resp.json();
+        } catch (e) {
+            console.error("Failed to load dashboard stats", e);
+        }
+
         this.container.innerHTML = `
-            <h1 class="title has-text-info">Search</h1>
-            <form>
-                <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
-                <div class="field"><div class="control"><label class="checkbox has-text-grey-light"><input type="checkbox" id="dontParseCheckbox"> parse on server</label></div></div>
-                <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
-                <div class="field"><div class="control"><div class="buttons are-small">
-                    <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
-                    <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
-                    <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
-                </div></div></div>
-            </form>`;
+        <h1 class="title has-text-info">Overview</h1>
+        <nav class="level is-mobile mb-6">
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading has-text-grey-light">Open Cases</p>
+                    <p class="title has-text-warning">${stats.open_cases}</p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading has-text-grey-light">Responses</p>
+                    <p class="title has-text-info">${stats.active_responses}</p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading has-text-grey-light">Archived</p>
+                    <p class="title has-text-grey">${stats.archived_responses}</p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading has-text-grey-light">Users</p>
+                    <p class="title has-text-success">${stats.total_users}</p>
+                </div>
+            </div>
+        </nav>
+
+        <h2 class="subtitle has-text-info">Search</h2>
+        <form>
+            <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
+            <div class="field"><div class="control"><label class="checkbox has-text-grey-light"><input type="checkbox" id="dontParseCheckbox"> parse on server</label></div></div>
+            <div class="field"><div class="control"><button class="button is-info is-outlined" id="searchButton" type="submit"><span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span></button></div></div>
+            <div class="field"><div class="control"><div class="buttons are-small">
+                <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
+                <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
+                <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
+            </div></div></div>
+        </form>`;
     }
 
     attachFormListeners() {
         this.container.addEventListener('click', async (event) => {
             const button = event.target.closest('button');
             if (!button) return;
-            const targetId = button.id; 
+            const targetId = button.id;
 
             if (targetId === 'searchButton') {
                 event.preventDefault();
@@ -41,40 +79,40 @@ export class SearchController {
                 this.renderGoToForm();
             } else if (targetId === 'uploadButton') {
                 this.handleUpload();
-            } else if (targetId === 'goButton') { 
-                 const id = document.getElementById('goToValue').value;
-                 const customEvent = new CustomEvent('req-open-details', { detail: id });
-                 document.dispatchEvent(customEvent);
+            } else if (targetId === 'goButton') {
+                const id = document.getElementById('goToValue').value;
+                const customEvent = new CustomEvent('req-open-details', { detail: id });
+                document.dispatchEvent(customEvent);
             }
         });
     }
 
     async handleSearch() {
-        this.isSearching = true; 
+        this.isSearching = true;
         this.app.results = [];
         this.app.errors = [];
-        
+
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
-        
+
         const userSearchInput = document.getElementById('userSearch');
         if (!userSearchInput) {
             this.isSearching = false;
-            return; 
+            return;
         }
         const searchText = userSearchInput.value;
         const dontParse = document.getElementById('dontParseCheckbox').checked;
-        
+
         this.container.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-link' max='100'></progress>";
 
         try {
             if (dontParse) {
                 await this.processMatches(null, { value: searchText }, null, true);
             } else {
-                const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({ 
-                    type: key, 
-                    matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))] 
+                const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({
+                    type: key,
+                    matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))]
                 }));
-                
+
                 const promises = [];
 
                 for (let svr of this.app.user.services) {
@@ -137,23 +175,23 @@ export class SearchController {
             }
             await Promise.allSettled(promises);
         }
-        
+
         await this.app.setHistory();
     }
 
     handleUpload() {
-         const fileInput = document.createElement("input");
-         fileInput.type = "file";
-         fileInput.addEventListener("change", async () => {
-             if (!fileInput.files[0]) return;
-             const file = new File([fileInput.files[0]], makeUnique(fileInput.files[0].name), { type: fileInput.files[0].type });
-             await this.app.uploadFile(file);
-         });
-         fileInput.click();
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.addEventListener("change", async () => {
+            if (!fileInput.files[0]) return;
+            const file = new File([fileInput.files[0]], makeUnique(fileInput.files[0].name), { type: fileInput.files[0].type });
+            await this.app.uploadFile(file);
+        });
+        fileInput.click();
     }
 
     renderGoToForm() {
-         this.container.innerHTML = `<div class="field"><label class="label has-text-info">Enter ID</label><div class="control"><input class="input" type="text" placeholder="ID" id="goToValue"></div><div class="control"><button class="button is-primary mt-2" id="goButton">Go</button></div></div>`;
+        this.container.innerHTML = `<div class="field"><label class="label has-text-info">Enter ID</label><div class="control"><input class="input" type="text" placeholder="ID" id="goToValue"></div><div class="control"><button class="button is-primary mt-2" id="goButton">Go</button></div></div>`;
     }
 
     renderResultCards(resultsArray, isHistoryView = false) {
@@ -162,7 +200,7 @@ export class SearchController {
         }
 
         this.container.innerHTML = "";
-        
+
         if (!resultsArray || resultsArray.length === 0) {
             this.container.innerHTML = `<p class="has-text-info">${isHistoryView ? 'History is empty.' : 'No results found.'}</p>`;
             const backBtn = document.createElement('button');
@@ -184,7 +222,7 @@ export class SearchController {
             header.className = 'message-header';
             if (typeof result.background === 'string') header.classList.add(escapeHtml(result.background));
             header.innerHTML = `<p>${escapeHtml(result.from)}</p>`;
-            
+
             const body = document.createElement('div');
             body.className = 'message-body has-background-dark-ter';
             body.innerHTML = `
@@ -199,16 +237,16 @@ export class SearchController {
 
             const footer = document.createElement('footer');
             footer.className = 'card-footer';
-            
+
             const historyButton = document.createElement('a');
             historyButton.href = '#';
             historyButton.className = 'card-footer-item has-background-black has-text-info';
             historyButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>Past Searches</span></span>`;
-            
+
             historyButton.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const pastSearches = await this.app.fetchPastSearches(result.value);
-                
+
                 if (!pastSearches || pastSearches.length === 0) {
                     alert(`No past searches found for: ${result.value}`);
                     return;
@@ -225,7 +263,7 @@ export class SearchController {
             viewButton.href = '#';
             viewButton.className = 'card-footer-item has-background-black has-text-info';
             viewButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">visibility</i></span><span>View Details</span></span>`;
-            
+
             if (!result.link || result.link === "none") viewButton.classList.add('is-disabled');
             viewButton.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -244,7 +282,7 @@ export class SearchController {
 
         const footerContainer = document.createElement('footer');
         footerContainer.className = 'card-footer mt-4';
-        
+
         const clearButton = document.createElement('a');
         clearButton.href = '#';
         clearButton.className = 'card-footer-item has-background-danger has-text-white';
@@ -256,7 +294,7 @@ export class SearchController {
                 this.app.setHistory();
             }
             this.app.results = [];
-            this.renderForm(); 
+            this.renderForm();
         });
 
         footerContainer.appendChild(clearButton);
