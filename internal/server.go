@@ -843,6 +843,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	}
 	s.Gateway.Handle("/", http.HandlerFunc(s.LoginViewHandler))
 	s.Gateway.HandleFunc("/logout", s.LogoutHandler)
+	s.Details.Stats["vendor_responses"] = 0
 	go s.Hub.Run()
 }
 

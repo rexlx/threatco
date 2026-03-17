@@ -14,7 +14,15 @@ export class SearchController {
         this.container.classList.remove('is-hidden');
 
         // Fetch dashboard data
-        let stats = { open_cases: 0, active_responses: 0, archived_responses: 0, total_users: 0 };
+        // Initialize with safe default values to prevent errors if the fetch fails
+        let stats = { 
+            open_cases: 0, 
+            active_responses: 0, 
+            archived_responses: 0, 
+            total_users: 0,
+            server_metrics: { vendor_responses: 0 }
+        };
+
         try {
             const resp = await fetch('/dashboard/stats');
             if (resp.ok) stats = await resp.json();
@@ -24,34 +32,41 @@ export class SearchController {
 
         this.container.innerHTML = `
         <h1 class="title has-text-info">Overview</h1>
-        <nav class="level is-mobile mb-6">
-            <div class="level-item has-text-centered">
-                <div>
+        
+        <div class="columns is-multiline is-mobile mb-6">
+            <div class="column is-one-fifth-tablet is-half-mobile">
+                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
                     <p class="heading has-text-grey-light">Open Cases</p>
-                    <p class="title has-text-warning">${stats.open_cases}</p>
+                    <p class="title is-4 has-text-warning">${stats.open_cases}</p>
                 </div>
             </div>
-            <div class="level-item has-text-centered">
-                <div>
+            <div class="column is-one-fifth-tablet is-half-mobile">
+                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
                     <p class="heading has-text-grey-light">Responses</p>
-                    <p class="title has-text-info">${stats.active_responses}</p>
+                    <p class="title is-4 has-text-info">${stats.active_responses}</p>
                 </div>
             </div>
-            <div class="level-item has-text-centered">
-                <div>
+            <div class="column is-one-fifth-tablet is-half-mobile">
+                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
                     <p class="heading has-text-grey-light">Archived</p>
-                    <p class="title has-text-grey">${stats.archived_responses}</p>
+                    <p class="title is-4 has-text-grey">${stats.archived_responses}</p>
                 </div>
             </div>
-            <div class="level-item has-text-centered">
-                <div>
+            <div class="column is-one-fifth-tablet is-half-mobile">
+                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
                     <p class="heading has-text-grey-light">Users</p>
-                    <p class="title has-text-success">${stats.total_users}</p>
+                    <p class="title is-4 has-text-success">${stats.total_users}</p>
                 </div>
             </div>
-        </nav>
+            <div class="column is-one-fifth-tablet is-full-mobile">
+                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
+                    <p class="heading has-text-grey-light">Proxied</p>
+                    <p class="title is-4 has-text-white">${stats.server_metrics?.vendor_responses || 0}</p>
+                </div>
+            </div>
+        </div>
 
-        <h2 class="subtitle has-text-info">Search</h2>
+        <h2 class="subtitle has-text-info mt-6">Search</h2>
         <form>
             <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
             <div class="field"><div class="control"><label class="checkbox has-text-grey-light"><input type="checkbox" id="dontParseCheckbox"> parse on server</label></div></div>
