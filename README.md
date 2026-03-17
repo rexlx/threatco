@@ -1,5 +1,5 @@
 # threatco
-a service for enriching indicators of compromise.
+a service for enriching indicators of compromise. Use in conjuction with [rider](https://github.com/rexlx/rider) and [teller](https://github.com/rexlx/teller) to perform automated log parsing / case creation in your environment.
 
 ### key features
 - enrich users query by fanning out to all available plugins (all tool response)
