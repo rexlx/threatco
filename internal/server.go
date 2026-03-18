@@ -811,6 +811,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/misp-workflow", http.HandlerFunc(s.ValidateSessionToken(s.TriggerMispWorkflowHandler)))
 	s.Gateway.HandleFunc("/misp/workflow/batch", http.HandlerFunc(s.ValidateSessionToken(s.TriggerMispBatchWorkflowHandler)))
 	s.Gateway.HandleFunc("/notifications", http.HandlerFunc(s.ValidateSessionToken(s.GetNotificationsHandler)))
+	s.Gateway.HandleFunc("/notifications/delete", http.HandlerFunc(s.ValidateSessionToken(s.DeleteNotificationHandler)))
 	s.Gateway.HandleFunc("/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParserHandler)))
 	s.Gateway.HandleFunc("/previous-results", http.HandlerFunc(s.ValidateSessionToken(s.GetPreviousResponsesHandler)))
 	s.Gateway.HandleFunc("/rectify", http.HandlerFunc(s.ValidateSessionToken(s.RectifyServicesHandler)))

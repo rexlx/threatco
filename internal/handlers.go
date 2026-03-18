@@ -3057,6 +3057,51 @@ func (s *Server) GetDashboardStatsHandler(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(summary)
 }
 
+func (s *Server) DeleteNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Get user context
+	userEmail, ok := r.Context().Value("email").(string)
+	if !ok || userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Access the PostgresDB instance directly
+	pgDB, ok := s.DB.(*PostgresDB)
+	if !ok {
+		http.Error(w, "Database type mismatch", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Parse the notification ID to delete
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// 4. Run the SQL query to filter the JSONB array
+	_, err := pgDB.Pool.Exec(r.Context(), `
+        UPDATE user_notifications 
+        SET notifications = COALESCE((
+            SELECT jsonb_agg(elem)
+            FROM jsonb_array_elements(notifications) AS elem
+            WHERE elem->>'id' != $2
+        ), '[]'::jsonb)
+        WHERE email = $1
+    `, userEmail, req.ID)
+
+	if err != nil {
+		s.Log.Printf("Error deleting notification for %s: %v", userEmail, err)
+		http.Error(w, "Failed to delete notification", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

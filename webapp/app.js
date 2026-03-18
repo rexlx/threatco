@@ -61,6 +61,9 @@ export class Application {
                 // Add a unique ID for the frontend to manage it
                 notification.id = `notif-${Date.now()}`;
                 this.notifications.push(notification);
+                const notifyEvent = new CustomEvent('notification-received', { detail: notification });
+                document.dispatchEvent(notifyEvent);
+                
             } catch (e) {
                 console.error('Error parsing notification message:', e);
             }
@@ -107,14 +110,21 @@ export class Application {
         return fetch(this.apiUrl + url, finalOptions);
     }
 
+    async deleteNotificationFromDB(id) {
+    return await this._fetch('/notifications/delete', {
+        method: 'POST',
+        body: JSON.stringify({ id: id })
+    });
+}
+
     async fetchNotifications() {
         const thisURL = `/notifications`;
         try {
             const response = await this._fetch(thisURL, { method: 'GET' });
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            
+
             const data = await response.json();
-            
+
             if (data && data.notifications && Array.isArray(data.notifications)) {
                 // Ensure each notification has a unique ID for the frontend renderer
                 const fetchedNotifs = data.notifications.map((notif, index) => {
@@ -123,7 +133,7 @@ export class Application {
                         id: notif.id || `notif-db-${Date.now()}-${index}` // Assign ID if missing
                     };
                 });
-                
+
                 // Prepend or append to existing notifications array
                 this.notifications = [...fetchedNotifs, ...this.notifications];
             }
@@ -549,20 +559,20 @@ document.addEventListener('DOMContentLoaded', () => {
             fetch('/tools/dnslookup?value=' + encodeURIComponent(value), {
                 method: 'POST'
             })
-            .then(response => {
-                dnsBtn.classList.remove('is-loading');
-                if (response.ok) {
-                    console.log("DNS Lookup requested for:", value);
-                    // Optional: Add a toast notification here
-                } else {
-                    console.error("DNS Lookup failed");
-                    alert("DNS Lookup failed to start.");
-                }
-            })
-            .catch(err => {
-                dnsBtn.classList.remove('is-loading');
-                console.error("Error requesting DNS lookup:", err);
-            });
+                .then(response => {
+                    dnsBtn.classList.remove('is-loading');
+                    if (response.ok) {
+                        console.log("DNS Lookup requested for:", value);
+                        // Optional: Add a toast notification here
+                    } else {
+                        console.error("DNS Lookup failed");
+                        alert("DNS Lookup failed to start.");
+                    }
+                })
+                .catch(err => {
+                    dnsBtn.classList.remove('is-loading');
+                    console.error("Error requesting DNS lookup:", err);
+                });
             return;
         }
 
@@ -575,12 +585,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (confirm('Are you sure you want to delete this response?')) {
                 // Check if a global function exists (legacy support), otherwise fetch
                 if (typeof deleteResponse === 'function') {
-                    deleteResponse(id); 
+                    deleteResponse(id);
                 } else {
                     fetch('/deleteresponse', {
                         method: 'POST',
                         body: JSON.stringify({ id: id, archived: false })
-                    }).then(() => location.reload()); 
+                    }).then(() => location.reload());
                 }
             }
             return;
@@ -593,8 +603,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (delUserBtn) {
             const email = delUserBtn.dataset.email;
             if (confirm(`Delete user ${email}?`)) {
-                 fetch('/deleteuser?email=' + encodeURIComponent(email), { method: 'POST' })
-                 .then(() => window.location.reload());
+                fetch('/deleteuser?email=' + encodeURIComponent(email), { method: 'POST' })
+                    .then(() => window.location.reload());
             }
             return;
         }
@@ -610,8 +620,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     body: JSON.stringify({ email: email })
                 })
-                .then(r => r.json())
-                .then(data => alert('New Key: ' + data.key));
+                    .then(r => r.json())
+                    .then(data => alert('New Key: ' + data.key));
             }
             return;
         }
