@@ -464,6 +464,13 @@ export class CaseController {
                                 <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
                                 <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
                                 <p><strong>Type:</strong> ${c.is_auto ? 'Automated System Case' : 'User Created'}</p>
+                                ${c.response_id ? `
+                                <hr class="has-background-grey">
+                                <button class="button is-info is-fullwidth is-small" id="btnViewSourceResponse">
+                                    <span class="icon is-small"><i class="material-icons">description</i></span>
+                                    <span>View Source Response</span>
+                                </button>
+                            ` : ''}
                             </div>
                         </div>
                     </div>
@@ -540,6 +547,16 @@ export class CaseController {
                 this.render();
             } catch (e) { alert("Delete failed: " + e.message); }
         };
+
+        if (c.response_id) {
+            const btn = document.getElementById('btnViewSourceResponse');
+            if (btn) {
+                btn.onclick = () => {
+                    // Dispatch custom event to trigger the response details modal
+                    document.dispatchEvent(new CustomEvent('req-open-details', { detail: c.response_id }));
+                };
+            }
+        }
 
         document.getElementById('btnAddIOC').onclick = () => {
             const val = document.getElementById('inputAddIOC').value.trim();

@@ -62,6 +62,7 @@ type Case struct {
 	Comments    []Comment `json:"comments"`
 	IOCCount    int       `json:"ioc_count"`
 	IsAuto      bool      `json:"is_auto"`
+	ResponseID  string    `json:"response_id"`
 }
 
 type Comment struct {
@@ -435,7 +436,8 @@ func (db *PostgresDB) createTables() error {
             status TEXT,
             iocs JSONB,
             comments JSONB,
-			is_auto BOOLEAN DEFAULT FALSE
+			is_auto BOOLEAN DEFAULT FALSE,
+			response_id TEXT
         );
 		CREATE TABLE IF NOT EXISTS search_history (
 			id TEXT PRIMARY KEY,
@@ -749,9 +751,9 @@ func (db *PostgresDB) SaveToken(t Token) error {
 
 func (db *PostgresDB) CreateCase(c Case) error {
 	_, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto,
+		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto, c.ResponseID,
 	)
 	return err
 }
@@ -763,7 +765,7 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 	// 1. Base Query (Selecting 8 columns total)
 	query = `SELECT id, name, description, created_by, created_at, status, 
                     COALESCE(jsonb_array_length(iocs), 0) as ioc_count, 
-                    is_auto 
+                    is_auto, response_id
              FROM cases`
 
 	// 2. Apply Filtering
@@ -795,6 +797,7 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 			&c.Status,
 			&c.IOCCount,
 			&c.IsAuto,
+			&c.ResponseID,
 		)
 		if err != nil {
 			return nil, err
@@ -807,16 +810,16 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 func (db *PostgresDB) GetCase(id string) (Case, error) {
 	var c Case
 	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM cases WHERE id = $1", id).Scan(
-		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto,
+		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID,
 	)
 	return c, err
 }
 
 func (db *PostgresDB) UpdateCase(c Case) error {
 	_, err := db.Pool.Exec(context.Background(),
-		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7
-		WHERE id = $8`,
-		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ID,
+		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8
+		WHERE id = $9`,
+		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.ID,
 	)
 	return err
 }
@@ -834,7 +837,7 @@ func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
 	}
 
 	sql := fmt.Sprintf(`
-        SELECT id, name, description, created_by, created_at, status, iocs, comments 
+        SELECT id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id
         FROM cases 
         WHERE (
 			id ILIKE $1
@@ -855,9 +858,10 @@ func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID); err != nil {
 			return nil, err
 		}
+		c.IOCCount = len(c.IOCs)
 		cases = append(cases, c)
 	}
 	return cases, nil

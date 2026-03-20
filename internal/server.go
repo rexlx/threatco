@@ -872,6 +872,7 @@ func (s *Server) AutomatedThreatScan() {
 			}
 
 			botUser := fmt.Sprintf("%v bot", se.SearchedBy)
+			responseMarker := fmt.Sprintf("[response_id:%s]", r.ID)
 			// throttleWindow := 24 * time.Hour
 
 			existingCases, err := s.DB.SearchCases(se.Value, 0)
@@ -884,31 +885,30 @@ func (s *Server) AutomatedThreatScan() {
 							if ioc == se.Value {
 								caseAlreadyExists = true
 
-								// If this bot didn't create the case, check if it needs to comment
-								if ec.CreatedBy != botUser {
-									botCommentedRecently := false
-									for _, comment := range ec.Comments {
-										// Check if this bot has already commented within the throttle window
-										if comment.User == botUser {
-											botCommentedRecently = true
-											break
-										}
+								if ec.ResponseID == r.ID {
+									break
+								}
+
+								responseAlreadyTracked := false
+								for _, comment := range ec.Comments {
+									if strings.Contains(comment.Text, responseMarker) {
+										responseAlreadyTracked = true
+										break
 									}
+								}
 
-									// ONLY add the comment if the bot hasn't commented recently
-									if !botCommentedRecently {
-										newComment := Comment{
-											User:      botUser,
-											Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s.", se.Value, r.Vendor),
-											CreatedAt: time.Now(),
-										}
-										ec.Comments = append(ec.Comments, newComment)
+								if !responseAlreadyTracked {
+									newComment := Comment{
+										User:      botUser,
+										Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s. %s", se.Value, r.Vendor, responseMarker),
+										CreatedAt: time.Now(),
+									}
+									ec.Comments = append(ec.Comments, newComment)
 
-										if err := s.DB.UpdateCase(ec); err != nil {
-											s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
-										} else {
-											s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
-										}
+									if err := s.DB.UpdateCase(ec); err != nil {
+										s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
+									} else {
+										s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
 									}
 								}
 								break
@@ -932,6 +932,7 @@ func (s *Server) AutomatedThreatScan() {
 					IOCs:        []string{se.Value},
 					Comments:    []Comment{},
 					IsAuto:      true,
+					ResponseID:  r.ID,
 				}
 				if err := s.DB.CreateCase(newCase); err != nil {
 					s.Log.Println("Failed to create auto-case:", err)
