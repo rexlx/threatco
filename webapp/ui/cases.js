@@ -464,6 +464,12 @@ export class CaseController {
                                 <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
                                 <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
                                 <p><strong>Type:</strong> ${c.is_auto ? 'Automated System Case' : 'User Created'}</p>
+                                ${c.is_auto ? `
+                                <button class="button is-small is-info is-outlined is-fullwidth mt-3" id="btnPromoteCase">
+                                    <span class="icon is-small"><i class="material-icons">upgrade</i></span>
+                                    <span>Promote to User Case</span>
+                                </button>
+                            ` : ''}
                                 ${c.response_id ? `
                                 <hr class="has-background-grey">
                                 <button class="button is-info is-fullwidth is-small" id="btnViewSourceResponse">
@@ -532,6 +538,19 @@ export class CaseController {
         const closeMisp = () => mispModal.classList.remove('is-active');
         document.getElementById('btnCancelMisp').onclick = closeMisp;
         mispModal.querySelector('.delete').onclick = closeMisp;
+
+        const promoteBtn = document.getElementById('btnPromoteCase');
+        if (promoteBtn) {
+            promoteBtn.onclick = async () => {
+                if (!confirm("Are you sure you want to promote this to a User Case? This will move it out of the automated category.")) {
+                    return;
+                }
+                // Update the local state
+                this.currentCase.is_auto = false;
+                // Sync with backend
+                await this.updateCase();
+            };
+        }
 
         document.getElementById('btnToggleStatus').onclick = async () => {
             const newStatus = this.currentCase.status === 'Open' ? 'Closed' : 'Open';

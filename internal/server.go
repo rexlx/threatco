@@ -925,7 +925,7 @@ func (s *Server) AutomatedThreatScan() {
 				newCase := Case{
 					ID:          uuid.New().String(),
 					Name:        fmt.Sprintf("Auto-Case: Critical Threat (%s)", se.Value),
-					Description: fmt.Sprintf("Automated case for %v. Info: %s.", r.ID, se.Info),
+					Description: fmt.Sprintf("Automated case for %v (%v). Info: %s.", r.ID, se.From, se.Info),
 					CreatedBy:   botUser,
 					CreatedAt:   time.Now(),
 					Status:      "Open",
@@ -1126,7 +1126,7 @@ func (s *Server) ManageCases() {
 
 	for rows.Next() {
 		var c Case
-		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto)
+		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID)
 		if err != nil {
 			fmt.Printf("Error scanning case row: %v\n", err)
 			continue

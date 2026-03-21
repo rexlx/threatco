@@ -817,9 +817,9 @@ func (db *PostgresDB) GetCase(id string) (Case, error) {
 
 func (db *PostgresDB) UpdateCase(c Case) error {
 	_, err := db.Pool.Exec(context.Background(),
-		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8
-		WHERE id = $9`,
-		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.ID,
+		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8, is_auto = $9
+		WHERE id = $10`,
+		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.IsAuto, c.ID,
 	)
 	return err
 }

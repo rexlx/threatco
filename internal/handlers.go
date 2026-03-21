@@ -475,8 +475,6 @@ func (s *Server) GetCaseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
-	// We expect the payload to contain the full updated case state or partial logic here.
-	// For simplicity, we accept the struct with the ID.
 	var incoming Case
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -488,24 +486,18 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch existing to ensure ownership or valid ID (optional checks skipped for brevity)
 	existing, err := s.DB.GetCase(incoming.ID)
 	if err != nil {
 		http.Error(w, "Case not found", http.StatusNotFound)
 		return
 	}
 
-	// Merge updates
-	// If incoming has new comments (we assume frontend sends the NEW comment to append, or the whole list)
-	// Strategy: Frontend sends the delta or specific action.
-	// Let's assume the frontend sends the *whole* updated object for IOCs,
-	// but maybe we handle comments specially?
-	// Let's trust the frontend sends the complete updated fields for now.
-
 	existing.Status = incoming.Status
 	existing.Description = incoming.Description
 	existing.IOCs = incoming.IOCs
-	existing.Comments = incoming.Comments // Overwrite strategy
+	existing.Comments = incoming.Comments
+	// this is how we "promote" to a user case
+	existing.IsAuto = incoming.IsAuto
 
 	if err := s.DB.UpdateCase(existing); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
