@@ -889,6 +889,7 @@ func (s *Server) AutomatedThreatScan() {
 			if err == nil {
 				for _, ec := range existingCases {
 					if ec.ResponseID == r.ID {
+						caseAlreadyExists = true
 						break
 					}
 					for _, ioc := range ec.IOCs {

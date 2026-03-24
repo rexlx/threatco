@@ -470,6 +470,13 @@ func (db *PostgresDB) createTables() error {
         -- SPECIAL INDEX: Index the CAST text version of the JSONB array.
         -- This makes "iocs::text ILIKE" fast for partial IP/Domain searches.
         CREATE INDEX IF NOT EXISTS idx_cases_iocs_text_trgm ON cases USING gin ((iocs::text) gin_trgm_ops);
+		CREATE INDEX IF NOT EXISTS idx_responses_created ON responses(created DESC);
+		-- Index on response_id for fast lookups when correlating cases to responses
+		CREATE INDEX IF NOT EXISTS idx_cases_response_id ON cases(response_id);
+		CREATE INDEX IF NOT EXISTS idx_cases_iocs_jsonb ON cases USING gin (iocs jsonb_path_ops);
+		
+		-- Cleanup Optimization
+		CREATE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email);
     `)
 
 	return err
