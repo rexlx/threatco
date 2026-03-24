@@ -399,6 +399,9 @@ func (s *Server) UpdateCache() {
 		stat.Data[k] = v
 	}
 	s.Cache.StatsHistory = append(s.Cache.StatsHistory, stat)
+	if len(s.Cache.StatsHistory) > 1000 {
+		s.Cache.StatsHistory = s.Cache.StatsHistory[1:]
+	}
 }
 
 func (s *Server) CleanUsers() {
@@ -851,6 +854,11 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 // internal/server.go
 
 func (s *Server) AutomatedThreatScan() {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		s.Log.Println(fmt.Sprintf("AutomatedThreatScan completed in %v", duration))
+	}()
 	scanWindow := time.Now().Add(-1 * time.Hour)
 	responses, err := s.DB.GetResponses(scanWindow)
 	if err != nil {
@@ -880,39 +888,36 @@ func (s *Server) AutomatedThreatScan() {
 
 			if err == nil {
 				for _, ec := range existingCases {
-					if ec.Status != "" {
-						for _, ioc := range ec.IOCs {
-							if ioc == se.Value {
-								caseAlreadyExists = true
+					if ec.ResponseID == r.ID {
+						break
+					}
+					for _, ioc := range ec.IOCs {
+						if ioc == se.Value {
+							caseAlreadyExists = true
 
-								if ec.ResponseID == r.ID {
+							responseAlreadyTracked := false
+							for _, comment := range ec.Comments {
+								if strings.Contains(comment.Text, responseMarker) {
+									responseAlreadyTracked = true
 									break
 								}
-
-								responseAlreadyTracked := false
-								for _, comment := range ec.Comments {
-									if strings.Contains(comment.Text, responseMarker) {
-										responseAlreadyTracked = true
-										break
-									}
-								}
-
-								if !responseAlreadyTracked {
-									newComment := Comment{
-										User:      botUser,
-										Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s. %s", se.Value, r.Vendor, responseMarker),
-										CreatedAt: time.Now(),
-									}
-									ec.Comments = append(ec.Comments, newComment)
-
-									if err := s.DB.UpdateCase(ec); err != nil {
-										s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
-									} else {
-										s.LogInfo(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
-									}
-								}
-								break
 							}
+
+							if !responseAlreadyTracked {
+								newComment := Comment{
+									User:      botUser,
+									Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s. %s", se.Value, r.Vendor, responseMarker),
+									CreatedAt: time.Now(),
+								}
+								ec.Comments = append(ec.Comments, newComment)
+
+								if err := s.DB.UpdateCase(ec); err != nil {
+									s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
+								} else {
+									s.Log.Println(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
+								}
+							}
+							break
 						}
 					}
 					if caseAlreadyExists {

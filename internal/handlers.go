@@ -1331,7 +1331,7 @@ func (s *Server) ArchiveResponseHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	res, err := s.DB.GetResponses(time.Now().Add(-(24 * 30) * time.Hour))
+	res, err := s.DB.GetResponses(time.Now().Add(-(24 * 90) * time.Hour))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -3029,7 +3029,13 @@ func (s *Server) GetDashboardStatsHandler(w http.ResponseWriter, r *http.Request
 		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM cases").Scan(&summary.TotalCases)
 
 		// Count Active Responses
-		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM responses").Scan(&summary.ActiveResponses)
+		responseQuery := `SELECT COUNT(*) FROM responses WHERE created > $1`
+
+		// 2. Pass the calculated time as a separate argument
+		cutoff := time.Now().Add(time.Duration(-s.Cache.ResponseExpiry) * time.Second)
+
+		// 3. Let the driver handle the formatting
+		_ = pgDB.Pool.QueryRow(ctx, responseQuery, cutoff).Scan(&summary.ActiveResponses)
 
 		// Count Archived Responses
 		_ = pgDB.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM archived_responses").Scan(&summary.ArchivedResponses)
