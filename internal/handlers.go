@@ -1283,6 +1283,24 @@ func (s *Server) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func (s *Server) GetAllUsersHandler(w http.ResponseWriter, r *http.Request) {
+	var out []string
+	users, err := s.DB.GetAllUsers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, u := range users {
+		out = append(out, u.Email)
+	}
+	jsonOut, err := json.Marshal(out)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonOut)
+}
+
 func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	s.Log.Println("UpdateUserHandler")
 	var u User

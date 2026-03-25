@@ -807,6 +807,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
 	s.Gateway.HandleFunc("/getlogs", http.HandlerFunc(s.ValidateSessionToken(s.LogsSSRHandler)))
 	s.Gateway.HandleFunc("/getresponses", http.HandlerFunc(s.ValidateSessionToken(s.GetResponseCacheHandler2)))
+	s.Gateway.HandleFunc("/getusers", http.HandlerFunc(s.ValidateSessionToken(s.GetAllUsersHandler)))
 	s.Gateway.HandleFunc("/getservices", http.HandlerFunc(s.ValidateSessionToken(s.GetServicesHandler)))
 	s.Gateway.HandleFunc("/getuptime", http.HandlerFunc(s.ValidateSessionToken(s.GetRuntimeHandler)))
 	s.Gateway.HandleFunc("/logger", http.HandlerFunc(s.ValidateSessionToken(s.LogHandler)))
@@ -857,7 +858,7 @@ func (s *Server) AutomatedThreatScan() {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		s.Log.Println(fmt.Sprintf("AutomatedThreatScan completed in %v", duration))
+		fmt.Println(fmt.Sprintf("AutomatedThreatScan completed in %v", duration))
 	}()
 	scanWindow := time.Now().Add(-1 * time.Hour)
 	responses, err := s.DB.GetResponses(scanWindow)

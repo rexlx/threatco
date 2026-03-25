@@ -51,7 +51,7 @@ export class Application {
 
         this.socket.onopen = () => {
             console.log('WebSocket connection established.');
-            this.errors.push('Real-time connection active.');
+            // this.errors.push('Real-time connection active.');
         };
 
         this.socket.onmessage = (event) => {

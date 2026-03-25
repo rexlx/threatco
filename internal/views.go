@@ -2,8 +2,10 @@ package internal
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/rexlx/threatco/views"
 )
@@ -29,10 +31,26 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 		s.Log.Println("AllUsersViewHandler", err)
 	}
 
-	// Pagination settings
+	// 1. Filter users based on search query 'q'
+	searchQuery := r.URL.Query().Get("q")
+	if searchQuery != "" {
+		filtered := []User{}
+		lowerQuery := strings.ToLower(searchQuery)
+		for _, u := range _users {
+			if strings.Contains(strings.ToLower(u.Email), lowerQuery) {
+				filtered = append(filtered, u)
+			}
+		}
+		_users = filtered
+	}
+
+	// 2. Pagination settings (Recalculated based on filtered results)
 	const usersPerPage = 15
 	totalUsers := len(_users)
 	totalPages := (totalUsers + usersPerPage - 1) / usersPerPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
 
 	// Get page from query parameter
 	pageStr := r.URL.Query().Get("page")
@@ -43,8 +61,11 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Calculate start and end indices
+	// Calculate start and end indices with safety checks
 	startIdx := (page - 1) * usersPerPage
+	if startIdx >= totalUsers {
+		startIdx = 0
+	}
 	endIdx := startIdx + usersPerPage
 	if endIdx > totalUsers {
 		endIdx = totalUsers
@@ -71,14 +92,88 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated, deleteButton, newKeyButton)
 	}
 
-	// Build pagination controls
-	paginationHTML := s.buildPaginationControls(page, totalPages)
+	// 3. Build pagination controls with search query preservation
+	paginationHTML := s.buildPaginationControls(page, totalPages, searchQuery)
 
-	tempDiv := fmt.Sprintf(views.ViewUsersSection, users, paginationHTML)
+	// Inject the escaped search query, table body, and pagination
+	tempDiv := fmt.Sprintf(views.ViewUsersSection, html.EscapeString(searchQuery), users, paginationHTML)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
 
-func (s *Server) buildPaginationControls(currentPage, totalPages int) string {
+func (s *Server) buildPaginationControls(currentPage, totalPages int, query string) string {
+	if totalPages <= 1 {
+		return ""
+	}
+
+	// Format the query parameter for the URLs
+	qParam := ""
+	if query != "" {
+		qParam = "&q=" + html.EscapeString(query)
+	}
+
+	var prevBtn, nextBtn string
+	pageItems := ""
+
+	// Previous button
+	if currentPage > 1 {
+		prevBtn = fmt.Sprintf(views.PaginationPrevious, "", currentPage-1, qParam)
+	} else {
+		prevBtn = fmt.Sprintf(views.PaginationPrevious, "is-disabled", currentPage, qParam)
+	}
+
+	// Page numbers logic...
+	const maxPageButtons = 7
+	var startPage, endPage int
+
+	if totalPages <= maxPageButtons {
+		startPage = 1
+		endPage = totalPages
+	} else {
+		startPage = currentPage - 3
+		endPage = currentPage + 3
+		if startPage < 1 {
+			startPage = 1
+			endPage = maxPageButtons
+		}
+		if endPage > totalPages {
+			endPage = totalPages
+			startPage = totalPages - maxPageButtons + 1
+		}
+	}
+
+	if startPage > 1 {
+		pageItems += fmt.Sprintf(views.PaginationItem, "", 1, qParam, 1)
+		if startPage > 2 {
+			pageItems += views.PaginationEllipsis
+		}
+	}
+
+	for p := startPage; p <= endPage; p++ {
+		activeClass := ""
+		if p == currentPage {
+			activeClass = "is-current"
+		}
+		pageItems += fmt.Sprintf(views.PaginationItem, activeClass, p, qParam, p)
+	}
+
+	if endPage < totalPages {
+		if endPage < totalPages-1 {
+			pageItems += views.PaginationEllipsis
+		}
+		pageItems += fmt.Sprintf(views.PaginationItem, "", totalPages, qParam, totalPages)
+	}
+
+	// Next button
+	if currentPage < totalPages {
+		nextBtn = fmt.Sprintf(views.PaginationNext, "", currentPage+1, qParam)
+	} else {
+		nextBtn = fmt.Sprintf(views.PaginationNext, "is-disabled", currentPage, qParam)
+	}
+
+	return fmt.Sprintf(views.PaginationControls, prevBtn, pageItems, nextBtn)
+}
+
+func (s *Server) buildPaginationControlsLegacy(currentPage, totalPages int) string {
 	if totalPages <= 1 {
 		return ""
 	}
