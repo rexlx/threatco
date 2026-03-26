@@ -768,22 +768,37 @@ func (db *PostgresDB) CreateCase(c Case) error {
 func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error) {
 	var query string
 	var args []interface{}
+	var whereClause string
+	var orderBy string = "created_at DESC" // Default sort
 
-	// 1. Base Query (Selecting 8 columns total)
-	query = `SELECT id, name, description, created_by, created_at, status, 
-                    COALESCE(jsonb_array_length(iocs), 0) as ioc_count, 
-                    is_auto, response_id
-             FROM cases`
-
-	// 2. Apply Filtering
-	if filter == "user" {
-		query += " WHERE is_auto = FALSE"
-	} else if filter == "auto" {
-		query += " WHERE is_auto = TRUE"
+	// 1. Determine Filtering and Sorting logic based on the tab clicked
+	switch filter {
+	case "user":
+		whereClause = " WHERE is_auto = FALSE"
+	case "auto":
+		whereClause = " WHERE is_auto = TRUE"
+	case "most_comments":
+		// Use COALESCE to treat NULL comments as 0 length for sorting
+		orderBy = "COALESCE(jsonb_array_length(comments), 0) DESC"
+	case "most_iocs":
+		orderBy = "COALESCE(jsonb_array_length(iocs), 0) DESC"
+	case "newest":
+		orderBy = "created_at DESC"
+	default:
+		// "all" or any other value defaults to newest
+		orderBy = "created_at DESC"
 	}
 
-	// 3. Apply Pagination (Ensuring the 50-per-page limit is preserved)
-	query += " ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+	// 2. Construct the dynamic query while preserving pagination
+	query = fmt.Sprintf(`
+        SELECT id, name, description, created_by, created_at, status, 
+               COALESCE(jsonb_array_length(iocs), 0) as ioc_count, 
+               is_auto, response_id
+        FROM cases 
+        %s 
+        ORDER BY %s 
+        LIMIT $1 OFFSET $2`, whereClause, orderBy)
+
 	args = append(args, limit, offset)
 
 	rows, err := db.Pool.Query(context.Background(), query, args...)

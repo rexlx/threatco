@@ -40,17 +40,28 @@ export class CaseController {
             </div>
 
             <div class="tabs is-boxed mb-4">
-                <ul>
-                    <li class="${this.currentFilter === 'all' ? 'is-active' : ''}" data-filter="all">
-                        <a><span class="icon is-small"><i class="material-icons">list</i></span><span>All Cases</span></a>
-                    </li>
-                    <li class="${this.currentFilter === 'user' ? 'is-active' : ''}" data-filter="user">
-                        <a><span class="icon is-small"><i class="material-icons">person</i></span><span>User Cases</span></a>
-                    </li>
-                    <li class="${this.currentFilter === 'auto' ? 'is-active' : ''}" data-filter="auto">
-                        <a><span class="icon is-small"><i class="material-icons">smart_toy</i></span><span>Auto Cases</span></a>
-                    </li>
-                </ul>
+                <div class="tabs is-boxed mb-4">
+        <ul>
+            <li class="${this.currentFilter === 'all' ? 'is-active' : ''}" data-filter="all">
+                <a><span class="icon is-small"><i class="material-icons">list</i></span><span>All Cases</span></a>
+            </li>
+            <li class="${this.currentFilter === 'user' ? 'is-active' : ''}" data-filter="user">
+                <a><span class="icon is-small"><i class="material-icons">person</i></span><span>User Cases</span></a>
+            </li>
+            <li class="${this.currentFilter === 'auto' ? 'is-active' : ''}" data-filter="auto">
+                <a><span class="icon is-small"><i class="material-icons">smart_toy</i></span><span>Auto Cases</span></a>
+            </li>
+            <li class="${this.currentFilter === 'newest' ? 'is-active' : ''}" data-filter="newest">
+                <a><span class="icon is-small"><i class="material-icons">schedule</i></span><span>Newest</span></a>
+            </li>
+            <li class="${this.currentFilter === 'most_comments' ? 'is-active' : ''}" data-filter="most_comments">
+                <a><span class="icon is-small"><i class="material-icons">comment</i></span><span>Most Comments</span></a>
+            </li>
+            <li class="${this.currentFilter === 'most_iocs' ? 'is-active' : ''}" data-filter="most_iocs">
+                <a><span class="icon is-small"><i class="material-icons">summarize</i></span><span>Most IOCs</span></a>
+            </li>
+        </ul>
+    </div>
             </div>
 
             <div class="level mb-4">
