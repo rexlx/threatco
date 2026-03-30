@@ -253,10 +253,11 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 	}
 	info := `%s total score %d: from %v sources`
 	info = fmt.Sprintf(info, strings.Join(associations, ", "), mscore, sources)
+	tid := GetThreatLevelID("mandiant", mscore, WeightMandiant)
 	sum := SummarizedEvent{
 		ID:            Iid,
 		AttrCount:     len(associations),
-		ThreatLevelID: mscore,
+		ThreatLevelID: tid,
 		Timestamp:     time.Now(),
 		Background:    "has-background-warning",
 		Info:          info,
