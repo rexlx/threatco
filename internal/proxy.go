@@ -180,6 +180,7 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 }
 
 func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
+	// 1. Initial Indicator Search
 	var postReq mandiantIndicatorPostReqest
 	postReq.Requests = []struct {
 		Values []string `json:"values"`
@@ -190,77 +191,125 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 	}
 	out, err := json.Marshal(postReq)
 	if err != nil {
-		fmt.Println("MandiantHelper: server error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
 	}
-	request, err := http.NewRequest("POST", ep.GetURL(), bytes.NewBuffer(out))
 
+	request, err := http.NewRequest("POST", ep.GetURL(), bytes.NewBuffer(out))
 	if err != nil {
-		fmt.Println("MandiantHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
+
 	resp := ep.Do(request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
-	out, err = json.Marshal(req)
-	if err != nil {
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
-	}
 
-	resItem := ResponseItem{
-		ID:     req.TransactionID,
-		Vendor: req.To,
-		Data:   out,
-		Email:  req.Username,
-		Time:   time.Now(),
-	}
-	mergedData, err := MergeJSONData(resItem.Data, resp)
-	if err != nil {
-		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("server error %v", err))
-	}
-	resItem.Data = mergedData
-	resch <- resItem
-
-	var response vendors.MandiantIndicatorResponse
+	// 2. Parse Initial Response for Report IDs and Attribution
+	var response vendors.MandiantIndicatorResponse // Defined in mandiant.go
 	err = json.Unmarshal(resp, &response)
 	if err != nil || len(response.Indicators) < 1 {
-		var e mandiantError
-		err := json.Unmarshal(resp, &e)
-		if err != nil {
-			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
-		}
+		var e mandiantError // Defined in helpers.go
+		_ = json.Unmarshal(resp, &e)
 		if e.Error == "Not Found" {
 			return CreateAndWriteSummarizedEvent(req, false, "no hits")
 		}
-		fmt.Println("MandiantHelper: bad vendor response", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
-	var sources int
-	var associations []string
+
+	// 3. Initialize the Final Response Object
+	reqData, _ := json.Marshal(req)
+	resItem := ResponseItem{
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   reqData,
+		Email:  req.Username,
+		Time:   time.Now(),
+	}
+
+	// Merge the indicator hit into the data array
+	resItem.Data, _ = MergeJSONData(resItem.Data, resp)
+
+	// 4. Secondary Fetch: Retrieve Full Report JSON for each ReportID
+	// Deriving the base URL for /v4/report/ calls
+	baseURL := strings.TrimSuffix(ep.GetURL(), "/v4/indicator")
+	if baseURL == ep.GetURL() {
+		baseURL = strings.Replace(ep.GetURL(), "/v4/indicator", "", 1)
+	}
+
+	var associations, actors, malware []string
 	var mscore int
 	var Iid string
+	var maxSeverity string
+
 	for _, ind := range response.Indicators {
 		if ind.ID != "" {
 			Iid = ind.ID
 		}
+		if ind.Mscore > mscore {
+			mscore = ind.Mscore
+		}
+		if ind.ThreatRating.SeverityLevel != "" {
+			maxSeverity = ind.ThreatRating.SeverityLevel
+		}
 
-		sources += len(ind.Sources)
-		mscore += ind.Mscore
+		// Aggregate Attribution Metadata
+		for _, a := range ind.Actors {
+			actors = append(actors, a.Name)
+		}
+		for _, m := range ind.Malware {
+			malware = append(malware, m.Name)
+		}
 		for _, assoc := range ind.AttributedAssociations {
 			associations = append(associations, assoc.Name)
 		}
+
+		// Loop through found reports and fetch full API content
+		for _, rep := range ind.Reports {
+			reportURL := fmt.Sprintf("%s/v4/report/%s", baseURL, rep.ReportID)
+			repReq, err := http.NewRequest("GET", reportURL, nil)
+			if err != nil {
+				continue
+			}
+
+			// Perform the GET request via the authenticated endpoint
+			reportResp := ep.Do(repReq)
+			if len(reportResp) > 0 {
+				// Merge raw report JSON into our unified response item
+				merged, err := MergeJSONData(resItem.Data, reportResp)
+				if err == nil {
+					resItem.Data = merged
+				}
+			}
+		}
 	}
-	info := `%s total score %d: from %v sources`
-	info = fmt.Sprintf(info, strings.Join(associations, ", "), mscore, sources)
-	tid := GetThreatLevelID("mandiant", mscore, WeightMandiant)
+
+	// 5. Send enriched "Final Object" to the UI channel
+	resch <- resItem
+
+	// 6. Build the UI Summary with Attribution and Severity
+	totalAttribution := append(actors, malware...)
+	attrStr := strings.Join(uniqueStrings(totalAttribution), ", ") // Uses helper in proxy.go
+
+	info := "Score %d (%s): Found %d associated reports."
+	if attrStr != "" {
+		info += " Attribution: " + attrStr
+	}
+	info = fmt.Sprintf(info, mscore, maxSeverity, len(associations))
+
+	// Dynamic background color based on threat score
+	bg := "has-background-warning"
+	if mscore >= 80 {
+		bg = "has-background-warning-dark"
+	}
+
+	tid := GetThreatLevelID("mandiant", mscore, WeightMandiant) // Uses weights in proxy.go
 	sum := SummarizedEvent{
 		ID:            Iid,
-		AttrCount:     len(associations),
+		AttrCount:     len(totalAttribution) + len(associations),
 		ThreatLevelID: tid,
 		Timestamp:     time.Now(),
-		Background:    "has-background-warning",
-		Info:          info,
+		Background:    bg,
+		Info:          truncateString(info, 200), // Helper in helpers.go
 		From:          req.To,
 		Value:         req.Value,
 		Link:          req.TransactionID,
@@ -269,6 +318,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		Type:          req.Type,
 	}
+
 	return json.Marshal(sum)
 }
 
