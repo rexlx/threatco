@@ -281,24 +281,68 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 	// Limit upload size to 10MB to prevent memory exhaustion
 	r.ParseMultipartForm(10 << 20)
 
-	file, _, err := r.FormFile("file")
+	file, header, err := r.FormFile("file") //
 	if err != nil {
 		http.Error(w, "Error retrieving file from request", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, file); err != nil {
-		http.Error(w, "Error reading file content", http.StatusInternalServerError)
+	// Detect file type by extension
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	var content string
+
+	switch ext {
+	case ".pdf":
+		// Placeholder for PDF implementation as requested
+		http.Error(w, "pdf not ready yet", http.StatusNotImplemented)
 		return
+
+	case ".docx", ".xlsx", ".pptx":
+		// Microsoft Office files are ZIP archives
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, file); err != nil {
+			http.Error(w, "Error reading file content", http.StatusInternalServerError)
+			return
+		}
+
+		// Use archive/zip to read the OOXML structure
+		zReader, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+		if err != nil {
+			http.Error(w, "Failed to parse document as zip: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var combined strings.Builder
+		for _, f := range zReader.File {
+			// Extract text from XML components (e.g., word/document.xml) to find IOCs
+			if strings.HasSuffix(strings.ToLower(f.Name), ".xml") {
+				rc, err := f.Open()
+				if err != nil {
+					continue
+				}
+				data, _ := io.ReadAll(rc)
+				rc.Close()
+				combined.Write(data)
+				combined.WriteString(" ") // Ensure separation between XML parts
+			}
+		}
+		content = combined.String()
+
+	default:
+		// Default behavior for flat text files
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, file); err != nil {
+			http.Error(w, "Error reading file content", http.StatusInternalServerError)
+			return
+		}
+		content = buf.String()
 	}
 
-	content := buf.String()
-
+	// Run the contextualizer on the extracted content
 	domains := []string{"nullferatu.com"}
-	cx := parser.NewContextualizer(true, domains, domains)
-	out := cx.ExtractAll(content)
+	cx := parser.NewContextualizer(true, domains, domains) //
+	out := cx.ExtractAll(content)                          //
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
