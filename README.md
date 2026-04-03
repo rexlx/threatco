@@ -12,6 +12,7 @@ a service for enriching indicators of compromise. Use in conjuction with [rider]
 - remote logging if desired
 - backup and restore
 - add events to misp
+- no npm or pypi!
 - convenience tools:
     - Archive Inspector: Safely inspect ZIP contents up to 500MB; analyzed for threats like Zip Slips and Zip Bombs in a temporary sandbox.
     - AES256 Encryptor: Server-side encryption and decryption of strings or files using password-based AES256.
@@ -108,6 +109,8 @@ backup and restore is limited to the postgresql database type at this time.
 - use **-restore-db file.sql** to restore (this is DESTRUCTIVE!)
 
 ## supported plugins
+- absuseipdb
+- alienvault OTX
 - crowdstrike
 - [deepfry](https://github.com/rexlx/deepfry)
 - domaintools
