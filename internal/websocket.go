@@ -11,6 +11,28 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var GlobalHub *Hub
+
+func SetGlobalHub(h *Hub) {
+	GlobalHub = h
+}
+
+// GlobalNotify provides a way to send a message without having the Hub object.
+func GlobalNotify(userID string, msg string, isError bool) error {
+	if GlobalHub == nil {
+		return fmt.Errorf("global hub not initialized")
+	}
+
+	notification := Notification{
+		Created: time.Now(),
+		Info:    msg,
+		Error:   isError,
+	}
+
+	// This calls the existing logic that iterates through active clients.
+	return GlobalHub.SendToUser(nil, userID, notification)
+}
+
 const (
 	// Time allowed to write a message to the peer.
 	writeWait = 10 * time.Second

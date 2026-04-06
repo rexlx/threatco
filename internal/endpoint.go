@@ -74,7 +74,7 @@ func (e *Endpoint) GetURL() string {
 	return e.URL
 }
 
-func (e *Endpoint) Do(req *http.Request) []byte {
+func (e *Endpoint) Do(userID string, req *http.Request) []byte {
 	e.Auth.Apply(req)
 	if e.RateLimited {
 		e.Memory.Lock()
@@ -88,6 +88,9 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 		if e.InFlight >= e.MaxRequests {
 			if e.RateMark.IsZero() {
 				e.RateMark = time.Now()
+			}
+			if userID != "" {
+				_ = GlobalNotify(userID, fmt.Sprintf("Endpoint '%s' is currently rate limited. Your request has been dropped.", e.GetURL()), true)
 			}
 			fmt.Println("--------------------------------------------Rate limited")
 			e.Memory.Unlock()
@@ -103,6 +106,9 @@ func (e *Endpoint) Do(req *http.Request) []byte {
 	}
 	resp, err := e.Gateway.Do(req)
 	if err != nil {
+		if userID != "" {
+			_ = GlobalNotify(userID, fmt.Sprintf("Error performing request to endpoint '%s': %s", e.GetURL(), err.Error()), true)
+		}
 		e := CheckConnectivity(e.URL)
 		if e != nil {
 			fmt.Println("CheckConnectivity -> Endpoint.Do: error doing request", e)
@@ -127,7 +133,7 @@ func (e *Endpoint) ProcessQueue(id string) {
 	e.InFlight++
 	e.Memory.Unlock()
 	go func() {
-		res := e.Do(req)
+		res := e.Do("", req)
 		ri := ResponseItem{
 			ID:   id,
 			Time: time.Now(),

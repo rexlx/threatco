@@ -283,6 +283,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	svr.ID = id
 	svr.ManageCases()
+	SetGlobalHub(svr.Hub)
 	fmt.Println("Server initialized with ID:", svr.ID)
 	svr.ProxyOperators["internal-case"] = ThreatcoInternalCaseSearchBuilder(svr.DB)
 	return svr, c
@@ -493,16 +494,6 @@ func (s *Server) ProcessTransientResponses() {
 				resp.Time = r.Time
 			}
 
-			// dur := time.Since(start)
-			// ms := float64(dur.Microseconds()) / float64(time.Millisecond)
-			// _, ok := s.Cache.Coordinates["response_processing_time_ms"]
-			// if !ok {
-			// 	s.Cache.Coordinates["response_processing_time_ms"] = make([]Coord, 0)
-			// }
-			// if len(s.Cache.Coordinates["response_processing_time_ms"]) > 250 {
-			// 	s.Cache.Coordinates["response_processing_time_ms"] = s.Cache.Coordinates["response_processing_time_ms"][1:]
-			// }
-			// s.Cache.Coordinates["response_processing_time_ms"] = append(s.Cache.Coordinates["response_processing_time_ms"], Coord{Value: ms, Time: time.Now().Unix()})
 			s.Memory.Lock()
 			s.Cache.Responses[resp.ID] = resp
 

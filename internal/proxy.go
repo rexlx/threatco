@@ -54,7 +54,7 @@ func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "zero length response")
 	}
@@ -132,7 +132,7 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -199,7 +199,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -272,7 +272,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 			}
 
 			// Perform the GET request via the authenticated endpoint
-			reportResp := ep.Do(repReq)
+			reportResp := ep.Do(req.Username, repReq)
 			if len(reportResp) > 0 {
 				// Merge raw report JSON into our unified response item
 				merged, err := MergeJSONData(resItem.Data, reportResp)
@@ -332,7 +332,7 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		fmt.Println("VirusTotalHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
@@ -430,7 +430,7 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		fmt.Println("CrowdstrikeHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
@@ -634,7 +634,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 		return nil, err
 	}
 
-	resp = ep.Do(request)
+	resp = ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -759,7 +759,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		return nil, err
 	}
 
-	resp = ep.Do(request)
+	resp = ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -936,7 +936,7 @@ func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 	query.Set("size", "10")
 	request.URL.RawQuery = query.Encode()
 
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1051,7 +1051,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	}
 
 	// Execute the request using the endpoint's client
-	respBytes := ep.Do(request)
+	respBytes := ep.Do(req.Username, request)
 	if len(respBytes) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response from Cloudflare")
 	}
@@ -1161,7 +1161,7 @@ func AbuseIPDBProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReques
 	// request.Header.Set("Key", ep.GetAuthToken())
 	request.Header.Set("Accept", "application/json")
 
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1252,7 +1252,7 @@ func OTXProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]
 	}
 
 	// OTX uses X-OTX-API-KEY header
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}

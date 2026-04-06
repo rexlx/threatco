@@ -57,13 +57,39 @@ export class Application {
         this.socket.onmessage = (event) => {
             try {
                 const notification = JSON.parse(event.data);
-                console.log('Received notification:', notification);
-                // Add a unique ID for the frontend to manage it
-                notification.id = `notif-${Date.now()}`;
-                this.notifications.push(notification);
-                const notifyEvent = new CustomEvent('notification-received', { detail: notification });
-                document.dispatchEvent(notifyEvent);
-                
+
+                // 1. Create a unique signature based on content, ignoring the timestamp
+                const signature = `${notification.info}|${notification.error}`;
+                const now = Date.now();
+                const DEBOUNCE_WINDOW = 5000; // 5 seconds
+
+                // 2. Check for a recent duplicate in existing notifications
+                const existingIndex = this.notifications.findLastIndex(n =>
+                    n.signature === signature && (now - n.lastSeen) < DEBOUNCE_WINDOW
+                );
+
+                if (existingIndex !== -1) {
+                    // Update the existing notification count and timestamp
+                    this.notifications[existingIndex].count = (this.notifications[existingIndex].count || 1) + 1;
+                    this.notifications[existingIndex].lastSeen = now;
+                    this.notifications[existingIndex].created = notification.created; // Update to latest time
+
+                    // Re-dispatch event to trigger UI update for the specific notification
+                    const notifyEvent = new CustomEvent('notification-received', {
+                        detail: this.notifications[existingIndex]
+                    });
+                    document.dispatchEvent(notifyEvent);
+                } else {
+                    // New unique notification
+                    notification.id = `notif-${now}`;
+                    notification.signature = signature;
+                    notification.lastSeen = now;
+                    notification.count = 1;
+                    if (notification.error) notification.background = "has-background-warning";
+                    this.notifications.push(notification);
+                    const notifyEvent = new CustomEvent('notification-received', { detail: notification });
+                    document.dispatchEvent(notifyEvent);
+                }
             } catch (e) {
                 console.error('Error parsing notification message:', e);
             }
@@ -111,11 +137,11 @@ export class Application {
     }
 
     async deleteNotificationFromDB(id) {
-    return await this._fetch('/notifications/delete', {
-        method: 'POST',
-        body: JSON.stringify({ id: id })
-    });
-}
+        return await this._fetch('/notifications/delete', {
+            method: 'POST',
+            body: JSON.stringify({ id: id })
+        });
+    }
 
     async fetchNotifications() {
         const thisURL = `/notifications`;

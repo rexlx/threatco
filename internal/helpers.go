@@ -453,8 +453,7 @@ func ExtractSummarizedEvent(rawData []byte) (SummarizedEvent, error) {
 }
 
 func ExtractThreatLevelID(rawData []byte) (int, error) {
-	// Unmarshal into a slice of maps since the responses can contain
-	// non-uniform objects (e.g., raw vendor data and SummarizedEvents).
+	var finalScore int = 6
 	var data []map[string]interface{}
 	if err := json.Unmarshal(rawData, &data); err != nil {
 		fmt.Println("ExtractThreatLevelID: failed to unmarshal data:", err, string(rawData))
@@ -467,22 +466,30 @@ func ExtractThreatLevelID(rawData []byte) (int, error) {
 			case float64:
 				// JSON numbers are unmarshaled as float64 by default in interface{} maps.
 				// Since you use "int" in your struct, this is the primary path.
-				return int(v), nil
+				if v < float64(finalScore) {
+					finalScore = int(v)
+				}
+				// return int(v), nil
 			case string:
 				// Fallback: Handle cases where the field is a string (e.g., raw MISP data).
 				tid, err := strconv.Atoi(v)
 				if err != nil {
 					continue // Try next object if string isn't an integer
 				}
-				return tid, nil
+				if tid < finalScore {
+					finalScore = tid
+				}
+				// return tid, nil
 			default:
 				fmt.Println("ExtractThreatLevelID got an unsupported type:", reflect.TypeOf(val))
 				continue // Unsupported type, try next object
 			}
 		}
 	}
-	// fmt.Println("ExtractThreatLevelID: threat_level_id not found in any object", string(rawData))
-	return 0, fmt.Errorf("threat_level_id not found")
+	if finalScore == 6 {
+		return 0, fmt.Errorf("threat_level_id not found")
+	}
+	return finalScore, nil
 }
 
 func ParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventResponse) ([]byte, error) {
@@ -591,7 +598,7 @@ func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]b
 		return nil, err
 	}
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	resp := ep.Do(request)
+	resp := ep.Do("", request)
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -638,7 +645,7 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 		req.Header.Set("X-Last-Chunk", strconv.FormatBool(isLastChunk))
 		req.ContentLength = int64(len(part))
 
-		respBodyBytes := ep.Do(req)
+		respBodyBytes := ep.Do("", req)
 		if len(respBodyBytes) == 0 {
 			return nil, fmt.Errorf("received an empty or error response from server for chunk %d of file '%s'", i+1, name)
 		}
@@ -668,7 +675,7 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 	resultsReq.Header.Set("Content-Type", "application/json")
 	resultsReq.ContentLength = int64(len(jsonBody))
 
-	resultsRespBodyBytes := ep.Do(resultsReq)
+	resultsRespBodyBytes := ep.Do("", resultsReq)
 	if len(resultsRespBodyBytes) == 0 {
 		return nil, fmt.Errorf("received an empty or error response from /results for file ID '%s'", file.ID)
 	}
@@ -813,7 +820,7 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("MandiantHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
-	resp := ep.Do(request)
+	resp := ep.Do(req.Username, request)
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1113,7 +1120,7 @@ func (s *Server) AddMispAttribute(eventID, attrType, attrValue, category, distri
 	// request.Header.Set("Authorization", "YOUR_MISP_API_KEY") // Handled by Endpoint.Do in this example
 
 	s.Log.Println("Sending add attribute request to MISP:", url, "Payload:", string(payloadBytes))
-	respBody := mispTarget.Do(request)
+	respBody := mispTarget.Do("", request)
 
 	s.Log.Println("Successfully added attribute to MISP event", eventID, ". Response:", string(respBody))
 	return respBody, nil
@@ -1168,7 +1175,7 @@ func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 
-	respBody := mispTarget.Do(request)
+	respBody := mispTarget.Do("", request)
 
 	// Debugging print (Preserved)
 	// fmt.Println(string(respBody))
@@ -1257,7 +1264,7 @@ func (s *Server) AddMispTag(eventID string, tagName string) error {
 	req.Header.Set("Accept", "application/json")
 
 	fmt.Printf("Attaching tag '%s' to event ID '%s'...", tagName, eventID)
-	respBody := mispTarget.Do(req)
+	respBody := mispTarget.Do("", req)
 
 	// Check for success
 	// MISP returns {"saved": true, "success": "Tag added"} on success

@@ -68,7 +68,7 @@ func getVmRaySubmission(ep Endpoint, submissionID int) (*vendors.VMRaySubmission
 	}
 
 	// The ep.Do method is assumed to handle authentication (e.g., adding the API key header).
-	respBytes := ep.Do(req)
+	respBytes := ep.Do("", req)
 	if len(respBytes) == 0 {
 		return nil, fmt.Errorf("received empty response when fetching status for submission %d", submissionID)
 	}
@@ -126,7 +126,7 @@ func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep E
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// The ep.Do method is assumed to handle authentication.
-	initialRespBytes := ep.Do(request)
+	initialRespBytes := ep.Do("", request)
 	if len(initialRespBytes) == 0 {
 		return fmt.Errorf("got a zero length response from VMRay on file submission")
 	}
@@ -201,7 +201,7 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 		req.Header.Set("X-Last-Chunk", strconv.FormatBool(isLastChunk))
 		req.ContentLength = int64(len(part))
 
-		respBodyBytes := ep.Do(req)
+		respBodyBytes := ep.Do("", req)
 		if len(respBodyBytes) == 0 {
 			return fmt.Errorf("received an empty or error response from server for chunk %d of file '%s'", i+1, file.FileName)
 		}
@@ -241,7 +241,7 @@ func LiveryHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id s
 		resultsReq.Header.Set("Content-Type", "application/json")
 		resultsReq.ContentLength = int64(len(jsonBody))
 
-		resultsRespBodyBytes := ep.Do(resultsReq)
+		resultsRespBodyBytes := ep.Do("", resultsReq)
 		responseStr := strings.TrimSpace(string(resultsRespBodyBytes))
 
 		if len(resultsRespBodyBytes) > 0 && responseStr != "No results found for the provided FileID" {
@@ -303,7 +303,7 @@ func MispFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	res := ep.Do(request)
+	res := ep.Do("", request)
 	if len(res) == 0 {
 		fmt.Println("MISPFileHelper: received empty response for file:", file.FileName)
 		return fmt.Errorf("received an empty response for file %s", file.FileName)

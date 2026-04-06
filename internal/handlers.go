@@ -272,7 +272,7 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	resp := ep.Do(request)
+	resp := ep.Do("", request)
 	w.Write(resp)
 
 }
