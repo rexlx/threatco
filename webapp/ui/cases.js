@@ -367,11 +367,8 @@ export class CaseController {
 
         cases.forEach(c => {
             const statusColor = c.status === 'Open' ? 'is-primary' : 'is-warning';
-
             let desc = c.description || 'No description';
-            if (desc.length > 250) {
-                desc = desc.substring(0, 250) + '...';
-            }
+            if (desc.length > 250) desc = desc.substring(0, 250) + '...';
 
             const box = document.createElement('div');
             box.className = 'box has-background-black has-text-light mb-2';
@@ -388,20 +385,20 @@ export class CaseController {
             box.onclick = () => this.openCase(c);
 
             const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
-            const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2"><span class="icon is-small mr-1"><i class="material-icons" style="font-size:14px;">smart_toy</i></span>AUTO</span>' : '';
+            const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2">AUTO</span>' : '';
 
             box.innerHTML = `
-                <article class="media is-vcentered">
-                    <div class="media-left">
+                <article class="media is-vcentered" style="overflow: hidden;"> <div class="media-left">
                         <input type="checkbox" class="case-select-checkbox" data-id="${c.id}" ${this.selectedCaseIds.has(c.id) ? 'checked' : ''}>
                     </div>
                     <div class="media-left">
                         <span class="tag ${statusColor}">${escapeHtml(c.status)}</span>
                     </div>
-                    <div class="media-content">
+                    
+                    <div class="media-content" style="min-width: 0;">
                         <div class="content">
-                            <p>
-                                <strong class="has-text-info is-size-5">${escapeHtml(c.name)}</strong> 
+                            <p style="overflow: hidden; text-overflow: ellipsis;">
+                                <strong class="has-text-info is-size-5" style="word-break: break-word;">${escapeHtml(c.name)}</strong> 
                                 ${autoBadge}
                                 <span class="has-text-info-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
                                 <br>
@@ -411,7 +408,8 @@ export class CaseController {
                             </p>
                         </div>
                     </div>
-                    <div class="media-right has-text-right">
+
+                    <div class="media-right has-text-right" style="flex-shrink: 0; min-width: 100px;">
                         <small class="has-text-grey is-size-7">${new Date(c.created_at).toLocaleDateString()}</small>
                         <br>
                         <span class="tag is-dark is-rounded mt-1">${iocCount} IOCs</span>
@@ -419,7 +417,6 @@ export class CaseController {
                 </article>
             `;
 
-            // Prevent checkbox interaction from opening the case view
             const checkbox = box.querySelector('.case-select-checkbox');
             checkbox.onclick = (e) => {
                 e.stopPropagation();
