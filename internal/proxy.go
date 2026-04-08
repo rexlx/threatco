@@ -1306,19 +1306,17 @@ func OTXProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]
 
 func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 	return func(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
-		// 1. Search the database using the optimized SearchCases method
 		cases, err := db.SearchCases(req.Value, 0)
 		if err != nil {
-			// Use the standard failure helper if the DB query fails
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("internal search error: %v", err))
 		}
 
 		matched := len(cases) > 0
-		background := "has-background-primary-dark" // Default safe color
+		background := "has-background-primary-dark"
 		info := "No open cases match this IOC."
 
 		if matched {
-			background = "has-background-warning-dark" // High-visibility color for internal hits
+			background = "has-background-warning-dark"
 			names := make([]string, 0, len(cases))
 			for _, c := range cases {
 				names = append(names, c.Name)
@@ -1326,18 +1324,18 @@ func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 			info = fmt.Sprintf("Match found in %d open case(s): %s", len(cases), strings.Join(names, ", "))
 		}
 
-		// 2. Build the SummarizedEvent for the UI
 		sum := SummarizedEvent{
-			Timestamp:  time.Now(),
-			Matched:    matched,
-			Background: background,
-			SearchedBy: req.Username,
-			From:       "Internal Cases",
-			Value:      req.Value,
-			Info:       info,
-			Link:       req.TransactionID,
-			RawLink:    fmt.Sprintf("%s/cases", req.FQDN), // Link to the cases dashboard
-			Type:       req.Type,
+			Timestamp:     time.Now(),
+			Matched:       matched,
+			Background:    background,
+			SearchedBy:    req.Username,
+			From:          "Internal Cases",
+			ThreatLevelID: 4,
+			Value:         req.Value,
+			Info:          info,
+			Link:          req.TransactionID,
+			RawLink:       fmt.Sprintf("%s/cases", req.FQDN),
+			Type:          req.Type,
 		}
 
 		out, err := json.Marshal(sum)

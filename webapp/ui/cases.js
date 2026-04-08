@@ -9,7 +9,10 @@ export class CaseController {
         // Pagination & Filter State
         this.currentPage = 1;
         this.itemsPerPage = 50;
-        this.currentFilter = 'all'; // Default to showing all cases
+        this.currentFilter = 'all';
+        
+        // NEW: Track selected case IDs for grouping
+        this.selectedCaseIds = new Set();
     }
 
     async render() {
@@ -32,36 +35,40 @@ export class CaseController {
                     </div>
                 </div>
                 <div class="column is-narrow">
-                    <button class="button is-success" id="btnNewCase">
-                        <span class="icon"><i class="material-icons">add</i></span>
-                        <span>New Case</span>
-                    </button>
+                    <div class="buttons">
+                        <button class="button is-link is-light" id="btnGroupSelected" title="Merge IOCs from selected cases into a new case">
+                            <span class="icon"><i class="material-icons">layers</i></span>
+                            <span>Group Selected</span>
+                        </button>
+                        <button class="button is-success" id="btnNewCase">
+                            <span class="icon"><i class="material-icons">add</i></span>
+                            <span>New Case</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div class="tabs is-boxed mb-4">
-                <div class="tabs is-boxed mb-4">
-        <ul>
-            <li class="${this.currentFilter === 'all' ? 'is-active' : ''}" data-filter="all">
-                <a><span class="icon is-small"><i class="material-icons">list</i></span><span>All Cases</span></a>
-            </li>
-            <li class="${this.currentFilter === 'user' ? 'is-active' : ''}" data-filter="user">
-                <a><span class="icon is-small"><i class="material-icons">person</i></span><span>User Cases</span></a>
-            </li>
-            <li class="${this.currentFilter === 'auto' ? 'is-active' : ''}" data-filter="auto">
-                <a><span class="icon is-small"><i class="material-icons">smart_toy</i></span><span>Auto Cases</span></a>
-            </li>
-            <li class="${this.currentFilter === 'newest' ? 'is-active' : ''}" data-filter="newest">
-                <a><span class="icon is-small"><i class="material-icons">schedule</i></span><span>Newest</span></a>
-            </li>
-            <li class="${this.currentFilter === 'most_comments' ? 'is-active' : ''}" data-filter="most_comments">
-                <a><span class="icon is-small"><i class="material-icons">comment</i></span><span>Most Comments</span></a>
-            </li>
-            <li class="${this.currentFilter === 'most_iocs' ? 'is-active' : ''}" data-filter="most_iocs">
-                <a><span class="icon is-small"><i class="material-icons">summarize</i></span><span>Most IOCs</span></a>
-            </li>
-        </ul>
-    </div>
+                <ul>
+                    <li class="${this.currentFilter === 'all' ? 'is-active' : ''}" data-filter="all">
+                        <a><span class="icon is-small"><i class="material-icons">list</i></span><span>All Cases</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'user' ? 'is-active' : ''}" data-filter="user">
+                        <a><span class="icon is-small"><i class="material-icons">person</i></span><span>User Cases</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'auto' ? 'is-active' : ''}" data-filter="auto">
+                        <a><span class="icon is-small"><i class="material-icons">smart_toy</i></span><span>Auto Cases</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'newest' ? 'is-active' : ''}" data-filter="newest">
+                        <a><span class="icon is-small"><i class="material-icons">schedule</i></span><span>Newest</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'most_comments' ? 'is-active' : ''}" data-filter="most_comments">
+                        <a><span class="icon is-small"><i class="material-icons">comment</i></span><span>Most Comments</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'most_iocs' ? 'is-active' : ''}" data-filter="most_iocs">
+                        <a><span class="icon is-small"><i class="material-icons">summarize</i></span><span>Most IOCs</span></a>
+                    </li>
+                </ul>
             </div>
 
             <div class="level mb-4">
@@ -144,9 +151,13 @@ export class CaseController {
             tab.onclick = () => {
                 this.currentFilter = tab.dataset.filter;
                 this.currentPage = 1;
-                this.render(); // Re-render to update UI state
+                this.selectedCaseIds.clear(); // Clear selections when changing view
+                this.render();
             };
         });
+
+        // --- Group Selected Logic ---
+        document.getElementById('btnGroupSelected').onclick = () => this.handleGroupSelected();
 
         // --- Export Logic ---
         document.getElementById('btnExportCases').onclick = () => {
@@ -154,12 +165,8 @@ export class CaseController {
             if (clear && !confirm("Warning: This will PERMANENTLY DELETE all cases in the current view after downloading. Proceed?")) {
                 return;
             }
-
-            // Redirecting to the handler URL triggers the browser download
             const exportUrl = `/cases/export?type=${this.currentFilter}&clear=${clear}`;
             window.location.href = exportUrl;
-
-            // If we cleared the cases, refresh the list after a short delay
             if (clear) {
                 setTimeout(() => this.loadCases(), 2000);
             }
@@ -167,9 +174,17 @@ export class CaseController {
 
         // --- Create Case Modal Logic ---
         const modal = document.getElementById('newCaseModal');
-        const closeModal = () => modal.classList.remove('is-active');
+        const closeModal = () => {
+            modal.classList.remove('is-active');
+            // Reset modal save button to default behavior
+            document.getElementById('btnSaveCase').onclick = () => this.saveNewCase();
+        };
 
-        document.getElementById('btnNewCase').onclick = () => modal.classList.add('is-active');
+        document.getElementById('btnNewCase').onclick = () => {
+            document.getElementById('newCaseName').value = '';
+            document.getElementById('newCaseDesc').value = '';
+            modal.classList.add('is-active');
+        };
         document.getElementById('btnCancelCase').onclick = closeModal;
         modal.querySelector('.delete').onclick = closeModal;
 
@@ -206,25 +221,85 @@ export class CaseController {
             this.loadCases();
         };
 
-        // --- Save Case Logic ---
-        document.getElementById('btnSaveCase').onclick = async () => {
-            const name = document.getElementById('newCaseName').value;
-            const desc = document.getElementById('newCaseDesc').value;
-            if (!name) return alert("Name is required");
+        // --- Save Case Logic (Default) ---
+        document.getElementById('btnSaveCase').onclick = () => this.saveNewCase();
+    }
 
-            try {
-                const res = await this.app._fetch('/cases/create', {
+    /**
+     * Helper to create a case, optionally with a list of IOCs.
+     */
+    async saveNewCase(predefinedIocs = []) {
+        const name = document.getElementById('newCaseName').value;
+        const desc = document.getElementById('newCaseDesc').value;
+        if (!name) return alert("Name is required");
+
+        try {
+            const res = await this.app._fetch('/cases/create', {
+                method: 'POST',
+                body: JSON.stringify({ name, description: desc, is_auto: false })
+            });
+            if (!res.ok) throw new Error(await res.text());
+            
+            const newCase = await res.json();
+
+            // If grouping, update the newly created case with aggregated IOCs
+            if (predefinedIocs.length > 0) {
+                newCase.iocs = predefinedIocs;
+                await this.app._fetch('/cases/update', {
                     method: 'POST',
-                    body: JSON.stringify({ name, description: desc, is_auto: false })
+                    body: JSON.stringify(newCase)
                 });
-                if (!res.ok) throw new Error(await res.text());
-                closeModal();
-                this.currentPage = 1;
-                await this.loadCases();
-            } catch (e) {
-                alert("Error creating case: " + e.message);
             }
-        };
+
+            document.getElementById('newCaseModal').classList.remove('is-active');
+            this.currentPage = 1;
+            this.selectedCaseIds.clear();
+            await this.loadCases();
+        } catch (e) {
+            alert("Error creating case: " + e.message);
+        }
+    }
+
+    /**
+     * Logic for grouping multiple selected cases.
+     */
+    async handleGroupSelected() {
+        if (this.selectedCaseIds.size < 2) {
+            return alert("Please select at least two cases to group.");
+        }
+
+        const ids = Array.from(this.selectedCaseIds);
+        const aggregatedIocs = new Set();
+        const btn = document.getElementById('btnGroupSelected');
+        
+        btn.classList.add('is-loading');
+
+        try {
+            // Fetch full details for each selected case to gather IOCs
+            for (const id of ids) {
+                const res = await this.app._fetch(`/cases/get?id=${id}`);
+                if (res.ok) {
+                    const c = await res.json();
+                    if (c.iocs) {
+                        c.iocs.forEach(ioc => aggregatedIocs.add(ioc));
+                    }
+                }
+            }
+
+            btn.classList.remove('is-loading');
+
+            // Set up modal for creation
+            document.getElementById('newCaseName').value = `Grouped Case - ${new Date().toLocaleDateString()}`;
+            document.getElementById('newCaseDesc').value = `Aggregated IOCs from ${ids.length} related cases.`;
+            
+            // Override modal save button for this specific operation
+            document.getElementById('btnSaveCase').onclick = () => this.saveNewCase(Array.from(aggregatedIocs));
+            document.getElementById('newCaseModal').classList.add('is-active');
+
+        } catch (e) {
+            btn.classList.remove('is-loading');
+            alert("Failed to group cases: " + e.message);
+        }
     }
 
     async searchCases(query) {
@@ -254,7 +329,7 @@ export class CaseController {
             }
 
             this.renderCaseList(cases);
-            this.updatePaginationControls(cases.length); // This will now receive 0 instead of crashing
+            this.updatePaginationControls(cases.length);
 
         } catch (e) {
             container.innerHTML = `<p class="has-text-danger">Error loading cases: ${e.message}</p>`;
@@ -301,7 +376,7 @@ export class CaseController {
             const box = document.createElement('div');
             box.className = 'box has-background-black has-text-light mb-2';
             box.style.cursor = 'pointer';
-            // box.style.borderLeft = c.status === 'Open' ? '4px solid #158c95ff' : '4px solid rgb(83, 87, 106)';
+            
             if (c.status === 'Open') {
                 box.style.border = '1px solid rgba(21, 140, 149, 0.3)';
                 box.style.boxShadow = '0 0 15px rgba(21, 140, 149, 0.15)';
@@ -313,12 +388,13 @@ export class CaseController {
             box.onclick = () => this.openCase(c);
 
             const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
-
-            // Add a badge for Automated cases
             const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2"><span class="icon is-small mr-1"><i class="material-icons" style="font-size:14px;">smart_toy</i></span>AUTO</span>' : '';
 
             box.innerHTML = `
                 <article class="media is-vcentered">
+                    <div class="media-left">
+                        <input type="checkbox" class="case-select-checkbox" data-id="${c.id}" ${this.selectedCaseIds.has(c.id) ? 'checked' : ''}>
+                    </div>
                     <div class="media-left">
                         <span class="tag ${statusColor}">${escapeHtml(c.status)}</span>
                     </div>
@@ -342,6 +418,18 @@ export class CaseController {
                     </div>
                 </article>
             `;
+
+            // Prevent checkbox interaction from opening the case view
+            const checkbox = box.querySelector('.case-select-checkbox');
+            checkbox.onclick = (e) => {
+                e.stopPropagation();
+                if (checkbox.checked) {
+                    this.selectedCaseIds.add(c.id);
+                } else {
+                    this.selectedCaseIds.delete(c.id);
+                }
+            };
+
             container.appendChild(box);
         });
     }
@@ -556,9 +644,7 @@ export class CaseController {
                 if (!confirm("Are you sure you want to promote this to a User Case? This will move it out of the automated category.")) {
                     return;
                 }
-                // Update the local state
                 this.currentCase.is_auto = false;
-                // Sync with backend
                 await this.updateCase();
             };
         }
@@ -582,7 +668,6 @@ export class CaseController {
             const btn = document.getElementById('btnViewSourceResponse');
             if (btn) {
                 btn.onclick = () => {
-                    // Dispatch custom event to trigger the response details modal
                     document.dispatchEvent(new CustomEvent('req-open-details', { detail: c.response_id }));
                 };
             }

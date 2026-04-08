@@ -519,6 +519,11 @@ func (s *Server) GetCaseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
+	email, ok := r.Context().Value("email").(string)
+	if !ok || email == "" {
+		http.Error(w, "Unauthorized: user email not found in session", http.StatusUnauthorized)
+		return
+	}
 	var incoming Case
 	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -546,6 +551,10 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	if err := s.DB.UpdateCase(existing); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if existing.CreatedBy != "" {
+		_ = GlobalNotify(existing.CreatedBy, fmt.Sprintf("Case '%s' has been updated by user %s", existing.Name, email), false)
 	}
 
 	w.Write([]byte(`{"status":"ok"}`))
