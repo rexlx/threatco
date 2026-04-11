@@ -74,7 +74,9 @@ func (e *Endpoint) GetURL() string {
 	return e.URL
 }
 
-func (e *Endpoint) Do(userID string, req *http.Request) []byte {
+var ErrRateLimited = fmt.Errorf("request dropped due to rate limiting")
+
+func (e *Endpoint) Do(userID string, req *http.Request) ([]byte, error) {
 	e.Auth.Apply(req)
 	if e.RateLimited {
 		e.Memory.Lock()
@@ -94,7 +96,7 @@ func (e *Endpoint) Do(userID string, req *http.Request) []byte {
 			}
 			fmt.Println("--------------------------------------------Rate limited")
 			e.Memory.Unlock()
-			return []byte{}
+			return []byte{}, ErrRateLimited
 		}
 		e.InFlight++
 		e.Memory.Unlock()
@@ -115,12 +117,12 @@ func (e *Endpoint) Do(userID string, req *http.Request) []byte {
 		} else {
 			fmt.Println("Endpoint.Do: failed to perorm request but passed connectivity check...")
 		}
-		return []byte(err.Error())
+		return []byte(err.Error()), err
 	}
 	defer resp.Body.Close()
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 func (e *Endpoint) ProcessQueue(id string) {
@@ -133,7 +135,10 @@ func (e *Endpoint) ProcessQueue(id string) {
 	e.InFlight++
 	e.Memory.Unlock()
 	go func() {
-		res := e.Do("", req)
+		res, err := e.Do("", req)
+		if err != nil {
+			fmt.Println("Error processing request:", err)
+		}
 		ri := ResponseItem{
 			ID:   id,
 			Time: time.Now(),

@@ -598,7 +598,10 @@ func (s *Server) VmRayFileSubmissionHelper(name string, file UploadHandler) ([]b
 		return nil, err
 	}
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	resp := ep.Do("", request)
+	resp, err := ep.Do("", request)
+	if err != nil {
+		return nil, err
+	}
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -645,7 +648,10 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 		req.Header.Set("X-Last-Chunk", strconv.FormatBool(isLastChunk))
 		req.ContentLength = int64(len(part))
 
-		respBodyBytes := ep.Do("", req)
+		respBodyBytes, err := ep.Do("", req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload chunk %d: %w", i+1, err)
+		}
 		if len(respBodyBytes) == 0 {
 			return nil, fmt.Errorf("received an empty or error response from server for chunk %d of file '%s'", i+1, name)
 		}
@@ -675,7 +681,10 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 	resultsReq.Header.Set("Content-Type", "application/json")
 	resultsReq.ContentLength = int64(len(jsonBody))
 
-	resultsRespBodyBytes := ep.Do("", resultsReq)
+	resultsRespBodyBytes, err := ep.Do("", resultsReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch results for file ID '%s': %w", file.ID, err)
+	}
 	if len(resultsRespBodyBytes) == 0 {
 		return nil, fmt.Errorf("received an empty or error response from /results for file ID '%s'", file.ID)
 	}
@@ -820,7 +829,10 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		s.Log.Println("MandiantHelper: request error", err)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1120,7 +1132,10 @@ func (s *Server) AddMispAttribute(eventID, attrType, attrValue, category, distri
 	// request.Header.Set("Authorization", "YOUR_MISP_API_KEY") // Handled by Endpoint.Do in this example
 
 	s.Log.Println("Sending add attribute request to MISP:", url, "Payload:", string(payloadBytes))
-	respBody := mispTarget.Do("", request)
+	respBody, err := mispTarget.Do("", request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add MISP attribute: %w", err)
+	}
 
 	s.Log.Println("Successfully added attribute to MISP event", eventID, ". Response:", string(respBody))
 	return respBody, nil
@@ -1175,7 +1190,10 @@ func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 
-	respBody := mispTarget.Do("", request)
+	respBody, err := mispTarget.Do("", request)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create MISP event: %w", err)
+	}
 
 	// Debugging print (Preserved)
 	// fmt.Println(string(respBody))
@@ -1264,7 +1282,10 @@ func (s *Server) AddMispTag(eventID string, tagName string) error {
 	req.Header.Set("Accept", "application/json")
 
 	fmt.Printf("Attaching tag '%s' to event ID '%s'...", tagName, eventID)
-	respBody := mispTarget.Do("", req)
+	respBody, err := mispTarget.Do("", req)
+	if err != nil {
+		return fmt.Errorf("failed to attach MISP tag: %w", err)
+	}
 
 	// Check for success
 	// MISP returns {"saved": true, "success": "Tag added"} on success

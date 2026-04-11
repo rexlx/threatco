@@ -795,6 +795,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/dashboard/stats", s.ValidateSessionToken(s.GetDashboardStatsHandler))
 	s.Gateway.HandleFunc("/deleteresponse", http.HandlerFunc(s.ValidateSessionToken(s.DeleteResponseHandler)))
 	s.Gateway.HandleFunc("/exportresponses", http.HandlerFunc(s.ValidateSessionToken(s.ExportResponseCSVHandler)))
+	s.Gateway.HandleFunc("/failed-requests", http.HandlerFunc(s.ValidateSessionToken(s.GetFailedRequestsHandler)))
+	s.Gateway.HandleFunc("/failed-requests/delete", http.HandlerFunc(s.ValidateSessionToken(s.DeleteFailedRequestHandler)))
 	s.Gateway.HandleFunc("/generatekey", http.HandlerFunc(s.ValidateSessionToken(s.GenerateAPIKeyHandler)))
 	s.Gateway.HandleFunc("/getlogs", http.HandlerFunc(s.ValidateSessionToken(s.LogsSSRHandler)))
 	s.Gateway.HandleFunc("/getresponses", http.HandlerFunc(s.ValidateSessionToken(s.GetResponseCacheHandler2)))

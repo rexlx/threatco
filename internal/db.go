@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io" // <-- ADDED THIS
+	"io"
 	"os/exec"
 	"time"
 
@@ -18,7 +18,7 @@ import (
 
 type Database interface {
 	CleanResponses(t time.Duration) error
-	Backup(w io.Writer) error // <-- CHANGED THIS
+	Backup(w io.Writer) error
 	Restore(filePath string) error
 	GetUserByEmail(email string) (User, error)
 	DeleteUser(email string) error
@@ -45,6 +45,10 @@ type Database interface {
 	AddNotification(email string, notification Notification) error
 	GetNotifications(email string) ([]Notification, error)
 	ClearNotifications(email string) error
+	AddFailedRequest(email string, req ProxyRequest) error
+	GetFailedRequests(email string) ([]ProxyRequest, error)
+	ClearFailedRequests(email string) error
+	DeleteFailedRequest(email string, transactionID string) error
 }
 
 type BboltDB struct {
@@ -448,6 +452,10 @@ func (db *PostgresDB) createTables() error {
 		CREATE TABLE IF NOT EXISTS user_notifications (
             email TEXT PRIMARY KEY,
             notifications JSONB DEFAULT '[]'::jsonb
+        );
+		CREATE TABLE IF NOT EXISTS failed_requests (
+            email TEXT PRIMARY KEY,
+            requests JSONB DEFAULT '[]'::jsonb
         );
 		CREATE INDEX IF NOT EXISTS idx_search_history_value ON search_history(value);`)
 	if err != nil {
@@ -959,6 +967,54 @@ func (db *PostgresDB) ClearNotifications(email string) error {
 		email)
 	return err
 }
+
+func (db *PostgresDB) AddFailedRequest(email string, req ProxyRequest) error {
+	_, err := db.Pool.Exec(context.Background(), `
+        INSERT INTO failed_requests (email, requests)
+        VALUES ($1, jsonb_build_array($2::jsonb))
+        ON CONFLICT (email) DO UPDATE SET
+            requests = failed_requests.requests || EXCLUDED.requests
+    `, email, req)
+	return err
+}
+
+func (db *PostgresDB) GetFailedRequests(email string) ([]ProxyRequest, error) {
+	var requests []ProxyRequest
+	err := db.Pool.QueryRow(context.Background(),
+		"SELECT requests FROM failed_requests WHERE email = $1",
+		email).Scan(&requests)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return []ProxyRequest{}, nil
+	}
+	return requests, err
+}
+
+func (db *PostgresDB) DeleteFailedRequest(email string, transactionID string) error {
+	_, err := db.Pool.Exec(context.Background(), `
+        UPDATE failed_requests 
+        SET requests = COALESCE((
+            SELECT jsonb_agg(elem)
+            FROM jsonb_array_elements(requests) AS elem
+            WHERE elem->>'transaction_id' != $2
+        ), '[]'::jsonb)
+        WHERE email = $1
+    `, email, transactionID)
+	return err
+}
+
+func (db *PostgresDB) ClearFailedRequests(email string) error {
+	_, err := db.Pool.Exec(context.Background(),
+		"UPDATE failed_requests SET requests = '[]'::jsonb WHERE email = $1",
+		email)
+	return err
+}
+
+// No-op implementations for BboltDB
+func (db *BboltDB) AddFailedRequest(email string, req ProxyRequest) error  { return nil }
+func (db *BboltDB) GetFailedRequests(email string) ([]ProxyRequest, error) { return nil, nil }
+func (db *BboltDB) ClearFailedRequests(email string) error                 { return nil }
+func (db *BboltDB) DeleteFailedRequest(email string, tid string) error     { return nil }
 
 // Implement no-ops for BboltDB to satisfy the interface
 func (db *BboltDB) AddNotification(email string, n Notification) error    { return nil }

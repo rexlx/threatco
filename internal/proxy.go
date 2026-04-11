@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -54,7 +55,13 @@ func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "zero length response")
 	}
@@ -132,7 +139,13 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -199,7 +212,13 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -272,7 +291,10 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 			}
 
 			// Perform the GET request via the authenticated endpoint
-			reportResp := ep.Do(req.Username, repReq)
+			reportResp, err := ep.Do(req.Username, repReq)
+			if err != nil {
+				continue
+			}
 			if len(reportResp) > 0 {
 				// Merge raw report JSON into our unified response item
 				merged, err := MergeJSONData(resItem.Data, reportResp)
@@ -332,7 +354,13 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
 	}
 
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		fmt.Println("VirusTotalHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
@@ -430,7 +458,13 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		fmt.Println("CrowdstrikeHelper: got a zero length response")
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
@@ -634,7 +668,10 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 		return nil, err
 	}
 
-	resp = ep.Do(req.Username, request)
+	resp, err = ep.Do(req.Username, request)
+	if err != nil {
+		return nil, err
+	}
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -759,7 +796,10 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		return nil, err
 	}
 
-	resp = ep.Do(req.Username, request)
+	resp, err = ep.Do(req.Username, request)
+	if err != nil {
+		return nil, err
+	}
 	if len(resp) == 0 {
 		return nil, fmt.Errorf("got a zero length response")
 	}
@@ -936,7 +976,13 @@ func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 	query.Set("size", "10")
 	request.URL.RawQuery = query.Encode()
 
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1051,7 +1097,13 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	}
 
 	// Execute the request using the endpoint's client
-	respBytes := ep.Do(req.Username, request)
+	respBytes, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(respBytes) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response from Cloudflare")
 	}
@@ -1161,7 +1213,13 @@ func AbuseIPDBProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReques
 	// request.Header.Set("Key", ep.GetAuthToken())
 	request.Header.Set("Accept", "application/json")
 
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1252,7 +1310,13 @@ func OTXProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]
 	}
 
 	// OTX uses X-OTX-API-KEY header
-	resp := ep.Do(req.Username, request)
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
 	if len(resp) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
 	}
@@ -1310,12 +1374,13 @@ func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 		if err != nil {
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("internal search error: %v", err))
 		}
-
+		var tid int
 		matched := len(cases) > 0
 		background := "has-background-primary-dark"
 		info := "No open cases match this IOC."
 
 		if matched {
+			tid = 4
 			background = "has-background-warning-dark"
 			names := make([]string, 0, len(cases))
 			for _, c := range cases {
@@ -1323,14 +1388,13 @@ func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 			}
 			info = fmt.Sprintf("Match found in %d open case(s): %s", len(cases), strings.Join(names, ", "))
 		}
-
 		sum := SummarizedEvent{
 			Timestamp:     time.Now(),
 			Matched:       matched,
 			Background:    background,
 			SearchedBy:    req.Username,
 			From:          "Internal Cases",
-			ThreatLevelID: 4,
+			ThreatLevelID: tid,
 			Value:         req.Value,
 			Info:          info,
 			Link:          req.TransactionID,

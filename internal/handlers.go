@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -168,6 +169,12 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 
 							out, err := op(s.RespCh, ep, req)
 							if err != nil || len(out) == 0 {
+								if errors.Is(err, ErrRateLimited) {
+									err := s.DB.AddFailedRequest(proxyReq.Username, proxyReq)
+									if err != nil {
+										s.Log.Printf("Failed to record rate-limited request: %v", err)
+									}
+								}
 								return
 							}
 
@@ -272,7 +279,11 @@ func (s *Server) AddAttributeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	resp := ep.Do("", request)
+	resp, err := ep.Do("", request)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
 	w.Write(resp)
 
 }
@@ -1053,6 +1064,12 @@ func (s *Server) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// Execute the vendor-specific proxy operator
 	resp, err := op(s.RespCh, ep, req)
 	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			err := s.DB.AddFailedRequest(req.Username, req)
+			if err != nil {
+				s.Log.Printf("Failed to record rate-limited request: %v", err)
+			}
+		}
 		// Create a failure event to return to the UI
 		failResp, _ := CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("error: %v", err))
 		w.Write(failResp)
@@ -3169,6 +3186,50 @@ func (s *Server) DeleteNotificationHandler(w http.ResponseWriter, r *http.Reques
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+func (s *Server) GetFailedRequestsHandler(w http.ResponseWriter, r *http.Request) {
+	email, ok := r.Context().Value("email").(string) //
+	if !ok || email == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized) //
+		return
+	}
+
+	requests, err := s.DB.GetFailedRequests(email) //
+	if err != nil {
+		s.Log.Printf("Error fetching failed requests for %s: %v", email, err)  //
+		http.Error(w, "Internal server error", http.StatusInternalServerError) //
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json") //
+	json.NewEncoder(w).Encode(requests)                //
+}
+
+// DeleteFailedRequestHandler removes a specific rate-limited request from the user's history.
+func (s *Server) DeleteFailedRequestHandler(w http.ResponseWriter, r *http.Request) {
+	email, ok := r.Context().Value("email").(string)
+	if !ok || email == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.DB.DeleteFailedRequest(email, req.ID); err != nil {
+		s.LogError(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status": "deleted"}`))
 }
 
 type NewUserRequest struct {

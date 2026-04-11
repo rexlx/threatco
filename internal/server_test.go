@@ -74,12 +74,16 @@ func (m *MockDB) SearchCases(query string, limit int) ([]Case, error) {
 	}
 	return res, nil
 }
-func (m *MockDB) RecordSearchBatch(values []string, email string) error { return nil }
-func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)   { return SearchRecord{}, nil }
-func (m *MockDB) CleanSearchHistory(days int) error                     { return nil }
-func (m *MockDB) AddNotification(email string, n Notification) error    { return nil }
-func (m *MockDB) GetNotifications(email string) ([]Notification, error) { return nil, nil }
-func (m *MockDB) ClearNotifications(email string) error                 { return nil }
+func (m *MockDB) RecordSearchBatch(values []string, email string) error        { return nil }
+func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)          { return SearchRecord{}, nil }
+func (m *MockDB) CleanSearchHistory(days int) error                            { return nil }
+func (m *MockDB) AddNotification(email string, n Notification) error           { return nil }
+func (m *MockDB) GetNotifications(email string) ([]Notification, error)        { return nil, nil }
+func (m *MockDB) ClearNotifications(email string) error                        { return nil }
+func (m *MockDB) AddFailedRequest(email string, req ProxyRequest) error        { return nil }
+func (m *MockDB) GetFailedRequests(email string) ([]ProxyRequest, error)       { return nil, nil }
+func (m *MockDB) ClearFailedRequests(email string) error                       { return nil }
+func (m *MockDB) DeleteFailedRequest(email string, transactionID string) error { return nil }
 
 func setupTestServer() *Server {
 	key := make([]byte, 32)

@@ -7,6 +7,7 @@ export class SearchController {
         this.contextualizer = contextualizer;
         this.isSearching = false;
         this.currentQueue = []; // Holds extracted matches for preview
+        this.activeTab = 'search'; // Track the active tab
 
         this.attachFormListeners();
     }
@@ -29,43 +30,58 @@ export class SearchController {
             console.error("Failed to load dashboard stats", e);
         }
 
+        // Render overview stats and tab headers
         this.container.innerHTML = `
         <h1 class="title has-text-info">Overview</h1>
         
         <div class="columns is-multiline is-mobile mb-6">
-            <div class="column is-one-fifth-tablet is-half-mobile">
-                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
-                    <p class="heading has-text-grey-light">Open Cases</p>
-                    <p class="title is-4 has-text-warning">${stats.open_cases}</p>
-                </div>
-            </div>
-            <div class="column is-one-fifth-tablet is-half-mobile">
-                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
-                    <p class="heading has-text-grey-light">Responses</p>
-                    <p class="title is-4 has-text-info">${stats.active_responses}</p>
-                </div>
-            </div>
-            <div class="column is-one-fifth-tablet is-half-mobile">
-                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
-                    <p class="heading has-text-grey-light">Archived</p>
-                    <p class="title is-4 has-text-grey">${stats.archived_responses}</p>
-                </div>
-            </div>
-            <div class="column is-one-fifth-tablet is-half-mobile">
-                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
-                    <p class="heading has-text-grey-light">Users</p>
-                    <p class="title is-4 has-text-success">${stats.total_users}</p>
-                </div>
-            </div>
-            <div class="column is-one-fifth-tablet is-full-mobile">
-                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
-                    <p class="heading has-text-grey-light">Proxied</p>
-                    <p class="title is-4 has-text-white">${stats.server_metrics?.vendor_responses || 0}</p>
-                </div>
-            </div>
+            ${this._renderStatBox("Open Cases", stats.open_cases, "warning")}
+            ${this._renderStatBox("Responses", stats.active_responses, "info")}
+            ${this._renderStatBox("Archived", stats.archived_responses, "grey")}
+            ${this._renderStatBox("Users", stats.total_users, "success")}
+            ${this._renderStatBox("Proxied", stats.server_metrics?.vendor_responses || 0, "white")}
         </div>
 
-        <h2 class="subtitle has-text-info mt-6">Search</h2>
+        <div class="tabs is-boxed mt-6">
+            <ul>
+                <li class="${this.activeTab === 'search' ? 'is-active' : ''}">
+                    <a id="searchTabBtn">
+                        <span class="icon is-small"><i class="material-icons">search</i></span>
+                        <span>Search</span>
+                    </a>
+                </li>
+                <li class="${this.activeTab === 'failed' ? 'is-active' : ''}">
+                    <a id="failedTabBtn">
+                        <span class="icon is-small"><i class="material-icons">report_problem</i></span>
+                        <span>Failed</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div id="tabContent"></div>`;
+
+        // Render the content for the active tab
+        if (this.activeTab === 'search') {
+            this.renderSearchTab();
+        } else {
+            this.renderFailedTab();
+        }
+    }
+
+    _renderStatBox(label, value, colorClass) {
+        return `
+            <div class="column is-one-fifth-tablet is-half-mobile">
+                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
+                    <p class="heading has-text-grey-light">${label}</p>
+                    <p class="title is-4 has-text-${colorClass}">${value}</p>
+                </div>
+            </div>`;
+    }
+
+    renderSearchTab() {
+        const content = document.getElementById('tabContent');
+        content.innerHTML = `
+        <h2 class="subtitle has-text-info mt-4">New Search</h2>
         <form>
             <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
             <div class="field"><div class="control">
@@ -91,9 +107,110 @@ export class SearchController {
         </form>`;
     }
 
+    async renderFailedTab() {
+        const content = document.getElementById('tabContent');
+        content.innerHTML = '<p class="has-text-grey-light">Loading failed requests...</p><progress class="progress is-small is-info" max="100"></progress>';
+
+        try {
+            const resp = await fetch('/failed-requests');
+            const requests = await resp.json();
+
+            if (!requests || requests.length === 0) {
+                content.innerHTML = '<h2 class="subtitle has-text-info mt-4">Failed Requests</h2><p class="has-text-white">No failed requests found.</p>';
+                return;
+            }
+
+            let html = `
+                <h2 class="subtitle has-text-info mt-4">Failed Requests</h2>
+                <table class="table is-fullwidth is-striped mt-4">
+                    <thead>
+                        <tr>
+                            <th>Vendor</th>
+                            <th>Type</th>
+                            <th>Value</th>
+                            <th class="has-text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            requests.forEach((req, idx) => {
+                html += `
+                    <tr>
+                        <td class="is-vcentered"><strong>${escapeHtml(req.to)}</strong></td>
+                        <td class="is-vcentered">${escapeHtml(req.type)}</td>
+                        <td class="is-vcentered" style="word-break: break-all;">${escapeHtml(req.value)}</td>
+                        <td class="is-vcentered">
+                            <div class="field is-grouped is-grouped-right">
+                                <p class="control">
+                                    <button class="button is-small is-info is-light retry-failed-btn" 
+                                            title="Retry Request"
+                                            data-vendor="${req.to}" data-val="${req.value}" data-type="${req.type}">
+                                        <span class="icon is-small"><i class="material-icons">refresh</i></span>
+                                    </button>
+                                </p>
+                                <p class="control">
+                                    <button class="button is-small is-danger is-light delete-failed-btn" 
+                                            title="Remove Record"
+                                            data-id="${req.transaction_id}">
+                                        <span class="icon is-small"><i class="material-icons">delete</i></span>
+                                    </button>
+                                </p>
+                            </div>
+                        </td>
+                    </tr>`;
+            });
+
+            html += '</tbody></table>';
+            content.innerHTML = html;
+
+            // Retry listener
+            content.querySelectorAll('.retry-failed-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const { vendor, val, type } = btn.dataset;
+                    btn.classList.add('is-loading');
+                    try {
+                        const result = await this.app.fetchMatch(vendor, val, type, "");
+                        this.renderResultCards([result]);
+                    } catch (err) {
+                        alert("Retry failed: " + err);
+                        btn.classList.remove('is-loading');
+                    }
+                });
+            });
+
+            // Delete listener
+            content.querySelectorAll('.delete-failed-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.id;
+                    if (!confirm("Are you sure you want to remove this failed request record?")) return;
+                    
+                    btn.classList.add('is-loading');
+                    try {
+                        const delResp = await fetch('/failed-requests/delete', {
+                            method: 'POST',
+                            body: JSON.stringify({ id: id }),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        if (delResp.ok) {
+                            this.renderFailedTab(); // Refresh list
+                        } else {
+                            throw new Error("Failed to delete record");
+                        }
+                    } catch (err) {
+                        alert("Error: " + err.message);
+                        btn.classList.remove('is-loading');
+                    }
+                });
+            });
+
+        } catch (e) {
+            content.innerHTML = `<p class="has-text-danger">Error loading failed requests: ${e.message}</p>`;
+        }
+    }
+
     attachFormListeners() {
         this.container.addEventListener('click', async (event) => {
-            const button = event.target.closest('button');
+            const button = event.target.closest('button, a');
 
             // Handle tag deletion in the preview queue
             if (!button && event.target.classList.contains('delete')) {
@@ -108,6 +225,19 @@ export class SearchController {
             }
 
             if (!button) return;
+
+            // Tab Switching Logic
+            if (button.id === 'searchTabBtn') {
+                this.activeTab = 'search';
+                this.renderForm();
+                return;
+            }
+            if (button.id === 'failedTabBtn') {
+                this.activeTab = 'failed';
+                this.renderForm();
+                return;
+            }
+
             const targetId = button.id;
 
             if (targetId === 'searchButton') {
