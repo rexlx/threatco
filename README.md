@@ -118,6 +118,7 @@ backup and restore is limited to the postgresql database type at this time.
 - mandiant
 - [misp](https://github.com/MISP/MISP)
 - splunk (*limited access*)
+- [sweetshell](https://github.com/rexlx/sweetshell)
 - urlscan
 - virustotal
 - vmray (*limited to file upload*)
