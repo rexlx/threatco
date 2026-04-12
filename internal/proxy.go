@@ -30,6 +30,101 @@ var ProxyOperators = map[string]ProxyOperator{
 	"cloudflare":          CloudflareProxyHelper,
 	"otx":                 OTXProxyHelper,
 	"abuseipdb":           AbuseIPDBProxyHelper,
+	"sweetshell":          SweetShellProxyHelper,
+}
+
+func SweetShellProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
+	// Construct the URL based on the path-based value in your handler
+	thisUrl := fmt.Sprintf("%s/%s", ep.GetURL(), req.Value)
+	if req.Route != "" {
+		thisUrl = fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	}
+
+	request, err := http.NewRequest("GET", thisUrl, nil)
+	if err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+
+	// Execute the request via the authenticated endpoint
+	resp, err := ep.Do(req.Username, request)
+	if err != nil {
+		if errors.Is(err, ErrRateLimited) {
+			return []byte{}, err
+		}
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("request error %v", err))
+	}
+	if len(resp) == 0 {
+		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response")
+	}
+
+	// Standard response tracking and caching logic
+	out, _ := json.Marshal(req)
+	resItem := ResponseItem{
+		Email:  req.Username,
+		ID:     req.TransactionID,
+		Vendor: req.To,
+		Data:   out,
+		Time:   time.Now(),
+	}
+	mergedData, _ := MergeJSONData(resItem.Data, resp)
+	resItem.Data = mergedData
+	resch <- resItem
+
+	// Parse the response from your HandleGetReputation handler
+	var response struct {
+		Value      string    `json:"value"`
+		Reputation string    `json:"reputation"`
+		Hits       int       `json:"total_hits"`
+		LastSeen   time.Time `json:"last_seen"`
+		Message    string    `json:"message"`
+	}
+
+	if err := json.Unmarshal(resp, &response); err != nil {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
+	}
+
+	// Logic to map the reputation string to UI elements
+	matched := response.Reputation != "unknown" && response.Reputation != ""
+	bg := "has-background-primary-dark"
+	var threatID int
+
+	switch strings.ToLower(response.Reputation) {
+	case "malicious":
+		bg = "has-background-warning-dark"
+		threatID = 4 // High/Critical
+	case "suspicious":
+		bg = "has-background-warning"
+		threatID = 2 // Medium
+	case "clean":
+		bg = "has-background-success-dark"
+		threatID = 0
+	}
+
+	// Build a descriptive info string for the UI
+	info := fmt.Sprintf("Reputation: %s | Total Hits: %d", response.Reputation, response.Hits)
+	if !response.LastSeen.IsZero() {
+		info += fmt.Sprintf(" | Last Seen: %s", response.LastSeen.Format("2006-01-02"))
+	}
+	if response.Reputation == "unknown" && response.Message != "" {
+		info = response.Message
+	}
+
+	// Create the final summary for the dashboard
+	sum := SummarizedEvent{
+		Timestamp:     time.Now(),
+		Background:    bg,
+		Info:          info,
+		From:          req.To,
+		Value:         response.Value,
+		Link:          req.TransactionID,
+		Matched:       matched,
+		SearchedBy:    req.Username,
+		Type:          req.Type,
+		ThreatLevelID: threatID,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+	}
+
+	return json.Marshal(sum)
 }
 
 func MispProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
