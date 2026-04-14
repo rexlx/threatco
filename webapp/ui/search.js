@@ -183,7 +183,7 @@ export class SearchController {
                 btn.addEventListener('click', async () => {
                     const id = btn.dataset.id;
                     if (!confirm("Are you sure you want to remove this failed request record?")) return;
-                    
+
                     btn.classList.add('is-loading');
                     try {
                         const delResp = await fetch('/failed-requests/delete', {
@@ -212,10 +212,9 @@ export class SearchController {
         this.container.addEventListener('click', async (event) => {
             const button = event.target.closest('button, a');
 
-            // Handle tag deletion in the preview queue
-            if (!button && event.target.classList.contains('delete')) {
-                const index = parseInt(event.target.dataset.index);
-                const type = event.target.dataset.type;
+            if (button && button.classList.contains('delete')) {
+                const index = parseInt(button.dataset.index);
+                const type = button.dataset.type;
                 const group = this.currentQueue.find(q => q.type === type);
                 if (group) {
                     group.matches.splice(index, 1);

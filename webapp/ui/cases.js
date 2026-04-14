@@ -10,7 +10,7 @@ export class CaseController {
         this.currentPage = 1;
         this.itemsPerPage = 50;
         this.currentFilter = 'all';
-        
+
         // NEW: Track selected case IDs for grouping
         this.selectedCaseIds = new Set();
     }
@@ -36,11 +36,11 @@ export class CaseController {
                 </div>
                 <div class="column is-narrow">
                     <div class="buttons">
-                        <button class="button is-link is-light" id="btnGroupSelected" title="Merge IOCs from selected cases into a new case">
+                        <button class="button is-info is-outlined" id="btnGroupSelected" title="Merge IOCs from selected cases into a new case">
                             <span class="icon"><i class="material-icons">layers</i></span>
                             <span>Group Selected</span>
                         </button>
-                        <button class="button is-success" id="btnNewCase">
+                        <button class="button is-success is-outlined" id="btnNewCase">
                             <span class="icon"><i class="material-icons">add</i></span>
                             <span>New Case</span>
                         </button>
@@ -239,7 +239,7 @@ export class CaseController {
                 body: JSON.stringify({ name, description: desc, is_auto: false })
             });
             if (!res.ok) throw new Error(await res.text());
-            
+
             const newCase = await res.json();
 
             // If grouping, update the newly created case with aggregated IOCs
@@ -271,7 +271,7 @@ export class CaseController {
         const ids = Array.from(this.selectedCaseIds);
         const aggregatedIocs = new Set();
         const btn = document.getElementById('btnGroupSelected');
-        
+
         btn.classList.add('is-loading');
 
         try {
@@ -291,7 +291,7 @@ export class CaseController {
             // Set up modal for creation
             document.getElementById('newCaseName').value = `Grouped Case - ${new Date().toLocaleDateString()}`;
             document.getElementById('newCaseDesc').value = `Aggregated IOCs from ${ids.length} related cases.`;
-            
+
             // Override modal save button for this specific operation
             document.getElementById('btnSaveCase').onclick = () => this.saveNewCase(Array.from(aggregatedIocs));
             document.getElementById('newCaseModal').classList.add('is-active');
@@ -373,7 +373,7 @@ export class CaseController {
             const box = document.createElement('div');
             box.className = 'box has-background-black has-text-light mb-2';
             box.style.cursor = 'pointer';
-            
+
             if (c.status === 'Open') {
                 box.style.border = '1px solid rgba(21, 140, 149, 0.3)';
                 box.style.boxShadow = '0 0 15px rgba(21, 140, 149, 0.15)';
@@ -465,16 +465,20 @@ export class CaseController {
                         </div>
                         <div class="level-right">
                             <div class="buttons">
-                                <button class="button ${isClosed ? 'is-info' : 'is-warning'}" id="btnToggleStatus">
+                                <button class="button is-info is-outlined" id="btnExportCaseJson">
+                                    <span class="icon"><i class="material-icons">file_download</i></span>
+                                    <span>Export JSON</span>
+                                </button>
+                                <button class="is-outlined button ${isClosed ? 'is-info' : 'is-warning'}" id="btnToggleStatus">
                                     <span class="icon"><i class="material-icons">${isClosed ? 'unarchive' : 'archive'}</i></span>
                                     <span>${isClosed ? 'Reopen Case' : 'Close Case'}</span>
                                 </button>
-                                <button class="button is-danger is-dark has-text-black" id="btnDeleteCase">
+                                <button class="button is-danger is-dark is-outlined" id="btnDeleteCase">
                                     <span class="icon"><i class="material-icons">delete</i></span>
                                     <span>Delete Case</span>
                                 </button>
                             </div>
-                        </div>
+                    </div>
                     </div>
                     <hr class="has-background-grey-dark">
                     
@@ -659,6 +663,26 @@ export class CaseController {
                 if (!res.ok) throw new Error(await res.text());
                 this.render();
             } catch (e) { alert("Delete failed: " + e.message); }
+        };
+
+        document.getElementById('btnExportCaseJson').onclick = () => {
+            const caseData = JSON.stringify(this.currentCase, null, 4);
+            const blob = new Blob([caseData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            // Create a clean filename: case_name_2024-04-14.json
+            const safeName = this.currentCase.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const date = new Date().toISOString().split('T')[0];
+
+            a.href = url;
+            a.download = `case_${safeName}_${date}.json`;
+            document.body.appendChild(a);
+            a.click();
+
+            // Cleanup
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         };
 
         if (c.response_id) {
