@@ -298,7 +298,7 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 			</header>
 			<section class="modal-card-body has-background-custom">
 				<ul>
-`, modalID, service.Kind, service.Description, modalID, service.Kind) //
+`, modalID, service.Kind, service.Description, modalID, service.Kind)
 
 		// Loop through service types
 		for _, t := range service.Type {

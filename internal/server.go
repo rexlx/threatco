@@ -536,8 +536,8 @@ func (s *Server) ProcessTransientResponses() {
 			}
 			s.Memory.Unlock()
 			go func() {
-				if err := s.DB.CleanSearchHistory(60); err != nil { //
-					s.Log.Printf("ERROR: search history cleanup failed: %v", err) //
+				if err := s.DB.CleanSearchHistory(60); err != nil {
+					s.Log.Printf("ERROR: search history cleanup failed: %v", err)
 				}
 			}()
 		}
@@ -822,6 +822,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/tools/uuid", http.HandlerFunc(s.ValidateSessionToken(s.ToolsGenerateUUIDHandler)))
 	s.Gateway.HandleFunc("/tools/password", http.HandlerFunc(s.ValidateSessionToken(s.ToolsGeneratePasswordHandler)))
 	s.Gateway.HandleFunc("/tools/dnslookup2", http.HandlerFunc(s.ValidateSessionToken(s.DNSLookupHandler2)))
+	s.Gateway.HandleFunc("/tools/parse-url", http.HandlerFunc(s.ValidateSessionToken(s.ParseURLHandler)))
 	s.Gateway.HandleFunc("/tools/encrypt", http.HandlerFunc(s.ValidateSessionToken(s.ToolsEncryptHandler)))
 	s.Gateway.HandleFunc("/tools/inspect-archive", http.HandlerFunc(s.ValidateSessionToken(s.ToolsInspectArchiveHandler)))
 	s.Gateway.HandleFunc("/tools/parse", http.HandlerFunc(s.ValidateSessionToken(s.ParseFileHandler)))

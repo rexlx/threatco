@@ -973,7 +973,14 @@ func (db *PostgresDB) AddFailedRequest(email string, req ProxyRequest) error {
         INSERT INTO failed_requests (email, requests)
         VALUES ($1, jsonb_build_array($2::jsonb))
         ON CONFLICT (email) DO UPDATE SET
-            requests = failed_requests.requests || EXCLUDED.requests
+            requests = (
+                SELECT jsonb_agg(elem)
+                FROM (
+                    SELECT elem
+                    FROM jsonb_array_elements(failed_requests.requests || EXCLUDED.requests) AS elem
+                    OFFSET GREATEST(0, jsonb_array_length(failed_requests.requests || EXCLUDED.requests) - 100)
+                ) AS sub
+            )
     `, email, req)
 	return err
 }

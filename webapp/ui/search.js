@@ -6,14 +6,14 @@ export class SearchController {
         this.app = app;
         this.contextualizer = contextualizer;
         this.isSearching = false;
-        this.currentQueue = []; // Holds extracted matches for preview
-        this.activeTab = 'search'; // Track the active tab
-
+        this.extractedMatches = []; 
+        this.currentQueue = [];
+        this.activeTab = 'search';
         this.attachFormListeners();
     }
 
     async renderForm() {
-        this.container.classList.remove('is-hidden');
+        this.container.classList.remove('is-hidden'); 
 
         let stats = {
             open_cases: 0,
@@ -24,13 +24,12 @@ export class SearchController {
         };
 
         try {
-            const resp = await fetch('/dashboard/stats');
+            const resp = await fetch('/dashboard/stats'); 
             if (resp.ok) stats = await resp.json();
         } catch (e) {
             console.error("Failed to load dashboard stats", e);
         }
 
-        // Render overview stats and tab headers
         this.container.innerHTML = `
         <h1 class="title has-text-info">Overview</h1>
         
@@ -50,6 +49,12 @@ export class SearchController {
                         <span>Search</span>
                     </a>
                 </li>
+                <li class="${this.activeTab === 'fetch' ? 'is-active' : ''}">
+                    <a id="fetchTabBtn">
+                        <span class="icon is-small"><i class="material-icons">cloud_download</i></span>
+                        <span>Fetch URL</span>
+                    </a>
+                </li>
                 <li class="${this.activeTab === 'failed' ? 'is-active' : ''}">
                     <a id="failedTabBtn">
                         <span class="icon is-small"><i class="material-icons">report_problem</i></span>
@@ -63,6 +68,10 @@ export class SearchController {
         // Render the content for the active tab
         if (this.activeTab === 'search') {
             this.renderSearchTab();
+            // If matches are staged for review, render the selection grid
+            if (this.extractedMatches.length > 0) this.renderMatchSelection();
+        } else if (this.activeTab === 'fetch') {
+            this.renderFetchTab();
         } else {
             this.renderFailedTab();
         }
@@ -83,21 +92,21 @@ export class SearchController {
         content.innerHTML = `
         <h2 class="subtitle has-text-info mt-4">New Search</h2>
         <form>
-            <div class="field"><div class="control"><textarea class="textarea" placeholder="feed me..." id="userSearch"></textarea></div></div>
+            <div class="field"><div class="control"><textarea class="textarea" placeholder="Paste text or IOCs here..." id="userSearch"></textarea></div></div>
             <div class="field"><div class="control">
                 <label class="checkbox has-text-grey-light"><input type="checkbox" id="dontParseCheckbox"> parse on server</label>
                 <label class="checkbox has-text-grey-light ml-4"><input type="checkbox" id="viewQueueCheckbox"> preview matches</label>
             </div></div>
             <div class="field"><div class="control">
                 <button class="button is-info is-outlined" id="searchButton" type="submit">
-                    <span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Search</span></span>
+                    <span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Find IOCs</span></span>
                 </button>
                 <button class="button is-success is-outlined is-hidden" id="executeQueueButton" type="button">
-                    <span class="icon-text"><span class="icon"><i class="material-icons">play_arrow</i></span><span>Execute Search</span></span>
+                    <span class="icon-text"><span class="icon"><i class="material-icons">bolt</i></span><span>Analyze Selected (<span id="queueCount">0</span>)</span></span>
                 </button>
             </div></div>
             
-            <div id="iocQueue" class="field is-grouped is-grouped-multiline mt-4"></div>
+            <div id="iocSelectionArea" class="mt-4"></div>
 
             <div class="field"><div class="control"><div class="buttons are-small">
                 <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
@@ -105,6 +114,81 @@ export class SearchController {
                 <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
             </div></div></div>
         </form>`;
+    }
+
+    renderFetchTab() {
+        const content = document.getElementById('tabContent');
+        content.innerHTML = `
+        <h2 class="subtitle has-text-info mt-4">Fetch and Extract URL</h2>
+        <p class="has-text-grey-light mb-4">Input a URL to extract IOCs for manual review.</p>
+        <form id="fetchUrlForm">
+            <div class="field">
+                <div class="control has-icons-left">
+                    <input class="input" type="url" id="userUrlSearch" placeholder="https://example.com/threat-report" required>
+                    <span class="icon is-small is-left"><i class="material-icons">link</i></span>
+                </div>
+            </div>
+            <div class="field">
+                <div class="control">
+                    <button class="button is-info is-outlined" id="fetchSearchButton" type="submit">
+                        <span class="icon-text"><span class="icon"><i class="material-icons">cloud_download</i></span><span>Fetch & Review</span></span>
+                    </button>
+                </div>
+            </div>
+        </form>`;
+    }
+
+    /**
+     * Renders the Opt-In selection grid. Items are dark by default.
+     * Click a tag to turn it blue and add it to the execution queue.
+     */
+    renderMatchSelection() {
+        const area = document.getElementById('iocSelectionArea');
+        const execBtn = document.getElementById('executeQueueButton');
+        if (!area || !execBtn) return;
+
+        area.innerHTML = `<h3 class="subtitle is-5 has-text-info">Found Indicators (Click to select)</h3>`;
+        
+        this.extractedMatches.forEach(group => {
+            const box = document.createElement('div');
+            box.className = "box has-background-black-bis mb-3";
+            box.innerHTML = `<h6 class="title is-6 has-text-grey-light mb-2">${group.type.toUpperCase()}</h6>`;
+            
+            const tagsDiv = document.createElement('div');
+            tagsDiv.className = "field is-grouped is-grouped-multiline";
+            
+            group.matches.forEach(val => {
+                const tag = document.createElement('span');
+                const isSelected = this.currentQueue.some(q => q.value === val && q.type === group.type);
+                
+                tag.className = `tag is-medium ${isSelected ? 'is-info' : 'is-dark'}`;
+                tag.style.cursor = "pointer";
+                tag.textContent = val;
+                
+                tag.onclick = () => {
+                    if (tag.classList.contains('is-dark')) {
+                        tag.classList.replace('is-dark', 'is-info');
+                        this.currentQueue.push({ value: val, type: group.type });
+                    } else {
+                        tag.classList.replace('is-info', 'is-dark');
+                        this.currentQueue = this.currentQueue.filter(q => !(q.value === val && q.type === group.type));
+                    }
+                    this.updateQueueCount();
+                };
+                tagsDiv.appendChild(tag);
+            });
+            box.appendChild(tagsDiv);
+            area.appendChild(box);
+        });
+        this.updateQueueCount();
+    }
+
+    updateQueueCount() {
+        const count = this.currentQueue.length;
+        const btn = document.getElementById('executeQueueButton');
+        const countSpan = document.getElementById('queueCount');
+        if (btn) btn.classList.toggle('is-hidden', count === 0);
+        if (countSpan) countSpan.textContent = count;
     }
 
     async renderFailedTab() {
@@ -133,7 +217,7 @@ export class SearchController {
                     </thead>
                     <tbody>`;
 
-            requests.forEach((req, idx) => {
+            requests.forEach((req) => {
                 html += `
                     <tr>
                         <td class="is-vcentered"><strong>${escapeHtml(req.to)}</strong></td>
@@ -192,7 +276,7 @@ export class SearchController {
                             headers: { 'Content-Type': 'application/json' }
                         });
                         if (delResp.ok) {
-                            this.renderFailedTab(); // Refresh list
+                            this.renderFailedTab();
                         } else {
                             throw new Error("Failed to delete record");
                         }
@@ -212,22 +296,16 @@ export class SearchController {
         this.container.addEventListener('click', async (event) => {
             const button = event.target.closest('button, a');
 
-            if (button && button.classList.contains('delete')) {
-                const index = parseInt(button.dataset.index);
-                const type = button.dataset.type;
-                const group = this.currentQueue.find(q => q.type === type);
-                if (group) {
-                    group.matches.splice(index, 1);
-                    this.renderQueue();
-                }
-                return;
-            }
-
             if (!button) return;
 
             // Tab Switching Logic
             if (button.id === 'searchTabBtn') {
                 this.activeTab = 'search';
+                this.renderForm();
+                return;
+            }
+            if (button.id === 'fetchTabBtn') {
+                this.activeTab = 'fetch';
                 this.renderForm();
                 return;
             }
@@ -242,6 +320,9 @@ export class SearchController {
             if (targetId === 'searchButton') {
                 event.preventDefault();
                 await this.handleSearch();
+            } else if (targetId === 'fetchSearchButton') {
+                event.preventDefault();
+                await this.handleUrlFetch();
             } else if (targetId === 'executeQueueButton') {
                 event.preventDefault();
                 await this.handleExecuteQueue();
@@ -259,33 +340,6 @@ export class SearchController {
         });
     }
 
-    renderQueue() {
-        const queueDiv = document.getElementById('iocQueue');
-        const execBtn = document.getElementById('executeQueueButton');
-        if (!queueDiv || !execBtn) return;
-
-        queueDiv.innerHTML = "";
-        let hasItems = false;
-
-        this.currentQueue.forEach(group => {
-            group.matches.forEach((match, idx) => {
-                hasItems = true;
-                const tagWrapper = document.createElement('div');
-                tagWrapper.className = "control";
-                tagWrapper.innerHTML = `
-                    <div class="tags has-addons">
-                        <span class="tag is-dark">${escapeHtml(group.type)}</span>
-                        <span class="tag is-info">${escapeHtml(match)}</span>
-                        <a class="tag is-delete delete" data-type="${escapeHtml(group.type)}" data-index="${idx}"></a>
-                    </div>`;
-                queueDiv.appendChild(tagWrapper);
-            });
-        });
-
-        if (hasItems) execBtn.classList.remove('is-hidden');
-        else execBtn.classList.add('is-hidden');
-    }
-
     async handleSearch() {
         const userSearchInput = document.getElementById('userSearch');
         if (!userSearchInput) return;
@@ -295,18 +349,66 @@ export class SearchController {
         const viewQueue = document.getElementById('viewQueueCheckbox').checked;
 
         if (viewQueue && !dontParse) {
-            // Extract matches and show queue instead of searching immediately
-            this.currentQueue = Object.keys(this.contextualizer.expressions).map(key => ({
+            // Populate extractedMatches for manual Opt-In selection
+            this.extractedMatches = Object.keys(this.contextualizer.expressions).map(key => ({
                 type: key,
                 matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))]
             })).filter(group => group.matches.length > 0);
 
-            this.renderQueue();
+            this.currentQueue = []; // Reset previous selections
+            this.renderMatchSelection();
             return;
         }
 
-        // Proceed with immediate search if preview is not enabled
         await this.executeStandardSearch(searchText, dontParse);
+    }
+
+    /**
+     * URL Fetch Logic: Populates the Selection Grid for manual review.
+     */
+    async handleUrlFetch() {
+        const urlInput = document.getElementById('userUrlSearch');
+        if (!urlInput || !urlInput.value) return;
+
+        const url = urlInput.value;
+        const btn = document.getElementById('fetchSearchButton');
+        
+        btn.classList.add('is-loading');
+        const content = document.getElementById('tabContent');
+        const originalContent = content.innerHTML;
+        content.innerHTML = `<p class="has-text-info">Fetching URL and extracting IOCs for review...</p><progress class='progress is-info' max='100'></progress>`;
+
+        try {
+            const res = await this.app._fetch('/tools/parse-url', {
+                method: 'POST',
+                body: JSON.stringify({ url })
+            });
+
+            if (!res.ok) throw new Error(await res.text());
+            const iocs = await res.json();
+
+            // Map backend map[type][]Match into the extraction review format
+            this.extractedMatches = Object.entries(iocs).map(([type, matches]) => ({
+                type: type,
+                matches: [...new Set(matches.map(m => m.Value))]
+            })).filter(group => group.matches.length > 0);
+
+            if (this.extractedMatches.length === 0) {
+                alert("No IOCs were found in the provided URL.");
+                content.innerHTML = originalContent;
+                return;
+            }
+
+            // Switch back to Search tab to display selection grid
+            this.activeTab = 'search';
+            this.currentQueue = [];
+            await this.renderForm(); 
+        } catch (e) {
+            alert("URL Fetch Failed: " + e.message);
+            content.innerHTML = originalContent;
+        } finally {
+            btn.classList.remove('is-loading');
+        }
     }
 
     async executeStandardSearch(searchText, dontParse) {
@@ -315,7 +417,7 @@ export class SearchController {
         this.app.errors = [];
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
 
-        this.container.innerHTML = "<p>Parsing text... searching...</p><progress class='progress is-link' max='100'></progress>";
+        this.container.innerHTML = "<p>Analyzing data... please wait...</p><progress class='progress is-link' max='100'></progress>";
 
         try {
             if (dontParse) {
@@ -360,13 +462,19 @@ export class SearchController {
 
         this.container.innerHTML = "<p>Processing reviewed items...</p><progress class='progress is-link' max='100'></progress>";
 
+        // Group selected queue by type for processMatches compatibility
+        const grouped = this.currentQueue.reduce((acc, curr) => {
+            if (!acc[curr.type]) acc[curr.type] = [];
+            acc[curr.type].push(curr.value);
+            return acc;
+        }, {});
+
         const promises = [];
         for (let svr of this.app.user.services) {
-            for (let matchPair of this.currentQueue) {
-                // Ensure we only process types supported by the service
-                if (svr.type.includes(matchPair.type)) {
-                    const route = svr.route_map ? svr.route_map.find(r => r.type === matchPair.type)?.route : "";
-                    promises.push(this.processMatches(svr.kind, matchPair, route, false));
+            for (const [type, matches] of Object.entries(grouped)) {
+                if (svr.type.includes(type)) {
+                    const route = svr.route_map ? svr.route_map.find(r => r.type === type)?.route : "";
+                    promises.push(this.processMatches(svr.kind, { type, matches }, route, false));
                 }
             }
         }
@@ -376,6 +484,7 @@ export class SearchController {
         } finally {
             this.isSearching = false;
             this.currentQueue = [];
+            this.extractedMatches = [];
             this.renderResultCards(this.app.results);
         }
     }

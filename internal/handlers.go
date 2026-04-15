@@ -292,7 +292,7 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 	// Limit upload size to 10MB to prevent memory exhaustion
 	r.ParseMultipartForm(10 << 20)
 
-	file, header, err := r.FormFile("file") //
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "Error retrieving file from request", http.StatusBadRequest)
 		return
@@ -352,8 +352,8 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Run the contextualizer on the extracted content
 	domains := []string{"nullferatu.com"}
-	cx := parser.NewContextualizer(true, domains, domains) //
-	out := cx.ExtractAll(content)                          //
+	cx := parser.NewContextualizer(true, domains, domains)
+	out := cx.ExtractAll(content)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
@@ -2389,7 +2389,7 @@ func (s *Server) GetPreviousResponsesHandler(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(matches)
-} //
+}
 
 type NottyRequest struct {
 	To      string    `json:"to"`
@@ -3189,21 +3189,21 @@ func (s *Server) DeleteNotificationHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) GetFailedRequestsHandler(w http.ResponseWriter, r *http.Request) {
-	email, ok := r.Context().Value("email").(string) //
+	email, ok := r.Context().Value("email").(string)
 	if !ok || email == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized) //
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	requests, err := s.DB.GetFailedRequests(email) //
+	requests, err := s.DB.GetFailedRequests(email)
 	if err != nil {
-		s.Log.Printf("Error fetching failed requests for %s: %v", email, err)  //
-		http.Error(w, "Internal server error", http.StatusInternalServerError) //
+		s.Log.Printf("Error fetching failed requests for %s: %v", email, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json") //
-	json.NewEncoder(w).Encode(requests)                //
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(requests)
 }
 
 // DeleteFailedRequestHandler removes a specific rate-limited request from the user's history.
@@ -3230,6 +3230,43 @@ func (s *Server) DeleteFailedRequestHandler(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "deleted"}`))
+}
+
+func (s *Server) ParseURLHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// SSRF Protection: Ensure we only fetch public web content
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		http.Error(w, "Only HTTP/HTTPS allowed", http.StatusBadRequest)
+		return
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(req.URL)
+	if err != nil {
+		http.Error(w, "Fetch failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Safety: Limit the download size to 5MB to prevent memory exhaustion
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+
+	// Use your existing contextualizer with common CDN noise filters
+	ignoreList := []string{"cloudfront.net", "akamai.net", "google.com"}
+	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
+
+	// Extract matches from the raw HTML string
+	out := cx.ExtractAll(string(body))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
 
 type NewUserRequest struct {

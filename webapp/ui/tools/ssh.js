@@ -1,13 +1,13 @@
 // webapp/ui/tools/ssh.js
 import { SshGenTool } from './sshgen.js';
 import { SshTradeTool } from './sshtrade.js';
-import { SshCommandTool } from './sshcommand.js'; //
+import { SshCommandTool } from './sshcommand.js';
 
 export class SshTool {
     constructor(app) {
         this.genTool = new SshGenTool(app);
         this.tradeTool = new SshTradeTool(app);
-        this.commandTool = new SshCommandTool(app); //
+        this.commandTool = new SshCommandTool(app);
     }
 
     render() {
