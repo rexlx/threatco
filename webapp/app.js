@@ -419,10 +419,12 @@ export class Application {
         return data;
     }
 
-    async fetchMatchDontParse(blob) {
+    async fetchMatchDontParse(blob, parsed = false) {
         let thisURL = `/parse`;
-        const proxyRequest = { "username": this.user.email, "blob": blob };
-        console.log("fetchMatchDontParse", blob)
+        // Include the 'parsed' flag in the request body
+        const proxyRequest = { "username": this.user.email, "blob": blob, "parsed": parsed };
+        console.log("fetchMatchDontParse", blob, "parsed:", parsed)
+        
         let response = await this._fetch(thisURL, {
             method: 'POST',
             body: JSON.stringify(proxyRequest)

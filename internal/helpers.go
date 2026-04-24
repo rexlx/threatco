@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -16,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +28,7 @@ import (
 	"github.com/go-echarts/go-echarts/v2/types"
 	"github.com/google/uuid"
 	"github.com/rexlx/threatco/optional"
+	"github.com/rexlx/threatco/parser"
 	"github.com/rexlx/threatco/vendors"
 )
 
@@ -1425,6 +1428,181 @@ func GetMispCategory(attrType string) string {
 	// Default fallback
 	default:
 		return "Other"
+	}
+}
+
+// and strictly classifies tokens directly as they are.
+func (s *Server) extractIndicators(pr ParserRequest) map[string][]parser.Match {
+	ignoreList := []string{"nullferatu.com", "fairlady.nullferatu.com"}
+	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
+
+	if pr.Parsed {
+		results := make(map[string][]parser.Match)
+		// strings.Fields handles strings separated by spaces, tabs, or newlines
+		tokens := strings.Fields(pr.Blob)
+
+		for _, token := range tokens {
+			token = strings.TrimSpace(token)
+			if token == "" {
+				continue
+			}
+
+			// We classify the token without extracting substrings.
+			// This stops a SHA256 from being misidentified as an MD5.
+			for kind, regex := range cx.Expressions {
+				// Enforce that the matched pattern constitutes the ENTIRE token
+				if regex.FindString(token) == token {
+					results[kind] = append(results[kind], parser.Match{
+						Value: token,
+						Type:  kind,
+					})
+					// Once we successfully classify the token, stop checking other patterns
+					// to prevent any theoretical overlapping classifications.
+					break
+				}
+			}
+		}
+		return results
+	}
+
+	// Fallback to standard bulk text extraction with built-in filtering
+	return cx.ExtractAll(pr.Blob)
+}
+
+// recordSearchHistory deduplicates parsed values and saves to batch search history
+func (s *Server) recordSearchHistory(out map[string][]parser.Match, email string) {
+	if email == "" {
+		return
+	}
+
+	seen := make(map[string]struct{})
+	var uniqueValues []string
+
+	for _, results := range out {
+		for _, res := range results {
+			if _, exists := seen[res.Value]; !exists {
+				seen[res.Value] = struct{}{}
+				uniqueValues = append(uniqueValues, res.Value)
+			}
+		}
+	}
+
+	if len(uniqueValues) > 0 {
+		go func(vals []string, user string) {
+			if err := s.DB.RecordSearchBatch(vals, user); err != nil {
+				s.Log.Printf("Batch search history update failed: %v", err)
+			}
+		}(uniqueValues, email)
+	}
+}
+
+// dispatchProxyRequests routes the matched indicators to the appropriate vendor operators
+func (s *Server) dispatchProxyRequests(out map[string][]parser.Match, username, email string) ([]byte, PromptRequest) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	first := true
+	allBytes := []byte{'['}
+
+	promptReq := PromptRequest{
+		TransactinID: uuid.New().String(),
+		MatchList:    make([]interface{}, 0),
+		Mu:           &sync.RWMutex{},
+	}
+
+	for kind, matches := range out {
+		if len(matches) == 0 {
+			continue
+		}
+
+		for _, svc := range s.Details.SupportedServices {
+			// Ensure service supports this IOC type
+			if !slices.Contains(svc.Type, kind) {
+				continue
+			}
+
+			// Map route
+			var route string
+			for _, rm := range svc.RouteMap {
+				if rm.Type == kind {
+					route = rm.Route
+					break
+				}
+			}
+
+			for _, value := range matches {
+				if strings.Contains(value.Value, "fairlady.nullferatu.com") {
+					continue
+				}
+
+				proxyReq := ProxyRequest{
+					Route:         route,
+					To:            svc.Kind,
+					Type:          kind,
+					Value:         value.Value,
+					Username:      username,
+					FQDN:          s.Details.FQDN,
+					From:          "api parser",
+					TransactionID: uuid.New().String(),
+				}
+
+				wg.Add(1)
+				go func(req ProxyRequest, svcName string) {
+					defer wg.Done()
+					s.executeSingleProxy(req, svcName, email, &promptReq, &mu, &allBytes, &first)
+				}(proxyReq, svc.Kind)
+			}
+		}
+	}
+
+	wg.Wait()
+	allBytes = append(allBytes, ']')
+	return allBytes, promptReq
+}
+
+// executeSingleProxy executes an individual lookup to a vendor and appends to the thread-safe result payload
+func (s *Server) executeSingleProxy(req ProxyRequest, svcName, email string, promptReq *PromptRequest, mu *sync.Mutex, allBytes *[]byte, first *bool) {
+	op, ok := s.ProxyOperators[svcName]
+	ep, ok2 := s.Targets[svcName]
+	if !ok || !ok2 {
+		return
+	}
+
+	outBytes, err := op(s.RespCh, ep, req)
+	if err != nil || len(outBytes) == 0 {
+		if errors.Is(err, ErrRateLimited) {
+			if dbErr := s.DB.AddFailedRequest(req.Username, req); dbErr != nil {
+				s.Log.Printf("Failed to record rate-limited request: %v", dbErr)
+			}
+		}
+		return
+	}
+
+	mu.Lock()
+	if !*first {
+		*allBytes = append(*allBytes, ',')
+	}
+	*allBytes = append(*allBytes, outBytes...)
+	*first = false
+	mu.Unlock()
+
+	s.RespCh <- ResponseItem{
+		Email:  email,
+		ID:     req.TransactionID,
+		Vendor: svcName,
+		Data:   outBytes,
+		Time:   time.Now(),
+	}
+
+	// Capture matched events for LLM summary
+	var se SummarizedEvent
+	if err := json.Unmarshal(outBytes, &se); err == nil && se.Matched {
+		promptReq.Mu.Lock()
+		promptReq.MatchList = append(promptReq.MatchList, struct {
+			Info  string `json:"info"`
+			Value string `json:"value"`
+			Score int    `json:"score"`
+		}{se.Info, se.Value, se.ThreatLevelID})
+		promptReq.Mu.Unlock()
 	}
 }
 

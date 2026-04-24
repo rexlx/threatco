@@ -462,29 +462,28 @@ export class SearchController {
 
         this.container.innerHTML = "<p>Processing reviewed items...</p><progress class='progress is-link' max='100'></progress>";
 
-        // Group selected queue by type for processMatches compatibility
-        const grouped = this.currentQueue.reduce((acc, curr) => {
-            if (!acc[curr.type]) acc[curr.type] = [];
-            acc[curr.type].push(curr.value);
-            return acc;
-        }, {});
-
-        const promises = [];
-        for (let svr of this.app.user.services) {
-            for (const [type, matches] of Object.entries(grouped)) {
-                if (svr.type.includes(type)) {
-                    const route = svr.route_map ? svr.route_map.find(r => r.type === type)?.route : "";
-                    promises.push(this.processMatches(svr.kind, { type, matches }, route, false));
-                }
-            }
-        }
+        // Combine all selected queue items into a single space-separated string
+        const blob = this.currentQueue.map(q => q.value).join(' ');
 
         try {
-            await Promise.allSettled(promises);
+            this.app.resultWorkers.push(1);
+            
+            // Send to ParserHandler with parsed = true
+            let result = await this.app.fetchMatchDontParse(blob, true);
+            
+            if (Array.isArray(result)) {
+                this.app.results.push(...result);
+            } else if (result) {
+                this.app.results.push(result);
+            }
+        } catch (error) {
+            this.app.errors.push(error.toString());
         } finally {
+            this.app.resultWorkers.pop();
             this.isSearching = false;
             this.currentQueue = [];
             this.extractedMatches = [];
+            await this.app.setHistory();
             this.renderResultCards(this.app.results);
         }
     }

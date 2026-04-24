@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,6 +47,7 @@ func PassStore(s *UploadStore) {
 type ParserRequest struct {
 	Blob     string `json:"blob"`
 	Username string `json:"username"`
+	Parsed   bool   `json:"parsed"`
 }
 
 type LogRequest struct {
@@ -78,15 +78,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized: user email not found in session", http.StatusUnauthorized)
 		return
 	}
-	start := time.Now()
-	var wg sync.WaitGroup
-	allBytes := []byte{'['}
-	first := true
-	ignoreList := []string{"nullferatu.com", "fairlady.nullferatu.com"}
-	var mu sync.Mutex
-	logIt := !ok
-	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
-	//http://fairlady.nullferatu.com
+
 	var pr ParserRequest
 	if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -96,131 +88,33 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		pr.Username = email
 	}
 
+	start := time.Now()
 	defer func(start time.Time, req ParserRequest) {
 		duration := time.Since(start).Seconds() * 1000
-		// Use .WithLabelValues() to satisfy the HistogramVec requirement
 		s.ParserDuration.WithLabelValues("success").Observe(duration)
 		reqOut, _ := json.Marshal(req)
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
+	fmt.Println(pr)
+	// 1. Extract or classify indicators based on the 'Parsed' flag
+	out := s.extractIndicators(pr)
 
-	out := cx.ExtractAll(pr.Blob)
+	// 2. Record batch search history
+	s.recordSearchHistory(out, email)
 
-	// Deduplicate unique values for efficient batch history recording
-	uniqueValues := make([]string, 0)
-	seen := make(map[string]struct{})
-	for _, results := range out {
-		for _, res := range results {
-			if _, exists := seen[res.Value]; !exists {
-				seen[res.Value] = struct{}{}
-				uniqueValues = append(uniqueValues, res.Value)
-			}
-		}
-	}
+	// 3. Dispatch requests to vendors and gather results
+	allBytes, promptReq := s.dispatchProxyRequests(out, pr.Username, email)
 
-	// Record all search history in a single batch operation
-	if email != "" && len(uniqueValues) > 0 {
-		go func(vals []string, user string) {
-			if err := s.DB.RecordSearchBatch(vals, user); err != nil {
-				s.Log.Printf("Batch search history update failed: %v", err)
-			}
-		}(uniqueValues, email)
-	}
-
-	promptRequest := PromptRequest{
-		TransactinID: uuid.New().String(),
-		MatchList:    make([]interface{}, 0),
-		Mu:           &sync.RWMutex{},
-	}
-
-	for k, v := range out {
-		for _, svc := range s.Details.SupportedServices {
-			for _, t := range svc.Type {
-				if t == k && len(v) > 0 {
-					for _, value := range v {
-						var proxyReq ProxyRequest
-						if len(svc.RouteMap) > 0 {
-							for _, rm := range svc.RouteMap {
-								if rm.Type == k {
-									proxyReq.Route = rm.Route
-								}
-							}
-						}
-						proxyReq.To = svc.Kind
-						proxyReq.Type = k
-						proxyReq.Value = value.Value
-						proxyReq.Username = pr.Username
-						proxyReq.FQDN = s.Details.FQDN
-						proxyReq.From = "api parser"
-						uid := uuid.New().String()
-						proxyReq.TransactionID = uid
-						if strings.Contains(value.Value, "fairlady.nullferatu.com") {
-							// s.Log.Println("Skipping known ignored value:", value.Value)
-							continue
-						}
-						wg.Add(1)
-						go func(name string, id string, firstPtr *bool, req ProxyRequest) {
-							defer wg.Done()
-							op, ok := s.ProxyOperators[name]
-							ep, ok2 := s.Targets[name]
-							if !ok || !ok2 {
-								return
-							}
-
-							out, err := op(s.RespCh, ep, req)
-							if err != nil || len(out) == 0 {
-								if errors.Is(err, ErrRateLimited) {
-									err := s.DB.AddFailedRequest(proxyReq.Username, proxyReq)
-									if err != nil {
-										s.Log.Printf("Failed to record rate-limited request: %v", err)
-									}
-								}
-								return
-							}
-
-							mu.Lock()
-							if !*firstPtr {
-								allBytes = append(allBytes, ',')
-							}
-							allBytes = append(allBytes, out...)
-							*firstPtr = false
-							mu.Unlock()
-
-							s.RespCh <- ResponseItem{
-								Email:  email,
-								ID:     id,
-								Vendor: name,
-								Data:   out,
-								Time:   time.Now(),
-							}
-
-							var se SummarizedEvent
-							if err := json.Unmarshal(out, &se); err == nil && se.Matched {
-								promptRequest.Mu.Lock()
-								promptRequest.MatchList = append(promptRequest.MatchList, struct {
-									Info  string `json:"info"`
-									Value string `json:"value"`
-									Score int    `json:"score"`
-								}{se.Info, se.Value, se.ThreatLevelID})
-								promptRequest.Mu.Unlock()
-							}
-						}(svc.Kind, uid, &first, proxyReq)
-					}
-				}
-			}
-		}
-	}
-
-	wg.Wait()
-	allBytes = append(allBytes, ']')
+	// 4. Return results to the client
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(allBytes)
 
-	fullPrompt, _ := promptRequest.BuildJSONPrompt(optional.LlmToolsBasicPrompt)
+	// 5. Send contextual prompt to LLM queue
+	fullPrompt, _ := promptReq.BuildJSONPrompt(optional.LlmToolsBasicPrompt)
 	s.RespCh <- ResponseItem{
-		Log:    logIt,
+		Log:    !ok,
 		Email:  email,
-		ID:     promptRequest.TransactinID,
+		ID:     promptReq.TransactinID,
 		Notify: true,
 		Data:   fullPrompt,
 		Time:   time.Now(),
