@@ -49,13 +49,13 @@ func NewContextualizer(ignoreIPs bool, ignoreDomains []string, ignoreEmails []st
 			"sha1":     regexp.MustCompile(`(?i)\b([a-f\d]{40})\b`),
 			"sha256":   regexp.MustCompile(`(?i)\b([a-f\d]{64})\b`),
 			"sha512":   regexp.MustCompile(`(?i)\b([a-f\d]{128})\b`),
-			"ipv4":     regexp.MustCompile(`(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`),
-			"ipv6":     regexp.MustCompile(`(?i)([a-f\d]{4}(:[a-f\d]{4}){7})`),
-			"email":    regexp.MustCompile(`(?i)([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})`),
+			"ipv4":     regexp.MustCompile(`\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b`),
+			"ipv6":     regexp.MustCompile(`(?i)\b([a-f\d]{4}(:[a-f\d]{4}){7})\b`),
+			"email":    regexp.MustCompile(`(?i)\b([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})\b`),
 			"url":      regexp.MustCompile(`(?i)((https?|ftp):\/\/[^\s/$.?#].[^\s]*)`),
-			"domain":   regexp.MustCompile(`(?i)([a-z0-9.-]+\.[a-z]{2,24})\b`),
-			"filepath": regexp.MustCompile(`([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)`),
-			"filename": regexp.MustCompile(`^[\w\-.]+\.[a-zA-Z]{2,4}$`),
+			"domain":   regexp.MustCompile(`(?i)\b([a-z0-9.-]+\.[a-z]{2,24})\b`),
+			"filepath": regexp.MustCompile(`\b([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)\b`),
+			"filename": regexp.MustCompile(`(?i)\b[\w\-.]+\.(exe|dll|bin|dat|sys|tmp|log|cfg|ini|vbs|ps1|bat|cmd|msi|jar|go|cpp|h|txt|pdf|sh)\b`),
 		},
 	}
 }
@@ -208,7 +208,7 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 						continue
 					}
 				}
-				if c.isDomainIgnored(cleanVal) {
+				if !c.isValidTLD(cleanVal) || c.isDomainIgnored(cleanVal) {
 					continue
 				}
 			}
@@ -252,24 +252,22 @@ func extractSecondLevelDomain(domain string) (string, error) {
 }
 
 func (c *Contextualizer) isValidTLD(domain string) bool {
-	// PublicSuffix returns the TLD and whether it is a managed (ICANN) suffix
 	suffix, icann := publicsuffix.PublicSuffix(domain)
-	return icann || suffix != ""
+
+	return icann && suffix != ""
 }
 
 func isLikelyFilename(val string) bool {
 	val = strings.ToLower(val)
 
+	// Explicit path indicators are strong filename signals
 	if strings.HasPrefix(val, "./") || strings.HasPrefix(val, "../") ||
 		strings.Contains(val, "/") || strings.Contains(val, "\\") {
 		return true
 	}
 
+	// Underscores are extremely rare in domains but common in files
 	if strings.Contains(val, "_") {
-		return true
-	}
-
-	if strings.Count(val, ".") > 2 && !strings.Contains(val, "www.") {
 		return true
 	}
 
@@ -278,10 +276,17 @@ func isLikelyFilename(val string) bool {
 		".tmp": {}, ".log": {}, ".cfg": {}, ".ini": {}, ".vbs": {},
 		".ps1": {}, ".bat": {}, ".cmd": {}, ".msi": {}, ".jar": {},
 		".go": {}, ".cpp": {}, ".h": {}, ".txt": {}, ".pdf": {},
+		".sh": {}, ".zip": {}, ".tar": {}, ".gz": {},
 	}
 
 	ext := filepath.Ext(val)
 	if _, exists := fileExts[ext]; exists {
+		return true
+	}
+
+	// Versioned files (e.g., app.v1.0.2) often have many dots.
+	// We only flag this if it doesn't look like a standard domain.
+	if strings.Count(val, ".") > 3 && !strings.HasPrefix(val, "www.") {
 		return true
 	}
 

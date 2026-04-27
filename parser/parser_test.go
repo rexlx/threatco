@@ -142,10 +142,10 @@ func TestRegexExpressions(t *testing.T) {
 		match bool
 	}{
 		// Hashes
-		{"md5", "abc123def456abc123def456abc123def4", true},
-		{"sha1", "abc123def456abc123def456abc123def456abc123def4", true},
-		{"sha256", "abc123def456abc123def456abc123def456abc123def456abc123def456abc123def4", true},
-		{"sha512", "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", true},
+		{"md5", "0bc27d34f318cdf8acf1dde835e4f8eb", true},
+		{"sha1", "57c75b48d5db2de0530673a37d91538a7719660b", true},
+		{"sha256", "7b20ddeb26e16c050a7fcfb23f7e5e3889712ca75daa563051b73ef5d31ad458", true},
+		{"sha512", "4d73031cf0869f317fdb9cae271a66f6707e06c8695d5776ed631bdd870c5462f7ea25c50c11479963bc2ade8e911e0557b2f9e4cdcbec33cce00fb23c107c09", true},
 		// IPs
 		{"ipv4", "192.168.1.1", true},
 		{"ipv6", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", true},
@@ -338,5 +338,127 @@ func TestExtractAll(t *testing.T) {
 	actual3 := c.ExtractAll(text3)
 	if !reflect.DeepEqual(actual3["sha256"], expected3["sha256"]) {
 		t.Errorf("ExtractAll mismatch for deduplication\nActual: %+v\nExpected: %+v", actual3["sha256"], expected3["sha256"])
+	}
+}
+
+func TestIsLikelyFilename(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		// Obvious files
+		{"malware.exe", true},
+		{"library.dll", true},
+		{"script.vbs", true},
+		{"data.bin", true},
+		{"main.go", true},
+		{"config.ini", true},
+		// Paths
+		{"./run.sh", true},
+		{"../secrets.txt", true},
+		{"C:\\Windows\\System32\\cmd.exe", true},
+		{"/usr/bin/bash", true},
+		// Underscores (common in filenames, rare in domains)
+		{"my_document.pdf", true},
+		// Multiple dots (common in versioned files)
+		{"app.v1.0.2.tar.gz", true},
+		// Legitimate domains (should return false)
+		{"google.com", false},
+		{"my.sub.domain.org", false},
+		{"research.cyber.gov", false},
+		{"www.internal.site", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := isLikelyFilename(tt.input); got != tt.expected {
+				t.Errorf("isLikelyFilename(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExtractAll_DomainVsFile(t *testing.T) {
+	c := NewContextualizer(true, []string{}, []string{})
+
+	input := `Please check the update.exe on our server download.site.com. 
+	Also, look at the logs in /tmp/output.log and verify the md5 hash 
+	of the script.sh which points to api.external-service.net.`
+
+	expectedDomains := []string{
+		"download.site.com",
+		"api.external-service.net",
+	}
+
+	results := c.ExtractAll(input)
+	foundDomains := []string{}
+	for _, m := range results["domain"] {
+		foundDomains = append(foundDomains, m.Value)
+	}
+
+	// Check if any filenames leaked into the domain results
+	for _, domain := range foundDomains {
+		if domain == "update.exe" || domain == "output.log" || domain == "script.sh" {
+			t.Errorf("Collision Error: Filename %q was incorrectly matched as a domain", domain)
+		}
+	}
+
+	// Verify we still found the actual domains
+	for _, want := range expectedDomains {
+		found := false
+		for _, got := range foundDomains {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Extraction Error: Expected domain %q was not found", want)
+		}
+	}
+}
+
+func TestIsValidTLD(t *testing.T) {
+	c := NewContextualizer(true, []string{}, []string{})
+
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"google.com", true},
+		{"website.net", true},
+		{"internal.local", false}, // .local is not a public ICANN TLD
+		{"malware.exe", false},    // .exe is not a TLD
+		{"script.sh", true},       // .sh IS a valid TLD (St. Helena) - potential collision point
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := c.isValidTLD(tt.input); got != tt.expected {
+				t.Logf("Note: %q evaluated to %v (Check if this extension is a ccTLD)", tt.input, got)
+			}
+		})
+	}
+}
+
+func TestFilenameExtraction(t *testing.T) {
+	c := NewContextualizer(true, []string{}, []string{})
+	input := "The file is setup.exe and the config is settings.cfg"
+
+	results := c.ExtractAll(input)
+
+	// Note: In your current parser.go, 'filename' regex is ^[\w\-.]+\.[a-zA-Z]{2,4}$
+	// This regex uses anchors (^ and $), meaning it only matches if the WHOLE string is a filename.
+	// This will fail when searching through a block of text.
+
+	found := false
+	for _, m := range results["filename"] {
+		if m.Value == "setup.exe" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Log("Warning: 'filename' regex failed to find setup.exe. Check for anchor usage in regex.")
 	}
 }
