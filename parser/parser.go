@@ -2,6 +2,7 @@ package parser
 
 import (
 	"net"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -202,6 +203,11 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 					continue
 				}
 			case "domain":
+				if isLikelyFilename(cleanVal) {
+					if !c.isValidTLD(cleanVal) {
+						continue
+					}
+				}
 				if c.isDomainIgnored(cleanVal) {
 					continue
 				}
@@ -245,4 +251,39 @@ func extractSecondLevelDomain(domain string) (string, error) {
 	return publicsuffix.EffectiveTLDPlusOne(domain)
 }
 
-//
+func (c *Contextualizer) isValidTLD(domain string) bool {
+	// PublicSuffix returns the TLD and whether it is a managed (ICANN) suffix
+	suffix, icann := publicsuffix.PublicSuffix(domain)
+	return icann || suffix != ""
+}
+
+func isLikelyFilename(val string) bool {
+	val = strings.ToLower(val)
+
+	if strings.HasPrefix(val, "./") || strings.HasPrefix(val, "../") ||
+		strings.Contains(val, "/") || strings.Contains(val, "\\") {
+		return true
+	}
+
+	if strings.Contains(val, "_") {
+		return true
+	}
+
+	if strings.Count(val, ".") > 2 && !strings.Contains(val, "www.") {
+		return true
+	}
+
+	fileExts := map[string]struct{}{
+		".exe": {}, ".dll": {}, ".bin": {}, ".dat": {}, ".sys": {},
+		".tmp": {}, ".log": {}, ".cfg": {}, ".ini": {}, ".vbs": {},
+		".ps1": {}, ".bat": {}, ".cmd": {}, ".msi": {}, ".jar": {},
+		".go": {}, ".cpp": {}, ".h": {}, ".txt": {}, ".pdf": {},
+	}
+
+	ext := filepath.Ext(val)
+	if _, exists := fileExts[ext]; exists {
+		return true
+	}
+
+	return false
+}
