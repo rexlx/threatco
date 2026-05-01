@@ -131,17 +131,22 @@ type indexRange struct {
 }
 
 func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
+	// 1. Pre-process the text to remove defanging
+	cleanText := Refang(text)
+
 	results := make(map[string][]Match)
 	urlRanges := []indexRange{}
-
-	// Track hashes by their first 8 characters to prevent duplicate type detection
 	hashTracker := make(map[string]string)
 
+	// 2. Handle URLs first to establish "safe zones" for the filepath parser
 	if urlRegex, ok := c.Expressions["url"]; ok {
-		indices := urlRegex.FindAllStringIndex(text, -1)
+		indices := urlRegex.FindAllStringIndex(cleanText, -1)
 		for _, idx := range indices {
-			urlRanges = append(urlRanges, indexRange{idx[0], idx[1]})
-			matchVal := strings.TrimRight(text[idx[0]:idx[1]], "/.,;:")
+			// Trim common trailing punctuation often caught in URL regex
+			matchVal := strings.TrimRight(cleanText[idx[0]:idx[1]], "/.,;:")
+
+			// Track the range based on the actual length of the trimmed match
+			urlRanges = append(urlRanges, indexRange{idx[0], idx[0] + len(matchVal)})
 			results["url"] = append(results["url"], Match{Value: matchVal, Type: "url"})
 		}
 	}
@@ -151,36 +156,38 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 			continue
 		}
 
-		rawMatches := regex.FindAllStringIndex(text, -1)
+		rawMatches := regex.FindAllStringIndex(cleanText, -1)
 		seen := make(map[string]bool)
 
 		for _, idx := range rawMatches {
-			val := text[idx[0]:idx[1]]
+			val := cleanText[idx[0]:idx[1]]
 			cleanVal := strings.ToLower(val)
 
 			if seen[cleanVal] {
 				continue
 			}
 
-			// Fidelity check: ensure hex matches aren't substrings of longer hex strings
+			// Boundary check for hashes (preventing substring matches)
 			if isHashType(kind) {
-				if (idx[0] > 0 && isHexDigit(text[idx[0]-1])) || (idx[1] < len(text) && isHexDigit(text[idx[1]])) {
+				if (idx[0] > 0 && isHexDigit(cleanText[idx[0]-1])) || (idx[1] < len(cleanText) && isHexDigit(cleanText[idx[1]])) {
 					continue
 				}
 
-				// Key-based tracking: use first 8 chars as requested
+				// Check if this same string was already identified as a longer hash
 				prefix := cleanVal
 				if len(prefix) > 8 {
 					prefix = prefix[:8]
 				}
 				if _, alreadyFound := hashTracker[prefix]; alreadyFound {
-					continue // Already processed this entity as a different/longer hash type
+					continue
 				}
 				hashTracker[prefix] = kind
 			}
 
+			// Type-specific validation logic
 			switch kind {
 			case "filepath":
+				// Ignore if it looks like a URL or is literally inside a URL match
 				if strings.HasPrefix(cleanVal, "http") || strings.HasPrefix(cleanVal, "www") {
 					continue
 				}
@@ -194,15 +201,19 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 				if isInsideUrl {
 					continue
 				}
+
 			case "ipv4":
 				if c.Checks.IgnorePrivateIPs && isPrivateIP(val) {
 					continue
 				}
+
 			case "email":
 				if _, exists := c.Checks.IgnoredEmails[cleanVal]; exists {
 					continue
 				}
+
 			case "domain":
+				// Prevent filenames (e.g. config.sys) from being treated as domains
 				if isLikelyFilename(cleanVal) {
 					if !c.isValidTLD(cleanVal) {
 						continue
@@ -291,4 +302,28 @@ func isLikelyFilename(val string) bool {
 	}
 
 	return false
+}
+
+var (
+	// Pre-compile refanging patterns for performance
+	reDots   = regexp.MustCompile(`(?i)\[\.\]|\(\.\)|\{\.\}`)
+	reAt     = regexp.MustCompile(`(?i)\[at\]|\(at\)| @ `)
+	reHxxp   = regexp.MustCompile(`(?i)h[x|t]{2}p(s?)://`)
+	reColons = regexp.MustCompile(`(?i)\[:\]`)
+)
+
+func Refang(text string) string {
+	// 1. Standardize dots: [.] or (.) -> .
+	text = reDots.ReplaceAllString(text, ".")
+
+	// 2. Standardize "at" symbols: [at] -> @
+	text = reAt.ReplaceAllString(text, "@")
+
+	// 3. Standardize protocols: hxxp:// -> http://
+	text = reHxxp.ReplaceAllString(text, "http$1://")
+
+	// 4. Standardize colons: [:] -> :
+	text = reColons.ReplaceAllString(text, ":")
+
+	return text
 }
