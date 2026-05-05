@@ -349,10 +349,12 @@ export class SearchController {
         const viewQueue = document.getElementById('viewQueueCheckbox').checked;
 
         if (viewQueue && !dontParse) {
-            // Populate extractedMatches for manual Opt-In selection
-            this.extractedMatches = Object.keys(this.contextualizer.expressions).map(key => ({
+            // Updated to use the new extractAll parser method
+            const extractedQueue = this.contextualizer.extractAll(searchText);
+            
+            this.extractedMatches = Object.keys(extractedQueue).map(key => ({
                 type: key,
-                matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))]
+                matches: [...new Set(extractedQueue[key].map(m => m.value))]
             })).filter(group => group.matches.length > 0);
 
             this.currentQueue = []; // Reset previous selections
@@ -411,6 +413,18 @@ export class SearchController {
         }
     }
 
+    /**
+     * Helper to safely extract second-level domain locally
+     */
+    _extractSecondLevelDomain(domain) {
+        if (!domain) return null;
+        let parts = domain.split('.');
+        if (parts.length < 2) {
+            return domain;
+        }
+        return parts.slice(-2).join('.');
+    }
+
     async executeStandardSearch(searchText, dontParse) {
         this.isSearching = true;
         this.app.results = [];
@@ -423,9 +437,11 @@ export class SearchController {
             if (dontParse) {
                 await this.processMatches(null, { value: searchText }, null, true);
             } else {
-                const allMatches = Object.keys(this.contextualizer.expressions).map(key => ({
+                // Updated to use extractAll instead of getMatches
+                const extracted = this.contextualizer.extractAll(searchText);
+                const allMatches = Object.keys(extracted).map(key => ({
                     type: key,
-                    matches: [...new Set(this.contextualizer.getMatches(searchText, key, this.contextualizer.expressions[key]))]
+                    matches: [...new Set(extracted[key].map(m => m.value))]
                 }));
 
                 const promises = [];
@@ -434,7 +450,8 @@ export class SearchController {
                         if (matchPair.type === "domain" && matchPair.matches.length > 0) {
                             const baseDomains = new Set();
                             for (const domain of matchPair.matches) {
-                                const baseDomain = this.contextualizer.extractSecondLevelDomain(domain);
+                                // Updated to use the local merged helper method
+                                const baseDomain = this._extractSecondLevelDomain(domain);
                                 if (baseDomain) baseDomains.add(baseDomain);
                             }
                             matchPair.matches = [...new Set([...matchPair.matches, ...baseDomains])];
