@@ -50,12 +50,30 @@ type VmRayAnalysis struct {
 	Status     string `json:"job_status"` // e.g., "in_work", "finished", "in_queue"
 }
 
+// VTUploadResponse represents the initial response from VirusTotal after file upload.
+type VTUploadResponse struct {
+	Data struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	} `json:"data"`
+}
+
+// VTAnalysisResponse represents the status of a queued analysis.
+type VTAnalysisResponse struct {
+	Data struct {
+		Attributes struct {
+			Status string `json:"status"` // e.g., "queued", "in-progress", "completed"
+		} `json:"attributes"`
+	} `json:"data"`
+}
+
 type UploadOperator func(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error
 
 var UploadOperators = map[string]UploadOperator{
-	"livery": LiveryHelper,
-	"vmray":  VmRayFileSubmissionHelper,
-	"misp":   MispFileHelper,
+	"livery":      LiveryHelper,
+	"vmray":       VmRayFileSubmissionHelper,
+	"mispu":       MispFileHelper,
+	"virustotalu": VirusTotalFileHelper,
 }
 
 // getVmRaySubmission fetches the current status of a VMRay submission.
@@ -112,6 +130,49 @@ func pollVmRayForCompletion(ep Endpoint, submissionID int) (*vendors.VMRaySubmis
 	}
 }
 
+// pollVirusTotalForCompletion blocks until the VirusTotal analysis is complete.
+func pollVirusTotalForCompletion(ep Endpoint, analysisID string) error {
+	timeoutChan := time.After(DefaultPollingTimeout)
+	ticker := time.NewTicker(DefaultPollingInterval)
+	defer ticker.Stop()
+
+	fmt.Printf("Polling VirusTotal for analysis %s every %s...\n", analysisID, DefaultPollingInterval)
+
+	for {
+		select {
+		case <-timeoutChan:
+			return fmt.Errorf("timed out waiting for VirusTotal analysis %s", analysisID)
+		case <-ticker.C:
+			statusURL := fmt.Sprintf("%s/analyses/%s", ep.GetURL(), analysisID)
+			req, err := http.NewRequest("GET", statusURL, nil)
+			if err != nil {
+				fmt.Printf("Error creating VT status request: %v. Retrying...\n", err)
+				continue
+			}
+
+			respBytes, err := ep.Do("", req)
+			if err != nil {
+				fmt.Printf("Error getting VT analysis status: %v. Retrying...\n", err)
+				continue
+			}
+
+			var analysisResp VTAnalysisResponse
+			if err := json.Unmarshal(respBytes, &analysisResp); err != nil {
+				fmt.Printf("Error unmarshaling VT status: %v. Retrying...\n", err)
+				continue
+			}
+
+			if analysisResp.Data.Attributes.Status != "completed" {
+				fmt.Printf("Analysis %s status: %s. Retrying...\n", analysisID, analysisResp.Data.Attributes.Status)
+				continue
+			}
+
+			fmt.Printf("VirusTotal analysis %s completed.\n", analysisID)
+			return nil
+		}
+	}
+}
+
 // VmRayFileSubmissionHelper submits a file and polls until analysis is complete.
 func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error {
 	// 1. Submit the file for analysis
@@ -136,9 +197,7 @@ func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep E
 	if len(initialRespBytes) == 0 {
 		return fmt.Errorf("got a zero length response from VMRay on file submission")
 	}
-	if len(initialRespBytes) == 0 {
-		return fmt.Errorf("got a zero length response")
-	}
+
 	resch <- ResponseItem{
 		ID:     id,
 		Vendor: "vmray",
@@ -176,6 +235,94 @@ func VmRayFileSubmissionHelper(resch chan ResponseItem, file UploadHandler, ep E
 		Data:   finalData,
 		Time:   time.Now(),
 	}
+	return nil
+}
+
+// VirusTotalFileHelper submits a file to VirusTotal, polls for completion, and returns the file report.
+func VirusTotalFileHelper(resch chan ResponseItem, file UploadHandler, ep Endpoint, id string) error {
+	fmt.Println("Submitting file to VirusTotal:--------------->", file.FileName)
+	// 1. Calculate SHA256 early so we can fetch the full file report later
+	hasher := sha256.New()
+	_, err := hasher.Write(file.Data)
+	if err != nil {
+		return fmt.Errorf("failed to compute hash for VT file %s: %w", file.FileName, err)
+	}
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	// 2. Submit the file for analysis
+	submitURL := fmt.Sprintf("%s/files", ep.GetURL())
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// VirusTotal specifically requires the form field to be named "file"
+	part, _ := writer.CreateFormFile("file", file.FileName)
+	_, _ = io.Copy(part, bytes.NewReader(file.Data))
+	writer.Close()
+
+	request, err := http.NewRequest("POST", submitURL, body)
+	if err != nil {
+		return fmt.Errorf("failed to create VirusTotal submission request: %w", err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Accept", "application/json")
+
+	initialRespBytes, err := ep.Do("", request)
+	if err != nil {
+		return fmt.Errorf("failed to submit file to VirusTotal: %w", err)
+	}
+	if len(initialRespBytes) == 0 {
+		return fmt.Errorf("got a zero length response from VirusTotal on file submission")
+	}
+
+	resch <- ResponseItem{
+		ID:     id,
+		Vendor: "virustotal",
+		Data:   initialRespBytes,
+		Time:   time.Now(),
+	}
+
+	// 3. Parse the initial response to get the analysis ID
+	var uploadResp VTUploadResponse
+	if err := json.Unmarshal(initialRespBytes, &uploadResp); err != nil {
+		return fmt.Errorf("failed to unmarshal VirusTotal upload response: %w", err)
+	}
+
+	analysisID := uploadResp.Data.ID
+	if analysisID == "" {
+		return fmt.Errorf("VirusTotal submission response contained no analysis ID")
+	}
+
+	// 4. Poll for analysis completion
+	err = pollVirusTotalForCompletion(ep, analysisID)
+	if err != nil {
+		return fmt.Errorf("failed while polling for VirusTotal analysis: %w", err)
+	}
+
+	// 5. Fetch the final File report using the SHA256 hash.
+	// This ensures the response maps correctly to vendors.VirusTotalResponse.
+	reportURL := fmt.Sprintf("%s/files/%s", ep.GetURL(), hash)
+	reportReq, err := http.NewRequest("GET", reportURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create VirusTotal report request: %w", err)
+	}
+	reportReq.Header.Set("Accept", "application/json")
+
+	finalRespBytes, err := ep.Do("", reportReq)
+	if err != nil {
+		return fmt.Errorf("failed to fetch final VirusTotal report: %w", err)
+	}
+
+	// 6. Send the final compiled data back to the channel
+	resch <- ResponseItem{
+		Notify: true,
+		Email:  file.For,
+		ID:     id,
+		Vendor: "virustotal",
+		Data:   finalRespBytes,
+		Time:   time.Now(),
+	}
+	fmt.Println("VirusTotal analysis complete and report fetched for file:", file.FileName)
+
 	return nil
 }
 
