@@ -150,7 +150,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	resch := make(chan ResponseItem, 200)
 	sessionMgr := scs.New()
 	sessionMgr.Lifetime = 24 * time.Hour
-	sessionMgr.IdleTimeout = 1 * time.Hour
+	sessionMgr.IdleTimeout = 4 * time.Hour
 	sessionMgr.Cookie.Persist = true
 	sessionMgr.Cookie.Name = "token"
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode

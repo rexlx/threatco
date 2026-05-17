@@ -1,17 +1,17 @@
 module github.com/rexlx/threatco
 
-go 1.25.0
+go 1.26.3
 
 require (
 	github.com/alexedwards/scs/v2 v2.9.0
-	github.com/go-echarts/go-echarts/v2 v2.7.1
+	github.com/go-echarts/go-echarts/v2 v2.7.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/prometheus/client_golang v1.23.2
 	go.etcd.io/bbolt v1.4.3
-	golang.org/x/crypto v0.49.0
-	golang.org/x/net v0.52.0
+	golang.org/x/crypto v0.51.0
+	golang.org/x/net v0.54.0
 	golang.org/x/time v0.15.0
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/prometheus/procfs v0.20.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
