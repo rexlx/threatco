@@ -2732,7 +2732,7 @@ func (s *Server) sendSshNotification(user, host, msg string, isError bool) {
 }
 
 type SSHExecRequest struct {
-	Host       string   `json:"host"`
+	Hosts      []string `json:"hosts"`
 	Method     string   `json:"method"`
 	Password   string   `json:"password"`
 	PrivateKey string   `json:"private_key"`
@@ -2746,19 +2746,7 @@ func (s *Server) ToolsSSHExecHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Parse Host (user@address:port)
-	user := "root"
-	addr := req.Host
-	if strings.Contains(req.Host, "@") {
-		parts := strings.Split(req.Host, "@")
-		user = parts[0]
-		addr = parts[1]
-	}
-	if !strings.Contains(addr, ":") {
-		addr += ":22"
-	}
-
-	// 2. Setup Auth
+	// 1. Setup Auth (Parse once for all hosts)
 	var auth ssh.AuthMethod
 	if req.Method == "key" {
 		signer, err := ssh.ParsePrivateKey([]byte(req.PrivateKey))
@@ -2771,38 +2759,66 @@ func (s *Server) ToolsSSHExecHandler(w http.ResponseWriter, r *http.Request) {
 		auth = ssh.Password(req.Password)
 	}
 
-	// 3. Connect and Execute
-	config := &ssh.ClientConfig{
-		User:            user,
-		Auth:            []ssh.AuthMethod{auth},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         15 * time.Second,
-	}
-
-	client, err := ssh.Dial("tcp", addr, config)
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"output": "Connection Failed: " + err.Error(), "error": true})
-		return
-	}
-	defer client.Close()
-
-	session, err := client.NewSession()
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"output": "Session Failed", "error": true})
-		return
-	}
-	defer session.Close()
-
-	// Join commands with semicolon
+	// Join queued commands with a semicolon
 	fullCmd := strings.Join(req.Commands, "; ")
-	output, err := session.CombinedOutput(fullCmd)
+
+	var combinedOutput strings.Builder
+	hasGlobalError := false
+
+	// 2. Connect and Execute on each host
+	for _, targetHost := range req.Hosts {
+		combinedOutput.WriteString(fmt.Sprintf("=== Target: %s ===\n", targetHost))
+
+		// Parse Host (user@address:port)
+		user := "root"
+		addr := targetHost
+		if strings.Contains(targetHost, "@") {
+			parts := strings.Split(targetHost, "@")
+			user = parts[0]
+			addr = parts[1]
+		}
+		if !strings.Contains(addr, ":") {
+			addr += ":22"
+		}
+
+		config := &ssh.ClientConfig{
+			User:            user,
+			Auth:            []ssh.AuthMethod{auth},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         15 * time.Second,
+		}
+
+		client, err := ssh.Dial("tcp", addr, config)
+		if err != nil {
+			combinedOutput.WriteString("Connection Failed: " + err.Error() + "\n\n")
+			hasGlobalError = true
+			continue
+		}
+
+		session, err := client.NewSession()
+		if err != nil {
+			combinedOutput.WriteString("Session Failed: " + err.Error() + "\n\n")
+			client.Close()
+			hasGlobalError = true
+			continue
+		}
+
+		output, err := session.CombinedOutput(fullCmd)
+		if err != nil {
+			combinedOutput.WriteString(string(output) + "\nExecution Error: " + err.Error() + "\n\n")
+			hasGlobalError = true
+		} else {
+			// Success output
+			combinedOutput.WriteString(string(output) + "\n\n")
+		}
+
+		session.Close()
+		client.Close()
+	}
 
 	resp := map[string]any{
-		"output": string(output),
-		"error":  err != nil,
-	}
-	if err != nil {
-		resp["output"] = string(output) + "\nExecution Error: " + err.Error()
+		"output": combinedOutput.String(),
+		"error":  hasGlobalError,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -14,10 +14,10 @@ export class SshCommandTool {
             <div class="columns">
                 <div class="column is-7">
                     <div class="field">
-                        <label class="label has-text-grey-light">Target Host</label>
+                        <label class="label has-text-grey-light">Target Host(s)</label>
                         <div class="control">
-                            <input class="input" type="text" id="sshExecHost" placeholder="user@address:port (e.g. root@10.0.0.5)">
-                            <p class="help has-text-grey">Defaults to root and port 22 if omitted.</p>
+                            <textarea class="textarea is-small" id="sshExecHost" rows="2" placeholder="user@address:port (e.g. root@10.0.0.5)&#10;user2@10.0.0.6"></textarea>
+                            <p class="help has-text-grey">Enter one host per line, or comma-separated. Defaults to root and port 22.</p>
                         </div>
                     </div>
                 </div>
@@ -102,22 +102,26 @@ export class SshCommandTool {
         };
 
         runBtn.onclick = async () => {
-            if (!document.getElementById('sshExecHost').value) return alert("Host is required.");
+            const rawHosts = document.getElementById('sshExecHost').value;
+            // Split by newline or comma and filter out empty items
+            const hosts = rawHosts.split(/[\n,]+/).map(h => h.trim()).filter(Boolean);
+
+            if (hosts.length === 0) return alert("At least one host is required.");
             if (this.commands.length === 0) return alert("Queue at least one command.");
 
             runBtn.classList.add('is-loading');
             const outputArea = document.getElementById('sshExecOutput');
             const container = document.getElementById('sshExecOutputContainer');
             
-            outputArea.textContent = "Connecting to remote host...\n";
+            outputArea.textContent = `Connecting to ${hosts.length} target(s)...\n`;
             container.classList.remove('is-hidden');
 
             const payload = {
-                host: document.getElementById('sshExecHost').value,
+                hosts: hosts, // Sending array instead of a single string
                 method: authMethod.value,
                 password: document.getElementById('sshExecPassword').value,
                 private_key: document.getElementById('sshExecPrivKey').value,
-                commands: this.commands // Sent as array for backend to join
+                commands: this.commands 
             };
 
             try {
