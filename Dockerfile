@@ -1,5 +1,5 @@
-# --- STAGE 1: Build the binary ---
-FROM golang:1.25-bookworm AS builder
+# --- STAGE 1: Build the application binary ---
+FROM golang:1.25.3-bookworm AS builder
 
 # Create and change to the app directory.
 WORKDIR /app
@@ -14,16 +14,20 @@ COPY . ./
 # Build the binary.
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
 
-# --- STAGE 2: Final Runtime Image ---
-FROM debian:bookworm-slim
+# --- STAGE 2: Extract up-to-date OSV-Scanner ---
+FROM ghcr.io/google/osv-scanner:v1.9.2 AS osv-bin
+
+# --- STAGE 3: Final Runtime Image ---
+FROM debian:bookworm-20260224-slim
 
 # Define which config file to use (defaults to config.json for non-prod)
 ARG CONFIG_FILE=config.json
 
-# Install necessary packages for a production environment.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install necessary packages and run an upgrade to eliminate base layer CVEs.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    git \
     tzdata \
     procps \
     postgresql-client && \
@@ -33,8 +37,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV TZ=America/Chicago
 RUN echo "${TZ}" > /etc/timezone && dpkg-reconfigure -f noninteractive tzdata
 
-# Copy the binary from the builder stage.
+# Copy the server binary from the builder stage.
 COPY --from=builder /app/server /server
+
+# Copy the official OSV-Scanner binary into the system PATH
+COPY --from=osv-bin /osv-scanner /usr/local/bin/osv-scanner
 
 # Copy static assets and documentation.
 COPY static /static
@@ -51,5 +58,3 @@ EXPOSE 8080
 
 # Run the entrypoint script on container startup.
 ENTRYPOINT ["/entrypoint.sh"]
-
-# docker build --build-arg CONFIG_FILE=config.enc -t myapp:prod .
