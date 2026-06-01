@@ -156,7 +156,7 @@ export class NpmTool {
         container.innerHTML = '';
 
         if (!data || data.length === 0) {
-            container.innerHTML = `<div class="notification is-success">No scan results returned. Workspace is clean.</div>`;
+            container.innerHTML = `<div class="notification is-success">No scan results returned. Workspace dependencies are clean.</div>`;
             return;
         }
 
@@ -178,9 +178,25 @@ export class NpmTool {
             } else {
                 res.matches.forEach(match => { 
                     const displayType = match.type ? match.type.toUpperCase() : 'UNKNOWN';
+                    const severityKey = (match.severity || 'warning').toLowerCase();
+                    
+                    // Style Mapper: Configure box-bounding borders to map metrics natively
+                    let bulmaAlertClass = 'is-warning';
+                    let inlineBorderStyle = 'border: 1px solid #ffdd57;'; // Warning yellow
+                    
+                    if (severityKey === 'critical') {
+                        bulmaAlertClass = 'is-danger';
+                        inlineBorderStyle = 'border: 2px solid #b10dc9; background-color: rgba(177, 13, 201, 0.05) !important;'; // Deep Purple Border for Criticals
+                    } else if (severityKey === 'high') {
+                        bulmaAlertClass = 'is-danger';
+                        inlineBorderStyle = 'border: 1px solid #f14668;'; // Danger red
+                    } else if (severityKey === 'info') {
+                        bulmaAlertClass = 'is-info';
+                        inlineBorderStyle = 'border: 1px solid #3e8ed0;'; // Info blue
+                    }
                     
                     content += `
-                <div class="notification is-warning is-light mb-2" style="border-left: 5px solid #ffdd57; padding: 0.75rem 1.25rem;">
+                <div class="notification ${bulmaAlertClass} is-light mb-2" style="${inlineBorderStyle} padding: 0.75rem 1.25rem; border-left: none;">
                     <div class="level is-mobile mb-1">
                         <div class="level-left">
                             <strong>${escapeHtml(match.name)}</strong>
@@ -189,7 +205,12 @@ export class NpmTool {
                             <span class="tag is-black">${escapeHtml(displayType)}</span>
                         </div>
                     </div>
-                    <p class="is-size-7 mb-0">${escapeHtml(match.description)}</p>
+                    <p class="is-size-7 mb-0">
+                        <span class="tag is-dark is-uppercase mr-2" style="font-weight: bold; font-size: 0.65rem; letter-spacing: 0.5px;">
+                            ${escapeHtml(severityKey)}
+                        </span> 
+                        ${escapeHtml(match.description)}
+                    </p>
                 </div>`;
                 });
             }
