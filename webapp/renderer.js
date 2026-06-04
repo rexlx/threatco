@@ -1,4 +1,3 @@
-// webapp/renderer.js
 import { Application } from "./app.js";
 import { Contextualizer } from "./parser.js";
 import { NotificationManager } from "./ui/notifications.js";
@@ -10,6 +9,7 @@ import { ResponseController } from "./ui/responses.js";
 import { ToolsController } from "./ui/tools.js";
 import { CaseController } from './ui/cases.js';
 import { ProfileController } from './ui/profile.js';
+import { FeedController } from './ui/feed.js'; // NEW: Import the Feed Controller
 
 const application = new Application();
 const contextualizer = new Contextualizer();
@@ -23,6 +23,7 @@ const responseCtrl = new ResponseController('matchBox', application);
 const toolsCtrl = new ToolsController('toolsContainer', application);
 const caseCtrl = new CaseController('casesContainer', application);
 const profileCtrl = new ProfileController('profileContainer', application);
+const feedCtrl = new FeedController('feedContainer', application); // NEW: Instantiate Feed Controller
 
 const errorBox = document.getElementById("errors");
 const sidebarLinks = document.querySelectorAll('.menu-list a');
@@ -46,6 +47,7 @@ function hideAll() {
     document.getElementById('servicesContainer').classList.add('is-hidden');
     document.getElementById('profileContainer').classList.add('is-hidden');
     document.getElementById('notificationContainer').classList.add('is-hidden');
+    document.getElementById('feedContainer').classList.add('is-hidden'); // NEW: Hide Feed viewport
 }
 
 function showMainView() {
@@ -77,6 +79,17 @@ document.getElementById("sidebarSearch").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     showMainView();
 });
+
+// NEW: Sidebar link listener for Feed option
+const sidebarFeed = document.getElementById("sidebarFeed");
+if (sidebarFeed) {
+    sidebarFeed.addEventListener('click', (e) => {
+        setActiveSidebar(e.currentTarget);
+        hideAll();
+        document.getElementById('feedContainer').classList.remove('is-hidden');
+        feedCtrl.render();
+    });
+}
 
 const sidebarCases = document.getElementById("sidebarCases");
 if (sidebarCases) {

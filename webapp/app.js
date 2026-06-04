@@ -108,6 +108,19 @@ export class Application {
         };
     }
 
+    async fetchVulnerabilityFeed() {
+        const thisURL = `/vulnerabilities/feed`; // Relative API endpoint matching the backend route
+        try {
+            const response = await this._fetch(thisURL, { method: 'GET' });
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            return await response.json(); 
+            // Expects structure: [{ title: string, description: string, source: "CISA"|"NIST", url: string, published: string }]
+        } catch (error) {
+            this.errors.push(`Error fetching vulnerability feed: ${error.message}`);
+            return [];
+        }
+    }
+
     /**
      * Generic fetch wrapper to include credentials (session cookies) by default.
      * @param {string} url - The URL to fetch.

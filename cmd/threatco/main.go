@@ -11,15 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rexlx/threatco/internal"
-	//github.com/prometheus/client_golang/prometheus/promhttp
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rexlx/threatco/internal"
 )
 
 func main() {
 	var logger *log.Logger
 	flag.Parse()
-	// var c internal.Configuration
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
@@ -38,31 +36,38 @@ func main() {
 		}
 		defer file.Close()
 		logger = log.New(file, "", log.LstdFlags)
-		// logger = log.New(os.Stdout, "", log.LstdFlags| log.Lshortfile)
 	}
 	s, c := internal.NewServer("", ":8080", *internal.DbMode, *internal.DbLocation, logger)
-	// s.InitializeFromConfig(&c, true)
 	internal.PassStore(internal.NewUploadStore(c))
+
 	ticker := time.NewTicker(time.Duration(c.StatCacheTickRate) * time.Second)
 	healthTicker := time.NewTicker(time.Duration(*internal.HealthCheck) * time.Second)
+
+	feedTicker := time.NewTicker(4 * time.Hour)
+
 	go func() {
 		go s.SimpleServiceCheck()
+		go s.PollVulnerabilityFeeds()
+
 		for {
 			select {
 			case <-ticker.C:
 				s.UpdateCharts()
 				go s.UpdateCache()
 			case <-healthTicker.C:
-				// fmt.Println("Performing health check")
 				go s.SimpleServiceCheck()
 				go s.AutomatedThreatScan()
+			case <-feedTicker.C:
+				go s.PollVulnerabilityFeeds()
 			case <-sigs:
 				s.Log.Println("Shutting down")
 				ticker.Stop()
+				feedTicker.Stop()
 				os.Exit(0)
 			case <-s.StopCh:
 				s.Log.Println("Shutting down")
 				ticker.Stop()
+				feedTicker.Stop()
 				os.Exit(0)
 			}
 		}

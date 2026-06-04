@@ -87,13 +87,22 @@ type Details struct {
 }
 
 type Cache struct {
-	Logs           []LogItem               `json:"logs"`
-	Charts         []byte                  `json:"charts"`
-	Coordinates    map[string][]Coord      `json:"coordinates"`
-	ResponseExpiry time.Duration           `json:"response_expiry"`
-	Services       []ServiceType           `json:"services"`
-	StatsHistory   []StatItem              `json:"stats_history"`
-	Responses      map[string]ResponseItem `json:"responses"`
+	Logs              []LogItem               `json:"logs"`
+	Charts            []byte                  `json:"charts"`
+	Coordinates       map[string][]Coord      `json:"coordinates"`
+	ResponseExpiry    time.Duration           `json:"response_expiry"`
+	Services          []ServiceType           `json:"services"`
+	StatsHistory      []StatItem              `json:"stats_history"`
+	Responses         map[string]ResponseItem `json:"responses"`
+	VulnerabilityFeed []VulnerabilityItem     `json:"vulnerability_feed"`
+}
+
+type VulnerabilityItem struct {
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Source      string    `json:"source"`
+	URL         string    `json:"url"`
+	Published   time.Time `json:"published"`
 }
 
 type Coord struct {
@@ -136,14 +145,14 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	operators := make(map[string]ProxyOperator)
 	memory := &sync.RWMutex{}
 
-	// logger := log.New(log.Writer(), log.Prefix(), log.Flags())
 	gateway := http.NewServeMux()
 	cache := &Cache{
-		Logs:         make([]LogItem, 0),
-		Coordinates:  make(map[string][]Coord),
-		StatsHistory: make([]StatItem, 0),
-		Responses:    make(map[string]ResponseItem),
-		Charts:       []byte(views.NoDataView),
+		Logs:              make([]LogItem, 0),
+		Coordinates:       make(map[string][]Coord),
+		StatsHistory:      make([]StatItem, 0),
+		Responses:         make(map[string]ResponseItem),
+		Charts:            []byte(views.NoDataView),
+		VulnerabilityFeed: make([]VulnerabilityItem, 0),
 	}
 
 	stopCh := make(chan bool)
@@ -154,7 +163,6 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	sessionMgr.Cookie.Persist = true
 	sessionMgr.Cookie.Name = "token"
 	sessionMgr.Cookie.SameSite = http.SameSiteLaxMode
-	// sessionMgr.Cookie.Secure = true
 	sessionMgr.Cookie.HttpOnly = true
 
 	key, err := hex.DecodeString(keyHex)
@@ -222,28 +230,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 	if id == "" {
 		id = fmt.Sprintf("%v-%v-%v", time.Now().Unix(), Version, "non-prod")
 	}
-	// svr := &Server{
-	// 	Hub:            NewHub(),
-	// 	ProxyOperators: operators,
-	// 	StopCh:         stopCh,
-	// 	Session:        sessionMgr,
-	// 	RespCh:         resch,
-	// 	Cache:          cache,
-	// 	DB:             database,
-	// 	Gateway:        gateway,
-	// 	Log:            logger,
-	// 	Memory:         memory,
-	// 	Targets:        targets,
-	// 	ID:             id,
-	// 	Details: Details{
-	// 		Key:               &aesGCM,
-	// 		FQDN:              *Fqdn,
-	// 		SupportedServices: SupportedServices,
-	// 		Address:           address,
-	// 		StartTime:         time.Now(),
-	// 		Stats:             make(map[string]float64),
-	// 	},
-	// }
+
 	if keyOldHex != "" {
 		logger.Println("Old encryption key detected, will attempt to support decryption with old key")
 		oldKey, err := hex.DecodeString(keyOldHex)
@@ -273,14 +260,11 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 			Help:    "Duration of parse handler requests in milliseconds",
 			Buckets: []float64{100, 500, 1000, 2000, 5000, 10000},
 		},
-		[]string{"status"}, // Define at least one label
+		[]string{"status"},
 	)
 
 	prometheus.MustRegister(svr.ParserDuration)
-
-	// Register it with the default registry
 	prometheus.MustRegister(svr.Gauges)
-	// svr.Gateway.HandleFunc("/pipe", svr.ProxyHandler
 	svr.ID = id
 	svr.ManageCases()
 	SetGlobalHub(svr.Hub)
@@ -290,19 +274,12 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 }
 
 func (s *Server) Encrypt(plaintext string) (string, error) {
-	// 1. Get the cipher from your server struct
 	aesGCM := *s.Details.Key
-
-	// 2. Create a new, unique nonce
 	nonce := make([]byte, aesGCM.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("failed to create nonce: %w", err)
 	}
-
-	// 3. Encrypt the data
 	ciphertext := aesGCM.Seal(nil, nonce, []byte(plaintext), nil)
-
-	// 4. Return as "nonce:ciphertext"
 	return fmt.Sprintf("%x:%x", nonce, ciphertext), nil
 }
 
@@ -467,7 +444,6 @@ func (s *Server) ProcessTransientResponses() {
 	for {
 		select {
 		case resp := <-s.RespCh:
-			// start := time.Now()
 			s.Memory.RLock()
 			r, exists := s.Cache.Responses[resp.ID]
 			var oldData []byte
@@ -489,7 +465,6 @@ func (s *Server) ProcessTransientResponses() {
 				continue
 			}
 			resp.Data = finalData
-			// Preserve the original timestamp if we are merging into an existing record
 			if exists {
 				resp.Time = r.Time
 			}
@@ -497,7 +472,6 @@ func (s *Server) ProcessTransientResponses() {
 			s.Memory.Lock()
 			s.Cache.Responses[resp.ID] = resp
 
-			// Update stats
 			s.Details.Stats[resp.Vendor] += float64(len(resp.Data))
 			s.Details.Stats["vendor_responses"]++
 			s.Memory.Unlock()
@@ -833,6 +807,8 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/view-logs", http.HandlerFunc(s.ValidateSessionToken(s.LogViewHandler)))
 	s.Gateway.HandleFunc("/ws", http.HandlerFunc(s.ValidateSessionToken(s.ServeWs)))
 	s.Gateway.HandleFunc("/history", s.GetStatHistoryHandler)
+	s.Gateway.HandleFunc("/vulnerabilities/feed", s.ValidateSessionToken(s.GetVulnerabilityFeedHandler))
+
 	appDir := http.Dir(*WebApp)
 	s.Gateway.Handle("/app/", http.StripPrefix("/app/", s.ProtectedFileServer(appDir)))
 	if s.Details.FirstUserMode {
@@ -845,8 +821,6 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Details.Stats["vendor_responses"] = 0
 	go s.Hub.Run()
 }
-
-// internal/server.go
 
 func (s *Server) AutomatedThreatScan() {
 	start := time.Now()
@@ -876,7 +850,6 @@ func (s *Server) AutomatedThreatScan() {
 
 			botUser := fmt.Sprintf("%v bot", se.SearchedBy)
 			responseMarker := fmt.Sprintf("[response_id:%s]", r.ID)
-			// throttleWindow := 24 * time.Hour
 
 			existingCases, err := s.DB.SearchCases(se.Value, 0)
 			caseAlreadyExists := false
@@ -951,16 +924,12 @@ func (s *Server) AutomatedThreatScan() {
 	}
 }
 
-// internal/server.go
-
-// CleanupClosedCases finds cases with "Closed" status older than 60 days and deletes them.
 func (s *Server) CleanupClosedCases() {
 	cutoff := time.Now().AddDate(0, 0, -60)
 	limit := 100
 	offset := 0
 
 	for {
-		// Use existing GetCases method to fetch a batch of cases
 		cases, err := s.DB.GetCases(limit, offset, "")
 		if err != nil {
 			s.Log.Printf("ERROR: Failed to fetch cases for cleanup: %v", err)
@@ -972,9 +941,7 @@ func (s *Server) CleanupClosedCases() {
 		}
 
 		for _, c := range cases {
-			// Filter logic: Status must be "Closed" and older than 60 days
 			if c.Status == "Closed" && c.CreatedAt.Before(cutoff) {
-				// Use existing DeleteCase method
 				if err := s.DB.DeleteCase(c.ID); err != nil {
 					s.Log.Printf("ERROR: Failed to delete closed case %s: %v", c.ID, err)
 				} else {
@@ -983,7 +950,6 @@ func (s *Server) CleanupClosedCases() {
 			}
 		}
 
-		// Move to the next batch if necessary
 		if len(cases) < limit {
 			break
 		}
@@ -1032,17 +998,8 @@ func (s *Server) UpdateCharts() {
 }
 
 func LogItemsToArticle(logs []LogItem) string {
-	out := `<div class="scrollbar">
-            <div class="thumb"></div>
-        </div>`
-	templ := `<article class="message is-%s">
-                <div class="message-header">
-                    <p>%s</p>
-                </div>
-                <div class="message-body">
-                    %v
-                </div>
-              </article>`
+	out := `<div class="scrollbar"><div class="thumb"></div></div>`
+	templ := `<article class="message is-%s"><div class="message-header"><p>%s</p></div><div class="message-body">%v</div></article>`
 	for _, log := range logs {
 		var color string
 		if log.Error {
@@ -1056,17 +1013,8 @@ func LogItemsToArticle(logs []LogItem) string {
 }
 
 func LogItemsToPanel(logs []LogItem) string {
-	out := `<div class="scrollbar">
-            <div class="thumb"></div>
-        </div>`
-	templ := `<article class="panel is-%s">
-                <p class="panel-heading">
-                    %s
-                </p>
-                <div class="panel-block">
-                    %v
-                </div>
-              </article>`
+	out := `<div class="scrollbar"><div class="thumb"></div></div>`
+	templ := `<article class="panel is-%s"><p class="panel-heading">%s</p><div class="panel-block">%v</div></article>`
 	for _, log := range logs {
 		var color string
 		if log.Error {
@@ -1149,5 +1097,114 @@ func (s *Server) ManageCases() {
 				s.Log.Println(fmt.Sprintf("Deleted case %s (%s) due to being closed and old\n", c.ID, c.Name))
 			}
 		}
+	}
+}
+
+func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Request) {
+	s.Memory.RLock()
+	feed := s.Cache.VulnerabilityFeed
+	s.Memory.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(feed); err != nil {
+		s.LogError(fmt.Errorf("failed encoding vulnerability feed JSON response: %w", err))
+		http.Error(w, "Internal server error reading telemetry cache", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) PollVulnerabilityFeeds() {
+	s.LogInfo("Beginning background synchronization task for CISA and NIST advisories...")
+
+	var items []VulnerabilityItem
+
+	// --- SECTION A: POLL CISA KEV (Known Exploited Vulnerabilities) ---
+	cisaClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := cisaClient.Get("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json")
+	if err == nil && resp.StatusCode == http.StatusOK {
+		var data struct {
+			Vulnerabilities []struct {
+				CveID             string `json:"cveID"`
+				VulnerabilityName string `json:"vulnerabilityName"`
+				ShortDescription  string `json:"shortDescription"`
+				DateAdded         string `json:"dateAdded"`
+			} `json:"vulnerabilities"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&data); err == nil {
+			// Pull up to 25 latest critical items for the view feed list
+			maxCount := len(data.Vulnerabilities)
+			if maxCount > 25 {
+				maxCount = 25
+			}
+			for i := 0; i < maxCount; i++ {
+				v := data.Vulnerabilities[i]
+				pubTime, _ := time.Parse("2006-01-02", v.DateAdded)
+				items = append(items, VulnerabilityItem{
+					Title:       fmt.Sprintf("%s: %s", v.CveID, v.VulnerabilityName),
+					Description: v.ShortDescription,
+					Source:      "CISA",
+					URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", v.CveID),
+					Published:   pubTime,
+				})
+			}
+		}
+		resp.Body.Close()
+	} else if err != nil {
+		s.LogError(fmt.Errorf("cisa intel feed pull failure: %w", err))
+	}
+
+	// --- SECTION B: POLL NIST NVD (National Vulnerability Database) ---
+	// Fetching from NVD public recent data file endpoint
+	nistClient := &http.Client{Timeout: 10 * time.Second}
+	nResp, err := nistClient.Get("https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json")
+	if err == nil && nResp.StatusCode == http.StatusOK {
+		var nData struct {
+			CVEItems []struct {
+				CVE struct {
+					CVEDataMeta struct {
+						ID string `json:"ID"`
+					} `json:"CVE_data_meta"`
+					Description struct {
+						DescriptionData []struct {
+							Value string `json:"value"`
+						} `json:"description_data"`
+					} `json:"description"`
+				} `json:"cve"`
+				PublishedDate string `json:"publishedDate"`
+			} `json:"CVE_Items"`
+		}
+		if err := json.NewDecoder(nResp.Body).Decode(&nData); err == nil {
+			maxCount := len(nData.CVEItems)
+			if maxCount > 25 {
+				maxCount = 25
+			}
+			for i := 0; i < maxCount; i++ {
+				item := nData.CVEItems[i]
+				desc := "No context provided."
+				if len(item.CVE.Description.DescriptionData) > 0 {
+					desc = item.CVE.Description.DescriptionData[0].Value
+				}
+				pubTime, _ := time.Parse("2006-01-02T15:04Z", item.PublishedDate)
+				items = append(items, VulnerabilityItem{
+					Title:       item.CVE.CVEDataMeta.ID,
+					Description: desc,
+					Source:      "NIST",
+					URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", item.CVE.CVEDataMeta.ID),
+					Published:   pubTime,
+				})
+			}
+		}
+		nResp.Body.Close()
+	} else if err != nil {
+		s.LogError(fmt.Errorf("nist nvd telemetry feed pull failure: %w", err))
+	}
+
+	// Save collected payloads to shared lock cache
+	if len(items) > 0 {
+		s.Memory.Lock()
+		s.Cache.VulnerabilityFeed = items
+		s.Memory.Unlock()
+		s.LogInfo(fmt.Sprintf("Vulnerability cache successfully rebuilt. Captured %d active advisories.", len(items)))
+	} else {
+		s.LogError(errors.New("warning: synchronization pass finished with empty datasets. checking upstream client restrictions"))
 	}
 }
