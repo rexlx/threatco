@@ -44,6 +44,25 @@ export class FeedController {
             // Tag colors depending on threat Intel source
             const tagColor = item.source === 'CISA' ? 'is-danger' : 'is-link';
             
+            // Defensively check for arrays to prevent rendering pipeline breakage
+            let iocHtml = '';
+            if (item.iocs && Array.isArray(item.iocs) && item.iocs.length > 0) {
+                iocHtml = `
+                    <div class="ioc-enrichment-box mt-3 p-3 has-background-dark style-radius" style="border-left: 3px solid #ffdd57; border-radius: 4px;">
+                        <strong class="is-size-7 has-text-warning uppercase tracking-wider block mb-2">Correlated MISP Indicators:</strong>
+                        <div class="tags">
+                            ${item.iocs.map(ioc => `<span class="tag is-dark has-text-info is-family-code">${ioc}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                iocHtml = `
+                    <div class="mt-2 is-size-7 has-text-grey-light is-italic">
+                        No known open-source technical indicators associated in current pool.
+                    </div>
+                `;
+            }
+            
             return `
                 <div class="box has-background-custom mb-3">
                     <div class="columns is-mobile is-vcentered">
@@ -55,7 +74,10 @@ export class FeedController {
                                 </a>
                             </h4>
                             <p class="has-text-white-ter is-size-6">${item.description || 'No description provided.'}</p>
-                            ${item.published ? `<p class="is-size-7 has-text-grey-light mt-1">Cached/Published: ${new Date(item.published).toLocaleString()}</p>` : ''}
+                            
+                            ${iocHtml}
+                            
+                            ${item.published ? `<p class="is-size-7 has-text-grey-light mt-2">Cached/Published: ${new Date(item.published).toLocaleString()}</p>` : ''}
                         </div>
                         <div class="column is-narrow">
                             <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="button is-small is-info is-outlined">

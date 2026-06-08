@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -1604,6 +1605,132 @@ func (s *Server) executeSingleProxy(req ProxyRequest, svcName, email string, pro
 		}{se.Info, se.Value, se.ThreatLevelID})
 		promptReq.Mu.Unlock()
 	}
+}
+
+// FetchMispIOCsByCVE targets the attributes/restSearch endpoint to extract specific
+// technical indicators tied to the requested CVE, bypassing over-generalized event filters.
+func (s *Server) FetchMispIOCsByCVE(ctx context.Context, cveID string) ([]byte, error) {
+	s.Memory.RLock()
+	mispTarget, exists := s.Targets["misp"]
+	s.Memory.RUnlock()
+
+	if !exists || mispTarget == nil {
+		return nil, fmt.Errorf("misp target service is not initialized or configured in ProxyOperators/Targets")
+	}
+
+	// Revert to a clean, highly scoped attribute search constraint.
+	// We pass the CVE value directly to match on indicators.
+	searchPayload := map[string]interface{}{
+		"returnFormat":   "json",
+		"value":          cveID,
+		"includeEventId": true,
+	}
+
+	jsonBytes, err := json.Marshal(searchPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal misp attribute search payload: %w", err)
+	}
+
+	// Route strictly back to attributes/restSearch as intended
+	reqUrl := fmt.Sprintf("%s/attributes/restSearch", strings.TrimSuffix(mispTarget.GetURL(), "/"))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", reqUrl, bytes.NewReader(jsonBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create misp api request: %w", err)
+	}
+
+	// req.Header.Set("Accept", "application/json")
+	// req.Header.Set("Content-Type", "application/json")
+
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("misp query context aborted before transport execution: %w", ctx.Err())
+	}
+
+	// Dispatch request using the underlying rate limiter pipeline
+	resp, err := mispTarget.Do("", req)
+	if err != nil {
+		fmt.Printf("Error executing MISP CVE search request for %s: %v\n", cveID, err)
+		return nil, fmt.Errorf("misp request execution failure: %w", err)
+	}
+
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("misp returned empty response for CVE search")
+	}
+
+	// Verify if the upstream server rejected our syntax or threw an operational error
+	if strings.Contains(string(resp), `"An Internal Error Has Occurred."`) {
+		fmt.Printf("MISP CVE search raw response error payload detected: %s\n", string(resp))
+		return nil, fmt.Errorf("upstream misp server internal tracking error 500")
+	}
+
+	// Return the flat attribute raw payload data block directly so that
+	// ExtractValuesFromMispResponse handles the extraction pipeline cleanly.
+	return resp, nil
+}
+
+// normalizeEventToAttributes extracts flat technical indicators from nested MISP Event objects
+func (s *Server) normalizeEventToAttributes(eventPayload []byte) []byte {
+	// Structural type matching MISP's complex multi-event wrapper payload layout
+	var eventData struct {
+		Response []struct {
+			Event struct {
+				Attribute []struct {
+					Value string `json:"value"`
+				} `json:"Attribute"`
+			} `json:"Event"`
+		} `json:"response"`
+	}
+
+	if err := json.Unmarshal(eventPayload, &eventData); err != nil {
+		// Return original raw string context intact if parsing fails
+		return eventPayload
+	}
+
+	// Re-wrap extracted data fields to mirror the flat structure expected by the backend parser
+	var normalizedResponse struct {
+		Response struct {
+			Attribute []map[string]string `json:"Attribute"`
+		} `json:"response"`
+	}
+	normalizedResponse.Response.Attribute = make([]map[string]string, 0)
+
+	for _, res := range eventData.Response {
+		for _, attr := range res.Event.Attribute {
+			if attr.Value != "" {
+				item := map[string]string{"value": attr.Value}
+				normalizedResponse.Response.Attribute = append(normalizedResponse.Response.Attribute, item)
+			}
+		}
+	}
+
+	finalBytes, err := json.Marshal(normalizedResponse)
+	if err != nil {
+		return eventPayload
+	}
+	return finalBytes
+}
+
+// Helper to parse out the value fields from MISP restSearch attribute response arrays
+func ExtractValuesFromMispResponse(mispPayload []byte) []string {
+	var results []string
+
+	// Quick type structure to handle standard MISP restSearch Attribute outputs
+	var responseData struct {
+		Response struct {
+			Attribute []struct {
+				Value string `json:"value"`
+			} `json:"Attribute"`
+		} `json:"response"`
+	}
+
+	if err := json.Unmarshal(mispPayload, &responseData); err == nil {
+		for _, attr := range responseData.Response.Attribute {
+			if attr.Value != "" {
+				results = append(results, attr.Value)
+			}
+		}
+	}
+	return results
 }
 
 type PromptRequest = optional.LlmToolsPromptRequest

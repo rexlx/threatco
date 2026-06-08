@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -103,6 +104,7 @@ type VulnerabilityItem struct {
 	Source      string    `json:"source"`
 	URL         string    `json:"url"`
 	Published   time.Time `json:"published"`
+	IOCs        []string  `json:"iocs"`
 }
 
 type Coord struct {
@@ -1101,10 +1103,11 @@ func (s *Server) ManageCases() {
 }
 
 func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Received request for vulnerability feed")
 	s.Memory.RLock()
 	feed := s.Cache.VulnerabilityFeed
 	s.Memory.RUnlock()
-
+	fmt.Println("Serving vulnerability feed with", len(feed), "items")
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(feed); err != nil {
 		s.LogError(fmt.Errorf("failed encoding vulnerability feed JSON response: %w", err))
@@ -1112,99 +1115,447 @@ func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// PollVulnerabilityFeeds orchestrates background collection of CISA and CIRCL advisories,
+// concurrently enriches ALL items via MISP, sorts them chronologically, and updates the cache.
 func (s *Server) PollVulnerabilityFeeds() {
-	s.LogInfo("Beginning background synchronization task for CISA and NIST advisories...")
+	fmt.Println("Beginning background synchronization task for CISA and CIRCL advisories...")
 
+	var rawItems []VulnerabilityItem
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Phase 1: Retrieve raw data from external feeds concurrently
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		cisaItems := s.pollCisaFeedRaw()
+
+		mu.Lock()
+		rawItems = append(rawItems, cisaItems...)
+		mu.Unlock()
+	}()
+
+	go func() {
+		defer wg.Done()
+		circlItems := s.pollCirclFeedRaw()
+
+		mu.Lock()
+		rawItems = append(rawItems, circlItems...)
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	if len(rawItems) == 0 {
+		s.LogError(errors.New("warning: synchronization pass finished with empty raw datasets from both feeds"))
+		return
+	}
+
+	// Phase 2: Perform concurrent MISP indicator enrichment across ALL collected items uniformly
+	fmt.Println(fmt.Sprintf("Raw collection complete. Dispatching concurrent MISP lookups for %d target CVEs...", len(rawItems)))
+
+	var enrichedItems []VulnerabilityItem
+	var enrichWg sync.WaitGroup
+	var enrichMu sync.Mutex
+
+	for _, item := range rawItems {
+		enrichWg.Add(1)
+		go func(vItem VulnerabilityItem) {
+			defer enrichWg.Done()
+
+			// Extract clean CVE identification string from the title block
+			// Handles parsing either raw IDs ("CVE-2026-1234") or descriptive headers ("CVE-2026-1234: Name")
+			cveID := vItem.Title
+			if strings.Contains(cveID, ":") {
+				cveID = strings.TrimSpace(strings.Split(cveID, ":")[0])
+			}
+
+			var extractedIOCs []string
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
+			cancel()
+
+			if err != nil {
+				s.Log.Printf("[Enrichment Engine] Skipping MISP lookup for %s: %v", cveID, err)
+				extractedIOCs = make([]string, 0)
+			} else {
+				extractedIOCs = ExtractValuesFromMispResponse(mispPayload)
+				fmt.Println(fmt.Sprintf("[Enrichment Engine] Successfully enriched %s with %d MISP technical indicators", cveID, len(extractedIOCs)))
+			}
+
+			vItem.IOCs = extractedIOCs
+
+			enrichMu.Lock()
+			enrichedItems = append(enrichedItems, vItem)
+			enrichMu.Unlock()
+		}(item)
+	}
+
+	enrichWg.Wait()
+
+	// Phase 3: Global chronological sorting (Most recent / newest timestamps on top)
+	sort.Slice(enrichedItems, func(i, j int) bool {
+		return enrichedItems[i].Published.After(enrichedItems[j].Published)
+	})
+
+	// Phase 4: Safe commit to global memory state cache
+	s.Memory.Lock()
+	s.Cache.VulnerabilityFeed = enrichedItems
+	s.Memory.Unlock()
+
+	fmt.Println(fmt.Sprintf("Vulnerability cache successfully rebuilt and sorted. Saved %d verified records.", len(enrichedItems)))
+}
+
+// pollCisaFeedRaw fetches the latest advisories from the CISA KEV catalog without enrichment
+func (s *Server) pollCisaFeedRaw() []VulnerabilityItem {
 	var items []VulnerabilityItem
 
-	// --- SECTION A: POLL CISA KEV (Known Exploited Vulnerabilities) ---
 	cisaClient := &http.Client{Timeout: 10 * time.Second}
 	resp, err := cisaClient.Get("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json")
-	if err == nil && resp.StatusCode == http.StatusOK {
-		var data struct {
-			Vulnerabilities []struct {
-				CveID             string `json:"cveID"`
-				VulnerabilityName string `json:"vulnerabilityName"`
-				ShortDescription  string `json:"shortDescription"`
-				DateAdded         string `json:"dateAdded"`
-			} `json:"vulnerabilities"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&data); err == nil {
-			// Pull up to 25 latest critical items for the view feed list
-			maxCount := len(data.Vulnerabilities)
-			if maxCount > 25 {
-				maxCount = 25
-			}
-			for i := 0; i < maxCount; i++ {
-				v := data.Vulnerabilities[i]
-				pubTime, _ := time.Parse("2006-01-02", v.DateAdded)
-				items = append(items, VulnerabilityItem{
-					Title:       fmt.Sprintf("%s: %s", v.CveID, v.VulnerabilityName),
-					Description: v.ShortDescription,
-					Source:      "CISA",
-					URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", v.CveID),
-					Published:   pubTime,
-				})
-			}
-		}
-		resp.Body.Close()
-	} else if err != nil {
+	if err != nil {
 		s.LogError(fmt.Errorf("cisa intel feed pull failure: %w", err))
+		return items
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.LogError(fmt.Errorf("cisa intel feed returned non-200 status: %d", resp.StatusCode))
+		return items
 	}
 
-	// --- SECTION B: POLL NIST NVD (National Vulnerability Database) ---
-	// Fetching from NVD public recent data file endpoint
-	nistClient := &http.Client{Timeout: 10 * time.Second}
-	nResp, err := nistClient.Get("https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json")
-	if err == nil && nResp.StatusCode == http.StatusOK {
-		var nData struct {
-			CVEItems []struct {
-				CVE struct {
-					CVEDataMeta struct {
-						ID string `json:"ID"`
-					} `json:"CVE_data_meta"`
-					Description struct {
-						DescriptionData []struct {
-							Value string `json:"value"`
-						} `json:"description_data"`
-					} `json:"description"`
-				} `json:"cve"`
-				PublishedDate string `json:"publishedDate"`
-			} `json:"CVE_Items"`
+	var data struct {
+		Vulnerabilities []struct {
+			CveID             string `json:"cveID"`
+			VulnerabilityName string `json:"vulnerabilityName"`
+			ShortDescription  string `json:"shortDescription"`
+			DateAdded         string `json:"dateAdded"`
+		} `json:"vulnerabilities"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		s.LogError(fmt.Errorf("failed to decode CISA json stream: %w", err))
+		return items
+	}
+
+	maxCount := len(data.Vulnerabilities)
+	if maxCount > 25 {
+		maxCount = 25
+	}
+
+	for i := 0; i < maxCount; i++ {
+		v := data.Vulnerabilities[i]
+		pubTime, _ := time.Parse("2006-01-02", v.DateAdded)
+
+		items = append(items, VulnerabilityItem{
+			Title:       fmt.Sprintf("%s: %s", v.CveID, v.VulnerabilityName),
+			Description: v.ShortDescription,
+			Source:      "CISA",
+			URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", v.CveID),
+			Published:   pubTime,
+		})
+	}
+
+	return items
+}
+
+// pollCirclFeedRaw fetches the latest advisories from the CIRCL CVE JSON 5.x feed without enrichment
+func (s *Server) pollCirclFeedRaw() []VulnerabilityItem {
+	var items []VulnerabilityItem
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	circlURL := "https://vulnerability.circl.lu/api/last"
+
+	req, err := http.NewRequest("GET", circlURL, nil)
+	if err != nil {
+		s.LogError(fmt.Errorf("failed to create circl api request object: %w", err))
+		return items
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ThreatCo/2.0 Threat Intel Sync Component")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.LogError(fmt.Errorf("circl vulnerability intel feed pull failure: %w", err))
+		return items
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.LogError(fmt.Errorf("circl vulnerability feed returned non-200 status: %d", resp.StatusCode))
+		return items
+	}
+
+	var circlData []struct {
+		CveMetadata struct {
+			CveID         string `json:"cveId"`
+			DatePublished string `json:"datePublished"`
+			DateUpdated   string `json:"dateUpdated"`
+		} `json:"cveMetadata"`
+		Containers struct {
+			Cna struct {
+				Descriptions []struct {
+					Lang  string `json:"lang"`
+					Value string `json:"value"`
+				} `json:"descriptions"`
+			} `json:"cna"`
+		} `json:"containers"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&circlData); err != nil {
+		s.LogError(fmt.Errorf("failed to decode nested circl json telemetry stream: %w", err))
+		return items
+	}
+
+	maxCount := len(circlData)
+	if maxCount > 25 {
+		maxCount = 25
+	}
+
+	for i := 0; i < maxCount; i++ {
+		entry := circlData[i]
+		cveID := entry.CveMetadata.CveID
+		if cveID == "" {
+			continue
 		}
-		if err := json.NewDecoder(nResp.Body).Decode(&nData); err == nil {
-			maxCount := len(nData.CVEItems)
-			if maxCount > 25 {
-				maxCount = 25
-			}
-			for i := 0; i < maxCount; i++ {
-				item := nData.CVEItems[i]
-				desc := "No context provided."
-				if len(item.CVE.Description.DescriptionData) > 0 {
-					desc = item.CVE.Description.DescriptionData[0].Value
+
+		desc := ""
+		if len(entry.Containers.Cna.Descriptions) > 0 {
+			for _, d := range entry.Containers.Cna.Descriptions {
+				if d.Lang == "en" {
+					desc = d.Value
+					break
 				}
-				pubTime, _ := time.Parse("2006-01-02T15:04Z", item.PublishedDate)
-				items = append(items, VulnerabilityItem{
-					Title:       item.CVE.CVEDataMeta.ID,
-					Description: desc,
-					Source:      "NIST",
-					URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", item.CVE.CVEDataMeta.ID),
-					Published:   pubTime,
-				})
+			}
+			if desc == "" {
+				desc = entry.Containers.Cna.Descriptions[0].Value
 			}
 		}
-		nResp.Body.Close()
-	} else if err != nil {
-		s.LogError(fmt.Errorf("nist nvd telemetry feed pull failure: %w", err))
+
+		if desc == "" {
+			desc = "No summary or structural context provided by advisory source."
+		}
+
+		var pubTime time.Time
+		pubStr := entry.CveMetadata.DatePublished
+		if pubStr == "" {
+			pubStr = entry.CveMetadata.DateUpdated
+		}
+
+		if pubStr != "" {
+			pubTime, _ = time.Parse(time.RFC3339, pubStr)
+		}
+		if pubTime.IsZero() {
+			pubTime = time.Now()
+		}
+
+		items = append(items, VulnerabilityItem{
+			Title:       strings.ToUpper(cveID),
+			Description: desc,
+			Source:      "NIST/CIRCL",
+			URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", strings.ToUpper(cveID)),
+			Published:   pubTime,
+		})
 	}
 
-	// Save collected payloads to shared lock cache
-	if len(items) > 0 {
-		s.Memory.Lock()
-		s.Cache.VulnerabilityFeed = items
-		s.Memory.Unlock()
-		s.LogInfo(fmt.Sprintf("Vulnerability cache successfully rebuilt. Captured %d active advisories.", len(items)))
-	} else {
-		s.LogError(errors.New("warning: synchronization pass finished with empty datasets. checking upstream client restrictions"))
+	return items
+}
+
+// pollCisaFeed handles fetching and concurrent MISP enrichment for the CISA KEV feed
+func (s *Server) pollCisaFeed() []VulnerabilityItem {
+	var items []VulnerabilityItem
+
+	cisaClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := cisaClient.Get("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json")
+	if err != nil {
+		fmt.Printf("CISA intel feed pull failure: %v\n", err)
+		return items
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("CISA intel feed returned non-200 status: %d\n", resp.StatusCode)
+		return items
+	}
+
+	var data struct {
+		Vulnerabilities []struct {
+			CveID             string `json:"cveID"`
+			VulnerabilityName string `json:"vulnerabilityName"`
+			ShortDescription  string `json:"shortDescription"`
+			DateAdded         string `json:"dateAdded"`
+		} `json:"vulnerabilities"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		fmt.Printf("Failed to decode CISA json stream: %v\n", err)
+		return items
+	}
+
+	maxCount := len(data.Vulnerabilities)
+	if maxCount > 25 {
+		maxCount = 25
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := 0; i < maxCount; i++ {
+		wg.Add(1)
+		go func(v struct {
+			CveID             string `json:"cveID"`
+			VulnerabilityName string `json:"vulnerabilityName"`
+			ShortDescription  string `json:"shortDescription"`
+			DateAdded         string `json:"dateAdded"`
+		}) {
+			defer wg.Done()
+
+			pubTime, _ := time.Parse("2006-01-02", v.DateAdded)
+			fmt.Printf("Processing CISA vulnerability %s, querying matching MISP attributes...\n", v.CveID)
+
+			var extractedIOCs []string
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			mispPayload, err := s.FetchMispIOCsByCVE(ctx, v.CveID)
+			cancel()
+
+			if err != nil {
+				fmt.Printf("Skipping MISP intelligence enrichment for %s: %v\n", v.CveID, err)
+				extractedIOCs = make([]string, 0)
+			} else {
+				extractedIOCs = ExtractValuesFromMispResponse(mispPayload)
+				fmt.Printf("Successfully enriched %s with %d MISP technical indicators\n", v.CveID, len(extractedIOCs))
+			}
+
+			item := VulnerabilityItem{
+				Title:       fmt.Sprintf("%s: %s", v.CveID, v.VulnerabilityName),
+				Description: v.ShortDescription,
+				Source:      "CISA",
+				URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", v.CveID),
+				Published:   pubTime,
+				IOCs:        extractedIOCs,
+			}
+
+			mu.Lock()
+			items = append(items, item)
+			mu.Unlock()
+		}(data.Vulnerabilities[i])
+	}
+
+	wg.Wait()
+	return items
+}
+
+// pollNistFeed handles fetching open-source alerts using CIRCL's open vulnerability database,
+// parsing the dense nested CVE JSON 5.5 metadata tree structure safely into VulnerabilityItems.
+func (s *Server) pollNistFeed() []VulnerabilityItem {
+	var items []VulnerabilityItem
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	circlURL := "https://vulnerability.circl.lu/api/last"
+
+	req, err := http.NewRequest("GET", circlURL, nil)
+	if err != nil {
+		s.LogError(fmt.Errorf("failed to create circl api request object: %w", err))
+		return items
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ThreatCo/2.0 Threat Intel Sync Component")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.LogError(fmt.Errorf("circl vulnerability intel feed pull failure: %w", err))
+		return items
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.LogError(fmt.Errorf("circl vulnerability feed returned non-200 status: %d", resp.StatusCode))
+		return items
+	}
+
+	// Unmarshal into an anonymous structural layout reflecting the official CVE v5 schema observed in ko.json
+	var circlData []struct {
+		CveMetadata struct {
+			CveID         string `json:"cveId"`
+			DatePublished string `json:"datePublished"`
+			DateUpdated   string `json:"dateUpdated"`
+		} `json:"cveMetadata"`
+		Containers struct {
+			Cna struct {
+				Descriptions []struct {
+					Lang  string `json:"lang"`
+					Value string `json:"value"`
+				} `json:"descriptions"`
+			} `json:"cna"`
+		} `json:"containers"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&circlData); err != nil {
+		s.LogError(fmt.Errorf("failed to decode nested circl json telemetry stream: %w", err))
+		return items
+	}
+
+	maxCount := len(circlData)
+	if maxCount > 25 {
+		maxCount = 25
+	}
+
+	for i := 0; i < maxCount; i++ {
+		entry := circlData[i]
+
+		// Unpack vulnerability identification token string
+		cveID := entry.CveMetadata.CveID
+		if cveID == "" {
+			continue
+		}
+
+		// Traverse down into the CNA container layer to pull out the English value description text block
+		desc := ""
+		if len(entry.Containers.Cna.Descriptions) > 0 {
+			// Prefer English or default to first index availability safely
+			for _, d := range entry.Containers.Cna.Descriptions {
+				if d.Lang == "en" {
+					desc = d.Value
+					break
+				}
+			}
+			if desc == "" {
+				desc = entry.Containers.Cna.Descriptions[0].Value
+			}
+		}
+
+		if desc == "" {
+			desc = "No summary or structural context provided by advisory source."
+		}
+
+		// Resolve time values safely
+		var pubTime time.Time
+		pubStr := entry.CveMetadata.DatePublished
+		if pubStr == "" {
+			pubStr = entry.CveMetadata.DateUpdated
+		}
+
+		if pubStr != "" {
+			// Handle standard NVD ISO fractional format strings
+			pubTime, _ = time.Parse(time.RFC3339, pubStr)
+		}
+		if pubTime.IsZero() {
+			pubTime = time.Now()
+		}
+
+		vItem := VulnerabilityItem{
+			Title:       strings.ToUpper(cveID),
+			Description: desc,
+			Source:      "NIST/CIRCL",
+			URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", strings.ToUpper(cveID)),
+			Published:   pubTime,
+			IOCs:        make([]string, 0),
+		}
+
+		items = append(items, vItem)
+	}
+
+	return items
 }
