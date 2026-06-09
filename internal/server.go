@@ -1116,9 +1116,9 @@ func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Requ
 }
 
 // PollVulnerabilityFeeds orchestrates background collection of CISA and CIRCL advisories,
-// concurrently enriches ALL items via MISP, sorts them chronologically, and updates the cache.
+// concurrently enriches ALL items via MISP & AlienVault OTX, sorts them chronologically, and updates the cache.
 func (s *Server) PollVulnerabilityFeeds() {
-	fmt.Println("Beginning background synchronization task for CISA and CIRCL advisories...")
+	s.LogInfo("Beginning background synchronization task for CISA and CIRCL advisories...")
 
 	var rawItems []VulnerabilityItem
 	var mu sync.Mutex
@@ -1152,8 +1152,8 @@ func (s *Server) PollVulnerabilityFeeds() {
 		return
 	}
 
-	// Phase 2: Perform concurrent MISP indicator enrichment across ALL collected items uniformly
-	fmt.Println(fmt.Sprintf("Raw collection complete. Dispatching concurrent MISP lookups for %d target CVEs...", len(rawItems)))
+	// Phase 2: Perform concurrent multi-source indicator enrichment across ALL collected items uniformly
+	s.LogInfo(fmt.Sprintf("Raw collection complete. Dispatching concurrent MISP and OTX lookups for %d target CVEs...", len(rawItems)))
 
 	var enrichedItems []VulnerabilityItem
 	var enrichWg sync.WaitGroup
@@ -1165,26 +1165,52 @@ func (s *Server) PollVulnerabilityFeeds() {
 			defer enrichWg.Done()
 
 			// Extract clean CVE identification string from the title block
-			// Handles parsing either raw IDs ("CVE-2026-1234") or descriptive headers ("CVE-2026-1234: Name")
 			cveID := vItem.Title
 			if strings.Contains(cveID, ":") {
 				cveID = strings.TrimSpace(strings.Split(cveID, ":")[0])
 			}
 
-			var extractedIOCs []string
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
-			cancel()
+			// Local lookup indicator tracking set to ensure string uniqueness
+			uniqueIOCs := make(map[string]bool)
+			var combinedIOCs []string
 
-			if err != nil {
-				s.Log.Printf("[Enrichment Engine] Skipping MISP lookup for %s: %v", cveID, err)
-				extractedIOCs = make([]string, 0)
-			} else {
-				extractedIOCs = ExtractValuesFromMispResponse(mispPayload)
-				fmt.Println(fmt.Sprintf("[Enrichment Engine] Successfully enriched %s with %d MISP technical indicators", cveID, len(extractedIOCs)))
+			// We launch lookup tasks inside internal execution contexts
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+
+			// 1. Primary Check: Local/Enterprise MISP Instance Lookup
+			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
+			if err == nil && len(mispPayload) > 0 {
+				mispIOCs := ExtractValuesFromMispResponse(mispPayload)
+				for _, ioc := range mispIOCs {
+					trimmed := strings.TrimSpace(ioc)
+					if trimmed != "" && !uniqueIOCs[trimmed] {
+						uniqueIOCs[trimmed] = true
+						combinedIOCs = append(combinedIOCs, trimmed)
+					}
+				}
 			}
 
-			vItem.IOCs = extractedIOCs
+			// 2. Bolstering Check: Anonymous Public AlienVault OTX Pulse Lookup
+			otxPayload, err := s.FetchPublicOtxIOCsByCVE(ctx, cveID)
+			if err == nil && len(otxPayload) > 0 {
+				otxIOCs := s.extractValuesFromOtxResponse(otxPayload)
+				for _, ioc := range otxIOCs {
+					trimmed := strings.TrimSpace(ioc)
+					if trimmed != "" && !uniqueIOCs[trimmed] {
+						uniqueIOCs[trimmed] = true
+						combinedIOCs = append(combinedIOCs, trimmed)
+					}
+				}
+			}
+
+			// Assign compiled indicators (or an empty array for UI rendering safety)
+			if len(combinedIOCs) > 0 {
+				vItem.IOCs = combinedIOCs
+				s.LogInfo(fmt.Sprintf("[Enrichment Engine] Successfully enriched %s with %d combined technical indicators", cveID, len(combinedIOCs)))
+			} else {
+				vItem.IOCs = make([]string, 0)
+			}
 
 			enrichMu.Lock()
 			enrichedItems = append(enrichedItems, vItem)
@@ -1204,7 +1230,63 @@ func (s *Server) PollVulnerabilityFeeds() {
 	s.Cache.VulnerabilityFeed = enrichedItems
 	s.Memory.Unlock()
 
-	fmt.Println(fmt.Sprintf("Vulnerability cache successfully rebuilt and sorted. Saved %d verified records.", len(enrichedItems)))
+	s.LogInfo(fmt.Sprintf("Vulnerability cache successfully rebuilt and sorted. Saved %d verified records.", len(enrichedItems)))
+}
+
+// FetchPublicOtxIOCsByCVE executes a keyless public lookup to capture open community pulse indicators tied to a CVE
+func (s *Server) FetchPublicOtxIOCsByCVE(ctx context.Context, cveID string) ([]byte, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// OTX exposes a public route map containing indicator groupings tagged directly by CVE strings
+	url := fmt.Sprintf("https://otx.alienvault.com/api/v1/pulses/cve/%s", strings.ToUpper(cveID))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ThreatCo/2.0 Cyber Threat Telemetry Sync Component")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("public otx api returned status code: %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+// extractValuesFromOtxResponse traverses OTX community response envelopes to harvest indicator values
+func (s *Server) extractValuesFromOtxResponse(otxPayload []byte) []string {
+	var indicators []string
+
+	// Target struct matching AlienVault's public pulses schema payload array layout
+	var schema struct {
+		Results []struct {
+			Indicators []struct {
+				Indicator string `json:"indicator"`
+			} `json:"indicators"`
+		} `json:"results"`
+	}
+
+	if err := json.Unmarshal(otxPayload, &schema); err != nil {
+		return indicators
+	}
+
+	for _, result := range schema.Results {
+		for _, ind := range result.Indicators {
+			if ind.Indicator != "" {
+				indicators = append(indicators, ind.Indicator)
+			}
+		}
+	}
+
+	return indicators
 }
 
 // pollCisaFeedRaw fetches the latest advisories from the CISA KEV catalog without enrichment
