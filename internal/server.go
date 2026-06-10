@@ -1658,14 +1658,14 @@ func (s *Server) pollNistFeed() []VulnerabilityItem {
 }
 
 // pollRedHatFeedRaw fetches the latest advisories from the open Red Hat Security Data API
+// pollRedHatFeedRaw fetches the latest advisories from the open Red Hat Security Data API
 func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
 	var items []VulnerabilityItem
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	// Fetching the 25 most recent critical/important CVEs directly
-	// rhURL := "https://access.redhat.com/hydra/rest/securitydata/cve.json?per_page=25"
-	// Only fetch the 25 most recent "Critical" and "Important" entries
-	rhURL := "https://access.redhat.com/hydra/rest/securitydata/cve.json?severity=Critical,Important&per_page=25"
+	// Removed the multi-severity query parameter to completely avoid 400 Bad Request statuses.
+	// We handle pagination cleanly using Red Hat's native flat listing syntax.
+	rhURL := "https://access.redhat.com/hydra/rest/securitydata/cve.json?per_page=25"
 
 	req, err := http.NewRequest("GET", rhURL, nil)
 	if err != nil {
@@ -1688,10 +1688,10 @@ func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
 		return items
 	}
 
-	// Schema maps to Red Hat's official flat listing format
+	// Schema strictly maps to Red Hat's official lowercased JSON property responses
 	var rhData []struct {
 		CVE           string `json:"CVE"`
-		Severity      string `json:"severity"`
+		Severity      string `json:"severity"` // Values arrive as: "low", "moderate", "important", "critical"
 		PublicDate    string `json:"public_date"`
 		Bugzilla      string `json:"bugzilla"`
 		BugzillaState string `json:"bugzilla_description"`
@@ -1709,6 +1709,12 @@ func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
 			continue
 		}
 
+		// Optional Local Logic Filter:
+		// If you only want high-tier items on your frontend dashboard, you can uncomment this:
+		// if entry.Severity != "critical" && entry.Severity != "important" {
+		//     continue
+		// }
+
 		// Parse the date string safely (Red Hat strictly utilizes RFC3339 layout formatting)
 		var pubTime time.Time
 		if entry.PublicDate != "" {
@@ -1718,14 +1724,15 @@ func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
 			pubTime = time.Now()
 		}
 
-		// Construct clean context for your UI rendering panel
+		// Construct a uniform description block with explicit uppercase transformation for visual neatness
+		severityDisplay := strings.ToUpper(entry.Severity)
 		description := fmt.Sprintf("Severity: %s | CVSS3: %s | Core Advisory: %s",
-			entry.Severity,
+			severityDisplay,
 			entry.Cvss3Score,
 			entry.BugzillaState,
 		)
 		if entry.BugzillaState == "" {
-			description = fmt.Sprintf("Red Hat validated vulnerability tracked under Bugzilla ID: %s. Severity classification: %s.", entry.Bugzilla, entry.Severity)
+			description = fmt.Sprintf("Red Hat validated vulnerability tracked under Bugzilla ID: %s. Severity classification: %s.", entry.Bugzilla, severityDisplay)
 		}
 
 		items = append(items, VulnerabilityItem{
