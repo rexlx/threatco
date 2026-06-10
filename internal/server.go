@@ -1138,10 +1138,10 @@ func (s *Server) PollVulnerabilityFeeds() {
 
 	go func() {
 		defer wg.Done()
-		circlItems := s.pollCirclFeedRaw()
+		redHatItems := s.pollRedHatFeedRaw()
 
 		mu.Lock()
-		rawItems = append(rawItems, circlItems...)
+		rawItems = append(rawItems, redHatItems...)
 		mu.Unlock()
 	}()
 
@@ -1342,6 +1342,7 @@ func (s *Server) pollCisaFeedRaw() []VulnerabilityItem {
 }
 
 // pollCirclFeedRaw fetches the latest advisories from the CIRCL CVE JSON 5.x feed without enrichment
+// pollCirclFeedRaw fetches the latest advisories from the CIRCL CVE JSON 5.x feed without enrichment
 func (s *Server) pollCirclFeedRaw() []VulnerabilityItem {
 	var items []VulnerabilityItem
 
@@ -1426,8 +1427,22 @@ func (s *Server) pollCirclFeedRaw() []VulnerabilityItem {
 		}
 
 		if pubStr != "" {
-			pubTime, _ = time.Parse(time.RFC3339, pubStr)
+			var parseErr error
+			// Attempt Layout 1: Strict RFC3339
+			pubTime, parseErr = time.Parse(time.RFC3339, pubStr)
+			if parseErr != nil {
+				// Fallback Layout 2: ISO fractional with millisecond precision frequently used by document APIs
+				pubTime, parseErr = time.Parse("2006-01-02T15:04:05.000Z", pubStr)
+				if parseErr != nil {
+					// Fallback Layout 3: Standard space-separated datetime string
+					pubTime, parseErr = time.Parse("2006-01-02 15:04:05", pubStr)
+					if parseErr != nil {
+						s.LogInfo(fmt.Errorf("[CIRCL Sync Warning] Unable to parse timestamp '%s' for %s: %w", pubStr, cveID, parseErr).Error())
+					}
+				}
+			}
 		}
+
 		if pubTime.IsZero() {
 			pubTime = time.Now()
 		}
@@ -1637,6 +1652,90 @@ func (s *Server) pollNistFeed() []VulnerabilityItem {
 		}
 
 		items = append(items, vItem)
+	}
+
+	return items
+}
+
+// pollRedHatFeedRaw fetches the latest advisories from the open Red Hat Security Data API
+func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
+	var items []VulnerabilityItem
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	// Fetching the 25 most recent critical/important CVEs directly
+	// rhURL := "https://access.redhat.com/hydra/rest/securitydata/cve.json?per_page=25"
+	// Only fetch the 25 most recent "Critical" and "Important" entries
+	rhURL := "https://access.redhat.com/hydra/rest/securitydata/cve.json?severity=Critical,Important&per_page=25"
+
+	req, err := http.NewRequest("GET", rhURL, nil)
+	if err != nil {
+		s.LogError(fmt.Errorf("failed to create redhat api request object: %w", err))
+		return items
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ThreatCo/2.0 Threat Intel Sync Component")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.LogError(fmt.Errorf("redhat vulnerability intel feed pull failure: %w", err))
+		return items
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.LogError(fmt.Errorf("redhat vulnerability feed returned non-200 status: %d", resp.StatusCode))
+		return items
+	}
+
+	// Schema maps to Red Hat's official flat listing format
+	var rhData []struct {
+		CVE           string `json:"CVE"`
+		Severity      string `json:"severity"`
+		PublicDate    string `json:"public_date"`
+		Bugzilla      string `json:"bugzilla"`
+		BugzillaState string `json:"bugzilla_description"`
+		ResourceURL   string `json:"resource_url"`
+		Cvss3Score    string `json:"cvss3_score"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&rhData); err != nil {
+		s.LogError(fmt.Errorf("failed to decode flat redhat json data stream: %w", err))
+		return items
+	}
+
+	for _, entry := range rhData {
+		if entry.CVE == "" {
+			continue
+		}
+
+		// Parse the date string safely (Red Hat strictly utilizes RFC3339 layout formatting)
+		var pubTime time.Time
+		if entry.PublicDate != "" {
+			pubTime, _ = time.Parse(time.RFC3339, entry.PublicDate)
+		}
+		if pubTime.IsZero() {
+			pubTime = time.Now()
+		}
+
+		// Construct clean context for your UI rendering panel
+		description := fmt.Sprintf("Severity: %s | CVSS3: %s | Core Advisory: %s",
+			entry.Severity,
+			entry.Cvss3Score,
+			entry.BugzillaState,
+		)
+		if entry.BugzillaState == "" {
+			description = fmt.Sprintf("Red Hat validated vulnerability tracked under Bugzilla ID: %s. Severity classification: %s.", entry.Bugzilla, entry.Severity)
+		}
+
+		items = append(items, VulnerabilityItem{
+			Title:       strings.ToUpper(entry.CVE),
+			Description: description,
+			Source:      "Red Hat",
+			URL:         fmt.Sprintf("https://access.redhat.com/security/cve/%s", strings.ToUpper(entry.CVE)),
+			Published:   pubTime,
+			IOCs:        make([]string, 0),
+		})
 	}
 
 	return items
