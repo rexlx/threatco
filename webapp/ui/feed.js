@@ -10,10 +10,12 @@ export class FeedController {
     constructor(containerId, app) {
         this.containerId = containerId;
         this.app = app;
+        this.feedItems = []; // Store raw items for dynamic filtering
+        this.currentFilter = 'All'; // Track current filter state
     }
 
     /**
-     * Renders the cached vulnerability feed view inside the container.
+     * Fetches raw feed data and initializes the layout.
      */
     async render() {
         const container = document.getElementById(this.containerId);
@@ -22,15 +24,15 @@ export class FeedController {
         // Show loading state matching existing styling conventions
         container.innerHTML = `
             <div class="box has-background-custom">
-                <p class="has-text-grey-light">Loading vulnerabilities from CISA & NIST cache...</p>
+                <p class="has-text-grey-light">Loading vulnerabilities from cache...</p>
                 <progress class="progress is-small is-info mt-2" max="100"></progress>
             </div>
         `;
 
-        // Fetch data via the Application instance wrapper
-        const feedItems = await this.app.fetchVulnerabilityFeed();
+        // Fetch and cache raw data via the Application instance wrapper
+        this.feedItems = await this.app.fetchVulnerabilityFeed();
 
-        if (!feedItems || feedItems.length === 0) {
+        if (!this.feedItems || this.feedItems.length === 0) {
             container.innerHTML = `
                 <div class="box has-background-custom">
                     <p class="has-text-warning">No vulnerability feed items found or cache is rebuilding.</p>
@@ -39,10 +41,89 @@ export class FeedController {
             return;
         }
 
-        // Map items to Bulma components with hyperlinks to external advisories
-        const itemsHtml = feedItems.map(item => {
+        // Dynamically extract unique sources from the feed dataset
+        const dynamicSources = [...new Set(
+            this.feedItems
+                .map(item => item.source)
+                .filter(source => typeof source === 'string' && source.trim() !== '')
+        )].sort();
+
+        // Build the option elements markup for our dropdown filter
+        const filterOptionsHtml = [
+            '<option value="All">All Sources</option>',
+            ...dynamicSources.map(source => `<option value="${source}">${source}</option>`)
+        ].join('');
+
+        // Render template scaffolding frame with the dynamic filter control
+        container.innerHTML = `
+            <div class="is-flex is-justify-content-between is-align-items-center mb-4">
+                <div>
+                    <h1 class="title has-text-info mb-1">Vulnerability Intel Feed</h1>
+                    <p class="subtitle is-size-6 has-text-grey-light mb-0">Aggregated live alerts from centralized caches. Updated periodically.</p>
+                </div>
+                <div class="field mb-0">
+                    <div class="control has-icons-left">
+                        <div class="select is-small">
+                            <select id="feedSourceFilter">
+                                ${filterOptionsHtml}
+                            </select>
+                        </div>
+                        <span class="icon is-small is-left">
+                            <i class="material-icons">filter_list</i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="feed-list-wrapper" id="feedListItems"></div>
+        `;
+
+        // Bind event handler to the dynamic filter dropdown
+        const filterSelect = document.getElementById('feedSourceFilter');
+        if (filterSelect) {
+            // Re-apply previous filter value if it matches an option, fallback to 'All'
+            if (this.currentFilter !== 'All' && !dynamicSources.includes(this.currentFilter)) {
+                this.currentFilter = 'All';
+            }
+            filterSelect.value = this.currentFilter;
+            
+            filterSelect.addEventListener('change', (e) => {
+                this.currentFilter = e.target.value;
+                this.updateList();
+            });
+        }
+
+        // Initially render the items list
+        this.updateList();
+    }
+
+    /**
+     * Filters, maps, and injects item list HTML depending on filter criteria.
+     */
+    updateList() {
+        const listContainer = document.getElementById('feedListItems');
+        if (!listContainer) return;
+
+        // Filter feed items safely by testing source matching
+        const filteredItems = this.feedItems.filter(item => {
+            if (this.currentFilter === 'All') return true;
+            return item.source === this.currentFilter;
+        });
+
+        if (filteredItems.length === 0) {
+            listContainer.innerHTML = `
+                <div class="box has-background-custom">
+                    <p class="has-text-grey-light is-italic">No vulnerabilities match the selected source filter.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Map matching items to Bulma markup components
+        listContainer.innerHTML = filteredItems.map(item => {
             // Tag colors depending on threat Intel source
-            const tagColor = item.source === 'CISA' ? 'is-danger' : 'is-link';
+            let tagColor = 'is-link';
+            if (item.source === 'CISA') tagColor = 'is-danger';
+            else if (item.source === 'NIST') tagColor = 'is-info';
             
             // Defensively check for arrays to prevent rendering pipeline breakage
             let iocHtml = '';
@@ -88,14 +169,5 @@ export class FeedController {
                 </div>
             `;
         }).join('');
-
-        // Inject completed frame markup into view slot
-        container.innerHTML = `
-            <h1 class="title has-text-info mb-4">Vulnerability Intel Feed</h1>
-            <p class="subtitle is-size-6 has-text-grey-light mb-5">Aggregated live alerts from CISA and NIST. Updated every 4 hours.</p>
-            <div class="feed-list-wrapper">
-                ${itemsHtml}
-            </div>
-        `;
     }
 }

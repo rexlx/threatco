@@ -3434,6 +3434,19 @@ func (s *Server) ParseURLHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(out)
 }
 
+func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Received request for vulnerability feed")
+	s.Memory.RLock()
+	feed := s.Cache.VulnerabilityFeed
+	s.Memory.RUnlock()
+	fmt.Println("Serving vulnerability feed with", len(feed), "items")
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(feed); err != nil {
+		s.LogError(fmt.Errorf("failed encoding vulnerability feed JSON response: %w", err))
+		http.Error(w, "Internal server error reading telemetry cache", http.StatusInternalServerError)
+	}
+}
+
 type NewUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

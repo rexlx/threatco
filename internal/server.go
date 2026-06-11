@@ -1102,19 +1102,6 @@ func (s *Server) ManageCases() {
 	}
 }
 
-func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Received request for vulnerability feed")
-	s.Memory.RLock()
-	feed := s.Cache.VulnerabilityFeed
-	s.Memory.RUnlock()
-	fmt.Println("Serving vulnerability feed with", len(feed), "items")
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(feed); err != nil {
-		s.LogError(fmt.Errorf("failed encoding vulnerability feed JSON response: %w", err))
-		http.Error(w, "Internal server error reading telemetry cache", http.StatusInternalServerError)
-	}
-}
-
 // PollVulnerabilityFeeds orchestrates background collection of CISA and CIRCL advisories,
 // concurrently enriches ALL items via MISP & AlienVault OTX, sorts them chronologically, and updates the cache.
 func (s *Server) PollVulnerabilityFeeds() {
@@ -1711,9 +1698,9 @@ func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
 
 		// Optional Local Logic Filter:
 		// If you only want high-tier items on your frontend dashboard, you can uncomment this:
-		// if entry.Severity != "critical" && entry.Severity != "important" {
-		//     continue
-		// }
+		if entry.Severity != "critical" && entry.Severity != "important" {
+			continue
+		}
 
 		// Parse the date string safely (Red Hat strictly utilizes RFC3339 layout formatting)
 		var pubTime time.Time
