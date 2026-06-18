@@ -1102,22 +1102,18 @@ func (s *Server) ManageCases() {
 	}
 }
 
-// PollVulnerabilityFeeds orchestrates background collection of CISA and CIRCL advisories,
-// concurrently enriches ALL items via MISP & AlienVault OTX, sorts them chronologically, and updates the cache.
 func (s *Server) PollVulnerabilityFeeds() {
-	s.LogInfo("Beginning background synchronization task for CISA and CIRCL advisories...")
+	s.LogInfo("Beginning background synchronization task for CISA, Red Hat, and Canonical advisories...")
 
 	var rawItems []VulnerabilityItem
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	// Phase 1: Retrieve raw data from external feeds concurrently
-	wg.Add(2)
+	wg.Add(3)
 
 	go func() {
 		defer wg.Done()
 		cisaItems := s.pollCisaFeedRaw()
-
 		mu.Lock()
 		rawItems = append(rawItems, cisaItems...)
 		mu.Unlock()
@@ -1126,20 +1122,26 @@ func (s *Server) PollVulnerabilityFeeds() {
 	go func() {
 		defer wg.Done()
 		redHatItems := s.pollRedHatFeedRaw()
-
 		mu.Lock()
 		rawItems = append(rawItems, redHatItems...)
+		mu.Unlock()
+	}()
+
+	go func() {
+		defer wg.Done()
+		canonicalItems := s.pollCanonicalFeedRaw()
+		mu.Lock()
+		rawItems = append(rawItems, canonicalItems...)
 		mu.Unlock()
 	}()
 
 	wg.Wait()
 
 	if len(rawItems) == 0 {
-		s.LogError(errors.New("warning: synchronization pass finished with empty raw datasets from both feeds"))
+		s.LogError(errors.New("warning: synchronization pass finished with empty raw datasets across feeds"))
 		return
 	}
 
-	// Phase 2: Perform concurrent multi-source indicator enrichment across ALL collected items uniformly
 	s.LogInfo(fmt.Sprintf("Raw collection complete. Dispatching concurrent MISP and OTX lookups for %d target CVEs...", len(rawItems)))
 
 	var enrichedItems []VulnerabilityItem
@@ -1151,21 +1153,17 @@ func (s *Server) PollVulnerabilityFeeds() {
 		go func(vItem VulnerabilityItem) {
 			defer enrichWg.Done()
 
-			// Extract clean CVE identification string from the title block
 			cveID := vItem.Title
 			if strings.Contains(cveID, ":") {
 				cveID = strings.TrimSpace(strings.Split(cveID, ":")[0])
 			}
 
-			// Local lookup indicator tracking set to ensure string uniqueness
 			uniqueIOCs := make(map[string]bool)
 			var combinedIOCs []string
 
-			// We launch lookup tasks inside internal execution contexts
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 
-			// 1. Primary Check: Local/Enterprise MISP Instance Lookup
 			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
 			if err == nil && len(mispPayload) > 0 {
 				mispIOCs := ExtractValuesFromMispResponse(mispPayload)
@@ -1178,7 +1176,6 @@ func (s *Server) PollVulnerabilityFeeds() {
 				}
 			}
 
-			// 2. Bolstering Check: Anonymous Public AlienVault OTX Pulse Lookup
 			otxPayload, err := s.FetchPublicOtxIOCsByCVE(ctx, cveID)
 			if err == nil && len(otxPayload) > 0 {
 				otxIOCs := s.extractValuesFromOtxResponse(otxPayload)
@@ -1191,10 +1188,8 @@ func (s *Server) PollVulnerabilityFeeds() {
 				}
 			}
 
-			// Assign compiled indicators (or an empty array for UI rendering safety)
 			if len(combinedIOCs) > 0 {
 				vItem.IOCs = combinedIOCs
-				s.LogInfo(fmt.Sprintf("[Enrichment Engine] Successfully enriched %s with %d combined technical indicators", cveID, len(combinedIOCs)))
 			} else {
 				vItem.IOCs = make([]string, 0)
 			}
@@ -1207,17 +1202,15 @@ func (s *Server) PollVulnerabilityFeeds() {
 
 	enrichWg.Wait()
 
-	// Phase 3: Global chronological sorting (Most recent / newest timestamps on top)
 	sort.Slice(enrichedItems, func(i, j int) bool {
 		return enrichedItems[i].Published.After(enrichedItems[j].Published)
 	})
 
-	// Phase 4: Safe commit to global memory state cache
 	s.Memory.Lock()
 	s.Cache.VulnerabilityFeed = enrichedItems
 	s.Memory.Unlock()
 
-	s.LogInfo(fmt.Sprintf("Vulnerability cache successfully rebuilt and sorted. Saved %d verified records.", len(enrichedItems)))
+	s.LogInfo(fmt.Sprintf("Vulnerability cache successfully rebuilt. Saved %d verified records.", len(enrichedItems)))
 }
 
 // FetchPublicOtxIOCsByCVE executes a keyless public lookup to capture open community pulse indicators tied to a CVE
@@ -1727,6 +1720,93 @@ func (s *Server) pollRedHatFeedRaw() []VulnerabilityItem {
 			Description: description,
 			Source:      "Red Hat",
 			URL:         fmt.Sprintf("https://access.redhat.com/security/cve/%s", strings.ToUpper(entry.CVE)),
+			Published:   pubTime,
+			IOCs:        make([]string, 0),
+		})
+	}
+
+	return items
+}
+
+func (s *Server) pollCanonicalFeedRaw() []VulnerabilityItem {
+	s.LogInfo("[Intel Engine] Gathering security notices from Canonical...")
+	var items []VulnerabilityItem
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", "https://ubuntu.com/security/notices.json", nil)
+	if err != nil {
+		s.LogError(fmt.Errorf("failed to create canonical request: %w", err))
+		return items
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ThreatCo/2.0 Threat Intel Sync Component")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.LogError(fmt.Errorf("canonical feed pull failure: %w", err))
+		return items
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.LogError(fmt.Errorf("canonical feed returned status code: %d", resp.StatusCode))
+		return items
+	}
+
+	// Correctly mapping the nested object array layout found in out.json
+	var data struct {
+		Notices []struct {
+			ID          string `json:"id"`
+			Published   string `json:"published"`
+			Summary     string `json:"summary"`
+			Description string `json:"description"`
+			CVEs        []struct {
+				ID string `json:"id"`
+			} `json:"cves"`
+		} `json:"notices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		s.LogError(fmt.Errorf("failed to decode canonical json payload: %w", err))
+		return items
+	}
+
+	maxCount := len(data.Notices)
+	if maxCount > 25 {
+		maxCount = 25
+	}
+
+	for i := 0; i < maxCount; i++ {
+		n := data.Notices[i]
+
+		// Safe extraction from the inner CVE object layer
+		targetCVE := n.ID
+		if len(n.CVEs) > 0 && n.CVEs[0].ID != "" {
+			targetCVE = n.CVEs[0].ID
+		}
+
+		// Robust time parsing fallback logic for strict stability
+		var pubTime time.Time
+		if n.Published != "" {
+			var parseErr error
+			// 1. Try high-precision fractional layout matching out.json
+			pubTime, parseErr = time.Parse("2006-01-02T15:04:05.999999", n.Published)
+			if parseErr != nil {
+				// 2. Fallback to standard RFC3339
+				pubTime, parseErr = time.Parse(time.RFC3339, n.Published)
+				if parseErr != nil {
+					pubTime = time.Now()
+				}
+			}
+		} else {
+			pubTime = time.Now()
+		}
+
+		items = append(items, VulnerabilityItem{
+			Title:       strings.ToUpper(targetCVE),
+			Description: fmt.Sprintf("%s: %s", n.Summary, n.Description),
+			Source:      "Canonical",
+			URL:         fmt.Sprintf("https://ubuntu.com/security/notices/%s", n.ID),
 			Published:   pubTime,
 			IOCs:        make([]string, 0),
 		})

@@ -29,6 +29,13 @@ const (
 	WeightAbuseIPDB       = 1.0
 )
 
+const (
+	VulnWeightDefault   = 0.5
+	VulnWeightKEV       = 1.0
+	VulnWeightRedHat    = 0.8
+	VulnWeightCanonical = 0.7
+)
+
 // NormalizerFunc defines the signature for logic that converts a vendor-specific
 // raw score into a standardized 0-100 confidence score.
 type NormalizerFunc func(rawScore int) int
@@ -177,11 +184,29 @@ func ScoreMispThreat(idStr string) int {
 	}
 }
 
-/*
-vendorName := "Mandiant"
-rawScore := 85 // You extracted this from the response
+func CalculateThreatWeight(item VulnerabilityItem) float64 {
+	var baseWeight float64
 
-threatID := internal.GetThreatLevelID(vendorName, rawScore)
+	switch item.Source {
+	case "CISA":
+		baseWeight = 100.0
+	case "Red Hat":
+		baseWeight = 50.0
+	case "Canonical":
+		baseWeight = 45.0
+	default:
+		baseWeight = 20.0
+	}
 
-event.ThreatLevelID = threatID
-*/
+	descLower := strings.ToLower(item.Description)
+
+	if strings.Contains(descLower, "cvss3: 1") || strings.Contains(descLower, "cvss3: 2") || strings.Contains(descLower, "cvss3: 3") || strings.Contains(descLower, "cvss3: 4") {
+		baseWeight -= 15.0
+	} else if strings.Contains(descLower, "cvss3: 5") || strings.Contains(descLower, "cvss3: 6") || strings.Contains(descLower, "cvss3: 7.0") {
+		baseWeight -= 5.0
+	} else if strings.Contains(descLower, "cvss3: 9") || strings.Contains(descLower, "severity: critical") {
+		baseWeight += 20.0
+	}
+
+	return baseWeight
+}

@@ -3437,8 +3437,27 @@ func (s *Server) ParseURLHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received request for vulnerability feed")
 	s.Memory.RLock()
-	feed := s.Cache.VulnerabilityFeed
+	feed := make([]VulnerabilityItem, len(s.Cache.VulnerabilityFeed))
+	copy(feed, s.Cache.VulnerabilityFeed)
 	s.Memory.RUnlock()
+
+	sort.Slice(feed, func(i, j int) bool {
+		weightI := CalculateThreatWeight(feed[i])
+		weightJ := CalculateThreatWeight(feed[j])
+		if weightI != weightJ {
+			return weightI > weightJ
+		}
+		return feed[i].Published.After(feed[j].Published)
+	})
+
+	if len(feed) > 50 {
+		feed = feed[:50]
+	}
+
+	sort.Slice(feed, func(i, j int) bool {
+		return feed[i].Published.After(feed[j].Published)
+	})
+
 	fmt.Println("Serving vulnerability feed with", len(feed), "items")
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(feed); err != nil {
