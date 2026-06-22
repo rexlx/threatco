@@ -1,6 +1,7 @@
 /**
  * webapp/ui/feed.js
  * Controller handling rendering and UI logic for the CISA/NIST vulnerability feed.
+ * Updates the layout to sit the colored CWE indicator tiles directly next to the source tags.
  */
 export class FeedController {
     /**
@@ -12,6 +13,36 @@ export class FeedController {
         this.app = app;
         this.feedItems = []; // Store raw items for dynamic filtering
         this.currentFilter = 'All'; // Track current filter state
+
+        // Standardized 25-item tracking dictionary for tooltips
+        this.cweDescriptions = {
+            "CWE-20":   "Improper Input Validation",
+            "CWE-22":   "Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
+            "CWE-78":   "Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+            "CWE-79":   "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+            "CWE-89":   "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')",
+            "CWE-94":   "Improper Control of Generation of Code ('Code Injection')",
+            "CWE-119":  "Improper Restriction of Operations within the Bounds of a Memory Buffer",
+            "CWE-120":  "Buffer Copy without Checking Size of Input ('Classic Buffer Overflow')",
+            "CWE-125":  "Out-of-bounds Read",
+            "CWE-190":  "Integer Overflow or Wraparound",
+            "CWE-200":  "Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-269":  "Improper Privilege Management",
+            "CWE-276":  "Incorrect Default Permissions",
+            "CWE-287":  "Improper Authentication",
+            "CWE-295":  "Improper Certificate Validation",
+            "CWE-306":  "Missing Authentication for Critical Function",
+            "CWE-352":  "Cross-Site Request Forgery (CSRF)",
+            "CWE-416":  "Use After Free",
+            "CWE-434":  "Unrestricted Upload of File with Dangerous Type",
+            "CWE-502":  "Deserialization of Untrusted Data",
+            "CWE-522":  "Insufficiently Protected Credentials (or Use of Hard-Coded Credentials)",
+            "CWE-611":  "Improper Restriction of XML External Entity Reference ('XXE')",
+            "CWE-732":  "Incorrect Permission Assignment for Critical Resource",
+            "CWE-787":  "Out-of-bounds Write",
+            "CWE-862":  "Missing Authorization",
+            "CWE-863":  "Incorrect Authorization"
+        };
     }
 
     /**
@@ -80,7 +111,6 @@ export class FeedController {
         // Bind event handler to the dynamic filter dropdown
         const filterSelect = document.getElementById('feedSourceFilter');
         if (filterSelect) {
-            // Re-apply previous filter value if it matches an option, fallback to 'All'
             if (this.currentFilter !== 'All' && !dynamicSources.includes(this.currentFilter)) {
                 this.currentFilter = 'All';
             }
@@ -125,6 +155,37 @@ export class FeedController {
             if (item.source === 'CISA') tagColor = 'is-danger';
             else if (item.source === 'NIST') tagColor = 'is-info';
             
+            // Generate inline CWE elements if present on the record
+            let cweHtml = '';
+            if (item.cwes && Array.isArray(item.cwes) && item.cwes.length > 0) {
+                cweHtml = item.cwes.map(cwe => {
+                    if (!cwe || cwe.trim() === "") return '';
+
+                    const description = this.cweDescriptions[cwe] || "Advisory-specified technical weakness category.";
+                    const numericId = cwe.replace(/\D/g, '');
+                    const externalUrl = numericId ? `https://cwe.mitre.org/data/definitions/${numericId}.html` : 'https://cwe.mitre.org/';
+
+                    // Contextual risk-based color-coding
+                    let cweColorStyle = 'background-color: #3273dc; color: #fff;'; 
+                    if (['CWE-787', 'CWE-119', 'CWE-94', 'CWE-89'].includes(cwe)) {
+                        cweColorStyle = 'background-color: #ff3860; color: #fff;'; 
+                    } else if (['CWE-20', 'CWE-22', 'CWE-287', 'CWE-416'].includes(cwe)) {
+                        cweColorStyle = 'background-color: #ffdd57; color: #4a4a4a;'; 
+                    }
+
+                    return `
+                        <a href="${externalUrl}" 
+                           target="_blank" 
+                           rel="noopener noreferrer" 
+                           class="tag font-weight-bold is-family-code ml-1 mb-1" 
+                           style="${cweColorStyle} font-size: 0.7rem; border-radius: 3px; display: inline-block; cursor: pointer;"
+                           title="${cwe}: ${description} (Click to view official MITRE details)">
+                            ${cwe}
+                        </a>
+                    `;
+                }).join('');
+            }
+
             // Defensively check for arrays to prevent rendering pipeline breakage
             let iocHtml = '';
             if (item.iocs && Array.isArray(item.iocs) && item.iocs.length > 0) {
@@ -148,13 +209,18 @@ export class FeedController {
                 <div class="box has-background-custom mb-3">
                     <div class="columns is-mobile is-vcentered">
                         <div class="column">
-                            <span class="tag ${tagColor} is-light mb-1">${item.source}</span>
+                            <div class="is-flex is-align-items-center is-flex-wrap-wrap mb-2">
+                                <span class="tag ${tagColor} is-light mb-1">${item.source}</span>
+                                ${cweHtml}
+                            </div>
+
                             <h4 class="title is-size-5 mb-1">
                                 <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="has-text-info">
                                     ${item.title || 'Unknown Identifier'}
                                 </a>
                             </h4>
-                            <p class="has-text-white-ter is-size-6">${item.description || 'No description provided.'}</p>
+                            
+                            <p class="has-text-white-ter is-size-6 mt-1">${item.description || 'No description provided.'}</p>
                             
                             ${iocHtml}
                             

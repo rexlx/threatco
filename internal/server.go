@@ -105,6 +105,7 @@ type VulnerabilityItem struct {
 	URL         string    `json:"url"`
 	Published   time.Time `json:"published"`
 	IOCs        []string  `json:"iocs"`
+	CWEs        []string  `json:"cwes"`
 }
 
 type Coord struct {
@@ -1288,10 +1289,11 @@ func (s *Server) pollCisaFeedRaw() []VulnerabilityItem {
 
 	var data struct {
 		Vulnerabilities []struct {
-			CveID             string `json:"cveID"`
-			VulnerabilityName string `json:"vulnerabilityName"`
-			ShortDescription  string `json:"shortDescription"`
-			DateAdded         string `json:"dateAdded"`
+			CveID             string   `json:"cveID"`
+			VulnerabilityName string   `json:"vulnerabilityName"`
+			ShortDescription  string   `json:"shortDescription"`
+			DateAdded         string   `json:"dateAdded"`
+			CWEs              []string `json:"cwes"` // Map array from upstream feed schema layout
 		} `json:"vulnerabilities"`
 	}
 
@@ -1309,12 +1311,19 @@ func (s *Server) pollCisaFeedRaw() []VulnerabilityItem {
 		v := data.Vulnerabilities[i]
 		pubTime, _ := time.Parse("2006-01-02", v.DateAdded)
 
+		// Defensive parsing check for nil arrays
+		cweList := v.CWEs
+		if cweList == nil {
+			cweList = make([]string, 0)
+		}
+
 		items = append(items, VulnerabilityItem{
 			Title:       fmt.Sprintf("%s: %s", v.CveID, v.VulnerabilityName),
 			Description: v.ShortDescription,
 			Source:      "CISA",
 			URL:         fmt.Sprintf("https://nvd.nist.gov/vuln/detail/%s", v.CveID),
 			Published:   pubTime,
+			CWEs:        cweList, // Appended collection tracking metrics
 		})
 	}
 
