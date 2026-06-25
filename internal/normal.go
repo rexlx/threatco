@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -125,7 +126,7 @@ func GetThreatLevelID(vendor string, rawScore int, weight float64) int {
 	// Apply weight
 	weightedScore := int(float64(standardScore) * weight)
 	finalScore := NormalizeStandardScale(weightedScore)
-
+	fmt.Println(MapScoreToID(finalScore), finalScore, vendor, rawScore, weight)
 	// 2. Map the standard 0-100 score to your specific ThreatLevelID buckets
 	return MapScoreToID(finalScore)
 }

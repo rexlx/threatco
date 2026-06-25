@@ -26,7 +26,6 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rexlx/threatco/vendors"
 	"github.com/rexlx/threatco/views"
 	"go.etcd.io/bbolt"
 )
@@ -1112,7 +1111,7 @@ func (s *Server) PollVulnerabilityFeeds() {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	wg.Add(4)
+	wg.Add(3)
 
 	go func() {
 		defer wg.Done()
@@ -1138,13 +1137,13 @@ func (s *Server) PollVulnerabilityFeeds() {
 		mu.Unlock()
 	}()
 
-	go func() {
-		defer wg.Done()
-		mispItems := s.pollRecentMispEventsRaw()
-		mu.Lock()
-		rawItems = append(rawItems, mispItems...)
-		mu.Unlock()
-	}()
+	// go func() {
+	// 	defer wg.Done()
+	// 	mispItems := s.pollRecentMispEventsRaw()
+	// 	mu.Lock()
+	// 	rawItems = append(rawItems, mispItems...)
+	// 	mu.Unlock()
+	// }()
 
 	wg.Wait()
 
@@ -1834,7 +1833,6 @@ func (s *Server) pollCanonicalFeedRaw() []VulnerabilityItem {
 	return items
 }
 
-// pollRecentMispEventsRaw pulls records from the configured MISP server infrastructure
 func (s *Server) pollRecentMispEventsRaw() []VulnerabilityItem {
 	var items []VulnerabilityItem
 
@@ -1847,9 +1845,9 @@ func (s *Server) pollRecentMispEventsRaw() []VulnerabilityItem {
 		return items
 	}
 
-	// Craft payload asking for events. We sort by timestamp descending to capture the absolute newest.
+	// Request a block from the event index sorted descending by timestamp
 	queryPayload := map[string]interface{}{
-		"limit":     100, // Pull a higher slice volume so we retain 25 items even after discarding low/medium tiers
+		"limit":     50,
 		"page":      1,
 		"sort":      "timestamp",
 		"direction": "DESC",
@@ -1857,90 +1855,85 @@ func (s *Server) pollRecentMispEventsRaw() []VulnerabilityItem {
 
 	jsonBytes, err := json.Marshal(queryPayload)
 	if err != nil {
+		s.LogError(fmt.Errorf("misp query payload serialization failed: %w", err))
 		return items
 	}
 
 	url := fmt.Sprintf("%s/events/index", ep.GetURL())
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		s.LogError(fmt.Errorf("failed creating MISP fetch request: %w", err))
+		s.LogError(fmt.Errorf("failed creating MISP fetch request object: %w", err))
 		return items
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Fire outbound transaction utilizing Endpoint's safety features and authentication mechanics
+	// Execute outbound request utilizing Endpoint's gateway client handlers
 	respBytes, err := ep.Do("", req)
 	if err != nil {
-		s.LogError(fmt.Errorf("failed calling MISP endpoint framework: %w", err))
+		s.LogError(fmt.Errorf("failed calling MISP endpoint infrastructure: %w", err))
 		return items
 	}
-	// Traverse layout envelope format matching the array schema in vendors/misp.go
-	var envelope []struct {
-		Event vendors.MispEvent `json:"Event"`
+
+	// Target layout strictly mapping the flat Event metadata blocks returned by /events/index
+	var indexResponse []struct {
+		Event struct {
+			ID             string `json:"id"`
+			Info           string `json:"info"`
+			Timestamp      string `json:"timestamp"`
+			ThreatLevelID  string `json:"threat_level_id"`
+			AttributeCount string `json:"attribute_count"`
+			OrgCID         string `json:"orgc_id"`
+		} `json:"Event"`
 	}
 
-	// Fallback to unstructured parsing if root object signature differs
-	if err := json.Unmarshal(respBytes, &envelope); err != nil {
-		// Attempt parsing as single direct Event wrapper object wrapper format
-		var alternative vendors.MispEventResponse
-		if errAlt := json.Unmarshal(respBytes, &alternative); errAlt == nil && alternative.Response != nil {
-			envelope = alternative.Response
-		} else {
-			s.LogError(fmt.Errorf("failed decoding unified MISP schema dataset: %w", err))
-			return items
-		}
+	if err := json.Unmarshal(respBytes, &indexResponse); err != nil {
+		s.LogError(fmt.Errorf("failed decoding flat MISP index array payload: %w", err))
+		return items
 	}
 
 	count := 0
-	for _, wrapper := range envelope {
-		// Stop if we have fully packed our target count
+	for _, wrapper := range indexResponse {
+		// Enforce collection ceiling limit
 		if count >= 25 {
 			break
 		}
 
-		evt := wrapper.Event
-		threatLevel, _ := strconv.Atoi(evt.ThreatLevelID)
-
-		// FILTER BLOCK: Ignore all events lower than ThreatLevelHigh (4) or ThreatLevelCritical (5)
-		if threatLevel < 4 {
-			fmt.Println(fmt.Sprintf("[MISP Sync Info] Skipping event %s due to low threat level (%d).", evt.ID, threatLevel))
+		mispEvt := wrapper.Event
+		fmt.Println(mispEvt.ThreatLevelID, "FFFFFFFFFFF")
+		if mispEvt.ID == "" {
 			continue
 		}
 
-		// Convert standard unix timestamps string format safely into Go time values
-		var publishedTime time.Time
-		if evt.Timestamp != "" {
-			if sec, errParse := strconv.ParseInt(evt.Timestamp, 10, 64); errParse == nil {
+		// Convert standard MISP unix epoch string safely into a Go time object
+		publishedTime := time.Now()
+		if mispEvt.Timestamp != "" {
+			if sec, errParse := strconv.ParseInt(mispEvt.Timestamp, 10, 64); errParse == nil {
 				publishedTime = time.Unix(sec, 0)
 			}
 		}
-		if publishedTime.IsZero() {
-			publishedTime = time.Now()
-		}
 
-		// Pull related technical indicators embedded inside the event payload
-		var collectedIOCs []string
-		for _, attr := range evt.Attribute {
-			if attr.Value != "" && !attr.Deleted {
-				collectedIOCs = append(collectedIOCs, fmt.Sprintf("[%s] %s", attr.Type, attr.Value))
-			}
-		}
+		// Construct a uniform details summary line for the description block
+		description := fmt.Sprintf("Total Attributes Logged: %s | Threat Severity Tier (Raw MISP ID): %s",
+			mispEvt.AttributeCount,
+			mispEvt.ThreatLevelID,
+		)
 
-		// Build standard structural dashboard representation format
+		// Pack item cleanly into the global vulnerability array structure
 		items = append(items, VulnerabilityItem{
-			Title:       fmt.Sprintf("MISP-%s: %s", evt.ID, evt.Info),
-			Description: fmt.Sprintf("Local Organization Creator ID: %s | Total Attributes Logged: %s", evt.OrgCID, evt.AttributeCount),
+			Title:       fmt.Sprintf("MISP-%s: %s", mispEvt.ID, mispEvt.Info),
+			Description: description,
 			Source:      "MISP",
-			URL:         fmt.Sprintf("%s/events/view/%s", ep.GetURL(), evt.ID),
+			URL:         fmt.Sprintf("%s/events/view/%s", ep.GetURL(), mispEvt.ID),
 			Published:   publishedTime,
-			IOCs:        collectedIOCs,
-			CWEs:        []string{fmt.Sprintf("THREAT_ID_%d", threatLevel)},
+			IOCs:        make([]string, 0),                                            // Flat index maps do not return embedded inner attribute lists
+			CWEs:        []string{fmt.Sprintf("THREAT_ID_%s", mispEvt.ThreatLevelID)}, // Stashing the raw ID if needed for UI tags
 		})
 
 		count++
 	}
 
+	s.LogInfo(fmt.Sprintf("[Intel Engine] Successfully synchronized %d recent raw MISP index events.", len(items)))
 	return items
 }
