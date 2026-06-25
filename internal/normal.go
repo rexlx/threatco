@@ -31,9 +31,10 @@ const (
 
 const (
 	VulnWeightDefault   = 0.5
-	VulnWeightKEV       = 1.0
-	VulnWeightRedHat    = 0.8
-	VulnWeightCanonical = 0.7
+	VulnWeightKEV       = 200.0
+	VulnWeightMISP      = 200.0
+	VulnWeightRedHat    = 50.0
+	VulnWeightCanonical = 5.0
 )
 
 // NormalizerFunc defines the signature for logic that converts a vendor-specific
@@ -187,19 +188,23 @@ func ScoreMispThreat(idStr string) int {
 func CalculateThreatWeight(item VulnerabilityItem) float64 {
 	var baseWeight float64
 
+	// Route strictly based on the configured source constants
 	switch item.Source {
 	case "CISA":
-		baseWeight = 100.0
+		baseWeight = VulnWeightKEV // Starts at 200.0
+	case "MISP":
+		baseWeight = VulnWeightMISP // Starts at 200.0
 	case "Red Hat":
-		baseWeight = 50.0
+		baseWeight = VulnWeightRedHat // Starts at 50.0
 	case "Canonical":
-		baseWeight = 45.0
+		baseWeight = VulnWeightCanonical // Starts at 5.0
 	default:
 		baseWeight = 20.0
 	}
 
 	descLower := strings.ToLower(item.Description)
 
+	// Apply modifications dynamically to fine-tune the stack rank
 	if strings.Contains(descLower, "cvss3: 1") || strings.Contains(descLower, "cvss3: 2") || strings.Contains(descLower, "cvss3: 3") || strings.Contains(descLower, "cvss3: 4") {
 		baseWeight -= 15.0
 	} else if strings.Contains(descLower, "cvss3: 5") || strings.Contains(descLower, "cvss3: 6") || strings.Contains(descLower, "cvss3: 7.0") {

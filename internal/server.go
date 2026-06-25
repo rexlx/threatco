@@ -18,6 +18,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rexlx/threatco/vendors"
 	"github.com/rexlx/threatco/views"
 	"go.etcd.io/bbolt"
 )
@@ -1110,7 +1112,7 @@ func (s *Server) PollVulnerabilityFeeds() {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	wg.Add(3)
+	wg.Add(4)
 
 	go func() {
 		defer wg.Done()
@@ -1133,6 +1135,14 @@ func (s *Server) PollVulnerabilityFeeds() {
 		canonicalItems := s.pollCanonicalFeedRaw()
 		mu.Lock()
 		rawItems = append(rawItems, canonicalItems...)
+		mu.Unlock()
+	}()
+
+	go func() {
+		defer wg.Done()
+		mispItems := s.pollRecentMispEventsRaw()
+		mu.Lock()
+		rawItems = append(rawItems, mispItems...)
 		mu.Unlock()
 	}()
 
@@ -1819,6 +1829,117 @@ func (s *Server) pollCanonicalFeedRaw() []VulnerabilityItem {
 			Published:   pubTime,
 			IOCs:        make([]string, 0),
 		})
+	}
+
+	return items
+}
+
+// pollRecentMispEventsRaw pulls records from the configured MISP server infrastructure
+func (s *Server) pollRecentMispEventsRaw() []VulnerabilityItem {
+	var items []VulnerabilityItem
+
+	s.Memory.RLock()
+	ep, exists := s.Targets["misp"]
+	s.Memory.RUnlock()
+
+	if !exists {
+		s.LogInfo("[MISP Sync Warning] Skipping ingestion: No live target endpoint configuration for 'misp'.")
+		return items
+	}
+
+	// Craft payload asking for events. We sort by timestamp descending to capture the absolute newest.
+	queryPayload := map[string]interface{}{
+		"limit":     100, // Pull a higher slice volume so we retain 25 items even after discarding low/medium tiers
+		"page":      1,
+		"sort":      "timestamp",
+		"direction": "DESC",
+	}
+
+	jsonBytes, err := json.Marshal(queryPayload)
+	if err != nil {
+		return items
+	}
+
+	url := fmt.Sprintf("%s/events/index", ep.GetURL())
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		s.LogError(fmt.Errorf("failed creating MISP fetch request: %w", err))
+		return items
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	// Fire outbound transaction utilizing Endpoint's safety features and authentication mechanics
+	respBytes, err := ep.Do("", req)
+	if err != nil {
+		s.LogError(fmt.Errorf("failed calling MISP endpoint framework: %w", err))
+		return items
+	}
+	// Traverse layout envelope format matching the array schema in vendors/misp.go
+	var envelope []struct {
+		Event vendors.MispEvent `json:"Event"`
+	}
+
+	// Fallback to unstructured parsing if root object signature differs
+	if err := json.Unmarshal(respBytes, &envelope); err != nil {
+		// Attempt parsing as single direct Event wrapper object wrapper format
+		var alternative vendors.MispEventResponse
+		if errAlt := json.Unmarshal(respBytes, &alternative); errAlt == nil && alternative.Response != nil {
+			envelope = alternative.Response
+		} else {
+			s.LogError(fmt.Errorf("failed decoding unified MISP schema dataset: %w", err))
+			return items
+		}
+	}
+
+	count := 0
+	for _, wrapper := range envelope {
+		// Stop if we have fully packed our target count
+		if count >= 25 {
+			break
+		}
+
+		evt := wrapper.Event
+		threatLevel, _ := strconv.Atoi(evt.ThreatLevelID)
+
+		// FILTER BLOCK: Ignore all events lower than ThreatLevelHigh (4) or ThreatLevelCritical (5)
+		if threatLevel < 4 {
+			fmt.Println(fmt.Sprintf("[MISP Sync Info] Skipping event %s due to low threat level (%d).", evt.ID, threatLevel))
+			continue
+		}
+
+		// Convert standard unix timestamps string format safely into Go time values
+		var publishedTime time.Time
+		if evt.Timestamp != "" {
+			if sec, errParse := strconv.ParseInt(evt.Timestamp, 10, 64); errParse == nil {
+				publishedTime = time.Unix(sec, 0)
+			}
+		}
+		if publishedTime.IsZero() {
+			publishedTime = time.Now()
+		}
+
+		// Pull related technical indicators embedded inside the event payload
+		var collectedIOCs []string
+		for _, attr := range evt.Attribute {
+			if attr.Value != "" && !attr.Deleted {
+				collectedIOCs = append(collectedIOCs, fmt.Sprintf("[%s] %s", attr.Type, attr.Value))
+			}
+		}
+
+		// Build standard structural dashboard representation format
+		items = append(items, VulnerabilityItem{
+			Title:       fmt.Sprintf("MISP-%s: %s", evt.ID, evt.Info),
+			Description: fmt.Sprintf("Local Organization Creator ID: %s | Total Attributes Logged: %s", evt.OrgCID, evt.AttributeCount),
+			Source:      "MISP",
+			URL:         fmt.Sprintf("%s/events/view/%s", ep.GetURL(), evt.ID),
+			Published:   publishedTime,
+			IOCs:        collectedIOCs,
+			CWEs:        []string{fmt.Sprintf("THREAT_ID_%d", threatLevel)},
+		})
+
+		count++
 	}
 
 	return items
