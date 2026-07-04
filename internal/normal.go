@@ -31,11 +31,12 @@ const (
 )
 
 const (
-	VulnWeightDefault   = 0.5
-	VulnWeightKEV       = 200.0
-	VulnWeightMISP      = 200.0
-	VulnWeightRedHat    = 50.0
-	VulnWeightCanonical = 5.0
+	VulnWeightDefault     = 0.5
+	VulnWeightKEV         = 200.0
+	VulnWeightMISP        = 200.0
+	VulnWeightAssureStart = 75.0
+	VulnWeightRedHat      = 50.0
+	VulnWeightCanonical   = 5.0
 )
 
 // NormalizerFunc defines the signature for logic that converts a vendor-specific

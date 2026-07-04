@@ -77,7 +77,7 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 	for _, idx := range indices {
 		match := text[idx[0]:idx[1]]
 		if kind == "url" {
-			match = strings.TrimRight(match, "/.,;:")
+			match = strings.TrimRight(match, "/.,;:\"'}])<>")
 			match = strings.TrimSuffix(match, "/")
 		}
 

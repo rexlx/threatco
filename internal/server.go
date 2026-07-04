@@ -1106,7 +1106,7 @@ func (s *Server) ManageCases() {
 }
 
 func (s *Server) PollVulnerabilityFeeds() {
-	s.LogInfo("Beginning background synchronization task for CISA, Red Hat, and Canonical advisories...")
+	s.LogInfo("Beginning background synchronization task for CISA, Red Hat, Canonical, and Assure Start advisories...")
 
 	var rawItems []VulnerabilityItem
 	var mu sync.Mutex
@@ -1140,9 +1140,9 @@ func (s *Server) PollVulnerabilityFeeds() {
 
 	// go func() {
 	// 	defer wg.Done()
-	// 	mispItems := s.pollRecentMispEventsRaw()
+	// 	asItems := s.pollAssureStartFeedRaw()
 	// 	mu.Lock()
-	// 	rawItems = append(rawItems, mispItems...)
+	// 	rawItems = append(rawItems, asItems...)
 	// 	mu.Unlock()
 	// }()
 
@@ -1153,16 +1153,39 @@ func (s *Server) PollVulnerabilityFeeds() {
 		return
 	}
 
-	s.LogInfo(fmt.Sprintf("Raw collection complete. Dispatching concurrent MISP and OTX lookups for %d target CVEs...", len(rawItems)))
+	s.LogInfo(fmt.Sprintf("Raw collection complete. Pre-sorting %d items into chronological sequence...", len(rawItems)))
+
+	// Re-run global chronological and internal threat weight calculations
+	sort.Slice(rawItems, func(i, j int) bool {
+		weightI := CalculateThreatWeight(rawItems[i])
+		weightJ := CalculateThreatWeight(rawItems[j])
+		if weightI != weightJ {
+			return weightI > weightJ
+		}
+		return rawItems[i].Published.After(rawItems[j].Published)
+	})
+
+	// Safely bounds limit the cache array to avoid front-end rendering lag
+	if len(rawItems) > 1000 {
+		rawItems = rawItems[:1000]
+	}
+
+	s.LogInfo(fmt.Sprintf("Dispatching optimized background verification lookups for top %d high-risk alerts...", len(rawItems)))
 
 	var enrichedItems []VulnerabilityItem
 	var enrichWg sync.WaitGroup
 	var enrichMu sync.Mutex
 
+	// Bounded Concurrency Semaphore: Safeguards outbound tracking connection lookups
+	sem := make(chan struct{}, 20)
+
 	for _, item := range rawItems {
 		enrichWg.Add(1)
+		sem <- struct{}{}
+
 		go func(vItem VulnerabilityItem) {
 			defer enrichWg.Done()
+			defer func() { <-sem }()
 
 			cveID := vItem.Title
 			if strings.Contains(cveID, ":") {
@@ -1172,8 +1195,7 @@ func (s *Server) PollVulnerabilityFeeds() {
 			uniqueIOCs := make(map[string]bool)
 			var combinedIOCs []string
 
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
 			if err == nil && len(mispPayload) > 0 {
@@ -1199,6 +1221,8 @@ func (s *Server) PollVulnerabilityFeeds() {
 				}
 			}
 
+			cancel() // Release timer resources immediately upon request lifecycle completion
+
 			if len(combinedIOCs) > 0 {
 				vItem.IOCs = combinedIOCs
 			} else {
@@ -1213,10 +1237,7 @@ func (s *Server) PollVulnerabilityFeeds() {
 
 	enrichWg.Wait()
 
-	sort.Slice(enrichedItems, func(i, j int) bool {
-		return enrichedItems[i].Published.After(enrichedItems[j].Published)
-	})
-
+	// 4. COMMIT SECURELY TO THE CACHE FOR FEED.JS VIEW ACCESS
 	s.Memory.Lock()
 	s.Cache.VulnerabilityFeed = enrichedItems
 	s.Memory.Unlock()
@@ -1924,4 +1945,86 @@ func (s *Server) pollRecentMispEventsRaw() []VulnerabilityItem {
 
 	s.LogInfo(fmt.Sprintf("[Intel Engine] Successfully synchronized %d complete MISP events with full IOC attributes.", len(items)))
 	return items
+}
+
+// AssureStartRawItem maps the incoming JSON array object schema directly
+type AssureStartRawItem struct {
+	CVE         string    `json:"cve_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Severity    string    `json:"severity"`
+	Published   time.Time `json:"published_date"`
+	URL         string    `json:"reference_url"`
+}
+
+// pollAssureStartFeedRaw calls the unauthenticated Assure Start API engine safely
+// and maps returned items natively to your core VulnerabilityItem database layout.
+func (s *Server) pollAssureStartFeedRaw() []VulnerabilityItem {
+	fmt.Println("[AssureStart] Fetching Microsoft")
+	targetVendor := "microsoft"
+	// FIX: Shift to the clean endpoint path layout without the hardcoded static extension file routing
+	url := fmt.Sprintf("https://assurestart.co/api/cve?term=%s", targetVendor)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		fmt.Printf("[ASSURESTART] Failed to initialize request layout: %v", err)
+		return nil
+	}
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[ASSURESTART ERROR] Outbound API request failed: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("[ASSURESTART ERROR] Failed to read response body: %v", err)
+		return nil
+	}
+	// Defensive Guard: Block downstream logic immediately if a 404, 500, or other error code returns
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("[ASSURESTART ERROR] Upstream API returned error status code: %d. %v", resp.StatusCode, string(res))
+		return nil
+	}
+
+	var incomingData []AssureStartRawItem
+	if err := json.NewDecoder(resp.Body).Decode(&incomingData); err != nil {
+		fmt.Printf("[ASSURESTART ERROR] JSON structural decoding validation mismatch: %v", err)
+		return nil
+	}
+	if len(incomingData) == 0 {
+		fmt.Println("RERERE", string(res))
+		return nil
+	}
+	fmt.Println(incomingData)
+	var localizedFeed []VulnerabilityItem
+	for _, item := range incomingData {
+		displayTitle := item.Title
+		if displayTitle == "" {
+			displayTitle = fmt.Sprintf("%s: Microsoft Advisory Alert", item.CVE)
+		}
+
+		var severityPrefix string
+		if item.Severity != "" {
+			severityPrefix = fmt.Sprintf("severity: %s | ", strings.ToLower(item.Severity))
+		}
+
+		localizedFeed = append(localizedFeed, VulnerabilityItem{
+			Title:       displayTitle,
+			Description: fmt.Sprintf("%s%s", severityPrefix, item.Description),
+			Source:      "AssureStart",
+			URL:         item.URL,
+			Published:   item.Published,
+			IOCs:        make([]string, 0),
+			CWEs:        make([]string, 0),
+		})
+	}
+
+	return localizedFeed
 }
