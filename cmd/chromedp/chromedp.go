@@ -109,3 +109,27 @@ func main() {
 
 	fmt.Printf("Execution successfully completed. Export matrix parsed to location:\nfile://%s\n", absPath)
 }
+
+/*
+chromedp.Evaluate(fmt.Sprintf(`
+			(async function() {
+				// 1. Automatically extract the CSRF token if the app stores it in a meta tag or header
+				// (Adjust this selector based on how ThreatPunch tracks CSRF tokens)
+				const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || "";
+
+				// 2. Dispatch a native fetch request. Chrome automatically appends
+				// all Session Cookies, HttpOnly tokens, and credentials.
+				const response = await fetch('/api/v1/bulk-search', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-CSRF-Token': csrfToken // Pass the extracted token if required
+					},
+					body: JSON.stringify(%s)
+				});
+
+				return await response.text();
+			})()
+		`, bulkPayloadJSON), &apiResponse),
+	)
+*/
