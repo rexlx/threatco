@@ -17,8 +17,7 @@ export class Contextualizer {
       "url": /((https?|ftp):\/\/[^\s/$.?#].[^\s]*)/g,
       "domain": /\b([a-z0-9.-]+\.[a-z]{2,24})\b/g,
       "filepath": /\b([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)\b/g,
-      // Logic-based: Matches a dot and 2-6 char extension
-      "filename": /\b[\w\-.]+\.[a-z0-9]{2,6}\b/g,
+      "filename": /\b[\w\-.]+\.[a-z0-9]*[a-z][a-z0-9]*\b/gi,
     };
   }
 

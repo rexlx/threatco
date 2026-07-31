@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/rexlx/threatco/internal"
 )
 
 func main() {
@@ -109,6 +110,8 @@ func main() {
 
 	fmt.Printf("Execution successfully completed. Export matrix parsed to location:\nfile://%s\n", absPath)
 }
+
+type ParseResponse internal.SummarizedEvent
 
 /*
 chromedp.Evaluate(fmt.Sprintf(`
