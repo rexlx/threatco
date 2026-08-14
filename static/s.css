@@ -229,3 +229,15 @@ pre {
 .scroll-button:hover {
     background-color: rgba(34, 34, 34, 0.8);
 }
+
+/* Prevent the main content column from expanding wider than viewport */
+#mainColumns > .column {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Ensure the match box stays constrained and can scroll if needed */
+#matchBox {
+    max-width: 100%;
+    overflow-x: auto; /* Adds horizontal scrollbar only if content exceeds width */
+}
