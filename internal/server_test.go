@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
 )
 
 type MockDB struct {
@@ -95,9 +97,10 @@ func setupTestServer() *Server {
 	}
 
 	s := &Server{
-		Log:    log.New(io.Discard, "", 0),
-		DB:     db,
-		Memory: &sync.RWMutex{},
+		Log:     log.New(io.Discard, "", 0),
+		DB:      db,
+		Memory:  &sync.RWMutex{},
+		Session: scs.New(),
 		Cache: &Cache{
 			Coordinates: make(map[string][]Coord),
 			Responses:   make(map[string]ResponseItem),
@@ -162,6 +165,7 @@ func TestAutomatedThreatScan(t *testing.T) {
 			"info":            "Known C2 IP",
 			"threat_level_id": 5,
 			"matched":         true,
+			"from":            "threat-intel",
 		},
 	}
 	payload, _ := json.Marshal(data)
