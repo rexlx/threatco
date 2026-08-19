@@ -829,9 +829,22 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 
 func (s *Server) AutomatedThreatScan() {
 	start := time.Now()
+	var scannedRecords float64
+	var criticalThreatsFound float64
+	var casesCreated float64
+
 	defer func() {
 		duration := time.Since(start)
-		fmt.Println(fmt.Sprintf("AutomatedThreatScan completed in %v", duration))
+		durationMs := float64(duration.Milliseconds())
+
+		s.Memory.Lock()
+		s.Details.Stats["threat_scan_duration_ms"] = durationMs
+		s.Details.Stats["threat_scan_records_scanned"] = scannedRecords
+		s.Details.Stats["threat_scan_critical_threats"] = criticalThreatsFound
+		s.Details.Stats["threat_scan_cases_created"] += casesCreated
+		s.Memory.Unlock()
+
+		fmt.Println(fmt.Sprintf("AutomatedThreatScan completed in %v (scanned: %.0f, critical: %.0f, cases: %.0f)", duration, scannedRecords, criticalThreatsFound, casesCreated))
 	}()
 	scanWindow := time.Now().Add(-1 * time.Hour)
 	responses, err := s.DB.GetResponses(scanWindow)
@@ -839,6 +852,7 @@ func (s *Server) AutomatedThreatScan() {
 		s.Log.Println("AutomatedThreatScan error getting responses:", err)
 		return
 	}
+	scannedRecords = float64(len(responses))
 
 	for _, r := range responses {
 		tid, err := ExtractThreatLevelID(r.Data)
@@ -847,6 +861,7 @@ func (s *Server) AutomatedThreatScan() {
 		}
 
 		if tid >= 4 {
+			criticalThreatsFound++
 			se, err := ExtractSummarizedEvent(r.Data)
 			if err != nil {
 				s.Log.Printf("AutomatedThreatScan: failed to extract event: %v", err)
@@ -915,6 +930,8 @@ func (s *Server) AutomatedThreatScan() {
 				}
 				if err := s.DB.CreateCase(newCase); err != nil {
 					s.Log.Println("Failed to create auto-case:", err)
+				} else {
+					casesCreated++
 				}
 				go func() {
 					out, err := json.Marshal(newCase)

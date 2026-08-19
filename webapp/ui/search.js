@@ -34,11 +34,11 @@ export class SearchController {
         <h1 class="title has-text-info">Overview</h1>
         
         <div class="columns is-multiline is-mobile mb-6">
-            ${this._renderStatBox("Open Cases", stats.open_cases, "warning")}
-            ${this._renderStatBox("Responses", stats.active_responses, "info")}
-            ${this._renderStatBox("Archived", stats.archived_responses, "grey")}
-            ${this._renderStatBox("Users", stats.total_users, "success")}
-            ${this._renderStatBox("Proxied", stats.server_metrics?.vendor_responses || 0, "white")}
+            ${this._renderStatBox("Open Cases", stats.open_cases, "warning", "statBoxOpenCases")}
+            ${this._renderStatBox("Responses", stats.active_responses, "info", "statBoxResponses")}
+            ${this._renderStatBox("Archived", stats.archived_responses, "grey", "statBoxArchived")}
+            ${this._renderStatBox("Users", stats.total_users, "success", "statBoxUsers")}
+            ${this._renderStatBox("Proxied", stats.server_metrics?.vendor_responses || 0, "white", "statBoxProxied")}
         </div>
 
         <div class="tabs is-boxed mt-6">
@@ -77,10 +77,10 @@ export class SearchController {
         }
     }
 
-    _renderStatBox(label, value, colorClass) {
+    _renderStatBox(label, value, colorClass, id = '') {
         return `
             <div class="column is-one-fifth-tablet is-half-mobile">
-                <div class="box has-background-black has-text-centered" style="border: 1px solid #333; height: 100%;">
+                <div class="box has-background-black has-text-centered stat-box" ${id ? `id="${id}"` : ''} style="border: 1px solid #333; height: 100%; cursor: pointer;">
                     <p class="heading has-text-grey-light">${label}</p>
                     <p class="title is-4 has-text-${colorClass}">${value}</p>
                 </div>
@@ -294,6 +294,23 @@ export class SearchController {
 
     attachFormListeners() {
         this.container.addEventListener('click', async (event) => {
+            const statBox = event.target.closest('.stat-box');
+            if (statBox) {
+                const target = statBox.id;
+                if (target === 'statBoxOpenCases') {
+                    document.getElementById('sidebarCases')?.click();
+                    return;
+                }
+                if (target === 'statBoxResponses' || target === 'statBoxArchived' || target === 'statBoxProxied') {
+                    document.getElementById('sidebarRecentActivity')?.click();
+                    return;
+                }
+                if (target === 'statBoxUsers') {
+                    window.location.href = '/users';
+                    return;
+                }
+            }
+
             const button = event.target.closest('button, a');
 
             if (!button) return;
