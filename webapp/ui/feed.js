@@ -187,13 +187,44 @@ export class FeedController {
             }
 
             // Defensively check for arrays to prevent rendering pipeline breakage
+            // Defensively check for arrays to prevent rendering pipeline breakage
+            // Defensively check for arrays to prevent rendering pipeline breakage
             let iocHtml = '';
             if (item.iocs && Array.isArray(item.iocs) && item.iocs.length > 0) {
+                // Separate Event ID from actual IOC indicators
+                const eventIdEntry = item.iocs.find(ioc => ioc.startsWith('Event ID:'));
+                const eventId = eventIdEntry ? eventIdEntry.replace('Event ID:', '').trim() : null;
+
+                // Filter out the Event ID and redundant CVE strings
+                const indicators = item.iocs.filter(ioc => 
+                    !ioc.startsWith('Event ID:') && 
+                    ioc !== item.title && 
+                    !ioc.startsWith('CVE-')
+                );
+
                 iocHtml = `
-                    <div class="ioc-enrichment-box mt-3 p-3 has-background-dark style-radius" style="border-left: 3px solid #ffdd57; border-radius: 4px;">
-                        <strong class="is-size-7 has-text-warning uppercase tracking-wider block mb-2">Correlated MISP Indicators:</strong>
-                        <div class="tags">
-                            ${item.iocs.map(ioc => `<span class="tag is-dark has-text-info is-family-code">${ioc}</span>`).join('')}
+                    <div class="is-flex is-align-items-center is-flex-wrap-wrap mt-2">
+                        <span class="is-flex is-align-items-center mr-2 mb-1">
+                            <span class="icon is-small has-text-warning mr-1">
+                                <i class="material-icons" style="font-size: 14px;">hub</i>
+                            </span>
+                            <strong class="is-size-7 has-text-warning uppercase mr-2" style="letter-spacing: 0.5px;">
+                                MISP Indicators:
+                            </strong>
+                            ${eventId ? `
+                                <span class="tag is-dark is-small is-family-code" style="border: 1px solid rgba(255, 221, 87, 0.35); color: #ffdd57; height: 1.6em; padding: 0 6px;">
+                                    Event #${eventId}
+                                </span>
+                            ` : ''}
+                        </span>
+
+                        <div class="tags mb-0">
+                            ${indicators.length > 0 ? indicators.map(ioc => `
+                                <span class="tag is-dark is-family-code is-small mb-1" style="background-color: #111927; border: 1px solid #1e293b; color: #38bdf8; height: 1.6em;">
+                                    <span class="icon is-small mr-1" style="opacity: 0.6;"><i class="material-icons" style="font-size: 11px;">crisis_alert</i></span>
+                                    ${ioc}
+                                </span>
+                            `).join('') : '<span class="is-size-7 has-text-grey-light is-italic">No additional IOCs</span>'}
                         </div>
                     </div>
                 `;

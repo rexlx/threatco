@@ -1622,9 +1622,18 @@ func (s *Server) FetchMispIOCsByCVE(ctx context.Context, cveID string) ([]byte, 
 	// We pass the CVE value directly to match on indicators.
 	searchPayload := map[string]interface{}{
 		"returnFormat":   "json",
+		"type":           "vulnerability",
 		"value":          cveID,
 		"includeEventId": true,
 	}
+
+	// searchPayload := map[string]interface{}{
+	// 	"request": map[string]interface{}{
+	// 		"returnFormat": "json",
+	// 		"value":        cveID,
+	// 		"type":         "vulnerability",
+	// 	},
+	// }
 
 	jsonBytes, err := json.Marshal(searchPayload)
 	if err != nil {
@@ -1632,15 +1641,22 @@ func (s *Server) FetchMispIOCsByCVE(ctx context.Context, cveID string) ([]byte, 
 	}
 
 	// Route strictly back to attributes/restSearch as intended
-	reqUrl := fmt.Sprintf("%s/attributes/restSearch", strings.TrimSuffix(mispTarget.GetURL(), "/"))
+	reqUrl := fmt.Sprintf("%s/events/restSearch", strings.TrimSuffix(mispTarget.GetURL(), "/"))
+	// reqUrl := fmt.Sprintf(
+	// 	"%s/events/restSearch/value:%s/type:vulnerability/returnFormat:json",
+	// 	strings.TrimSuffix(mispTarget.GetURL(), "/"),
+	// 	url.PathEscape(cveID),
+	// )
+	// reqUrl := fmt.Sprintf("%s/attributes/restSearch", strings.TrimSuffix(mispTarget.GetURL(), "/"))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", reqUrl, bytes.NewReader(jsonBytes))
+	// req, err := http.NewRequestWithContext(ctx, "POST", reqUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create misp api request: %w", err)
 	}
 
-	// req.Header.Set("Accept", "application/json")
-	// req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("misp query context aborted before transport execution: %w", ctx.Err())
@@ -1662,6 +1678,16 @@ func (s *Server) FetchMispIOCsByCVE(ctx context.Context, cveID string) ([]byte, 
 		fmt.Printf("MISP CVE search raw response error payload detected: %s\n", string(resp))
 		return nil, fmt.Errorf("upstream misp server internal tracking error 500")
 	}
+	if searchPayload["value"] == "CVE-2026-72529" {
+		fmt.Println(string(resp))
+	}
+	// if reqMap, ok := searchPayload["request"].(map[string]interface{}); ok {
+	// 	if val, ok := reqMap["value"].(string); ok {
+	// 		if val == "CVE-2026-72529" {
+	// 			fmt.Println(string(resp))
+	// 		}
+	// 	}
+	// }
 
 	// Return the flat attribute raw payload data block directly so that
 	// ExtractValuesFromMispResponse handles the extraction pipeline cleanly.
@@ -1710,26 +1736,85 @@ func (s *Server) normalizeEventToAttributes(eventPayload []byte) []byte {
 	return finalBytes
 }
 
-// Helper to parse out the value fields from MISP restSearch attribute response arrays
+// raw respone:
+// {"response": [{"Event":{"id":"1725","orgc_id":"1","org_id":"1","date":"2026-08-21","threat_level_id":"3","info":"CVE-2026-72529","published":false,"uuid":"7404d066-f627-4372-ab2c-ddbd4d370c04","attribute_count":"2","analysis":"0","timestamp":"1787321026","distribution":"1","proposal_email_lock":false,"locked":false,"publish_timestamp":"0","first_publication":"0","sharing_group_id":"0","disable_correlation":false,"extends_uuid":"","protected":null,"event_creator_email":"admin@admin.test","Org":{"id":"1","name":"ADMIN","uuid":"218c2558-1e64-49b2-a82d-746ee4cc7c68","local":true},"Orgc":{"id":"1","name":"ADMIN","uuid":"218c2558-1e64-49b2-a82d-746ee4cc7c68","local":true},"Attribute":[{"id":"834783","type":"ip-src","category":"Network activity","to_ids":false,"uuid":"f5c89216-b093-40de-92c0-e16e4fad26c8","event_id":"1725","distribution":"5","timestamp":"1787320624","comment":"CVE-2026-72529","sharing_group_id":"0","deleted":false,"disable_correlation":false,"object_id":"0","object_relation":null,"first_seen":null,"last_seen":null,"value":"8.8.8.8","Galaxy":[],"ShadowAttribute":[]},{"id":"834784","type":"vulnerability","category":"External analysis","to_ids":false,"uuid":"85e01b9e-050e-4f12-b368-564004c2cbe4","event_id":"1725","distribution":"5","timestamp":"1787321026","comment":"","sharing_group_id":"0","deleted":false,"disable_correlation":false,"object_id":"0","object_relation":null,"first_seen":null,"last_seen":null,"value":"CVE-2026-72529","Galaxy":[],"ShadowAttribute":[]}],"ShadowAttribute":[],"RelatedEvent":[{"Event":{"id":"1542","date":"2026-02-12","threat_level_id":"4","info":"Fake 7-Zip downloads are turning home PCs into proxy nodes","published":true,"uuid":"a1ddf106-025e-438c-947d-202ded0ee395","analysis":"0","timestamp":"1772440113","distribution":"3","org_id":"1","orgc_id":"4","Org":{"id":"1","name":"ADMIN","uuid":"218c2558-1e64-49b2-a82d-746ee4cc7c68"},"Orgc":{"id":"4","name":"CIRCL","uuid":"55f6ea5e-2c60-40e5-964f-47a8950d210f"}}}],"Galaxy":[],"Object":[],"EventReport":[],"CryptographicKey":[]}}]}
 func ExtractValuesFromMispResponse(mispPayload []byte) []string {
 	var results []string
 
-	// Quick type structure to handle standard MISP restSearch Attribute outputs
+	// Schema matching MISP /events/restSearch output
 	var responseData struct {
-		Response struct {
-			Attribute []struct {
-				Value string `json:"value"`
-			} `json:"Attribute"`
+		Response []struct {
+			Event struct {
+				ID        string `json:"id"`
+				Attribute []struct {
+					Value string `json:"value"`
+				} `json:"Attribute"`
+			} `json:"Event"`
 		} `json:"response"`
 	}
 
-	if err := json.Unmarshal(mispPayload, &responseData); err == nil {
-		for _, attr := range responseData.Response.Attribute {
+	if err := json.Unmarshal(mispPayload, &responseData); err != nil {
+		return results
+	}
+
+	for _, item := range responseData.Response {
+		if item.Event.ID != "" {
+			results = append(results, fmt.Sprintf("Event ID: %s", item.Event.ID))
+		}
+		for _, attr := range item.Event.Attribute {
 			if attr.Value != "" {
 				results = append(results, attr.Value)
 			}
 		}
 	}
+
+	return results
+}
+
+type MispEventIOCs struct {
+	EventID string   `json:"eventId"`
+	Info    string   `json:"info"`
+	Values  []string `json:"values"`
+}
+
+func ExtractEventIOCsFromMispResponse(mispPayload []byte, cveID string) []MispEventIOCs {
+	var results []MispEventIOCs
+
+	var responseData struct {
+		Response []struct {
+			Event struct {
+				ID        string `json:"id"`
+				Info      string `json:"info"`
+				Attribute []struct {
+					Type  string `json:"type"`
+					Value string `json:"value"`
+				} `json:"Attribute"`
+			} `json:"Event"`
+		} `json:"response"`
+	}
+
+	if err := json.Unmarshal(mispPayload, &responseData); err != nil {
+		return results
+	}
+
+	for _, item := range responseData.Response {
+		var values []string
+		for _, attr := range item.Event.Attribute {
+			// Exclude the queried CVE identifier itself from the IOC list
+			if attr.Value != "" && attr.Value != cveID && attr.Type != "vulnerability" {
+				values = append(values, attr.Value)
+			}
+		}
+
+		if len(values) > 0 {
+			results = append(results, MispEventIOCs{
+				EventID: item.Event.ID,
+				Info:    item.Event.Info,
+				Values:  values,
+			})
+		}
+	}
+
 	return results
 }
 
