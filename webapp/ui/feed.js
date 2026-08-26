@@ -3,6 +3,8 @@
  * Controller handling rendering and UI logic for the CISA/NIST vulnerability feed.
  * Updates the layout to sit the colored CWE indicator tiles directly next to the source tags.
  */
+import { escapeHtml } from './utils.js';
+
 export class FeedController {
     /**
      * @param {string} containerId - The DOM ID of the container element ('feedContainer')
@@ -106,6 +108,58 @@ export class FeedController {
                 </div>
             </div>
             <div class="feed-list-wrapper" id="feedListItems"></div>
+
+            <div class="modal" id="feedCaseModal">
+                <div class="modal-background"></div>
+                <div class="modal-card">
+                    <header class="modal-card-head">
+                        <p class="modal-card-title">Open Case for Vulnerability</p>
+                        <button class="delete" aria-label="close"></button>
+                    </header>
+                    <section class="modal-card-body">
+                        <form id="feedCaseForm">
+                            <div class="field">
+                                <label class="label">Target Case</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="feedTargetCaseId">
+                                            <option value="">-- Create New Case --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="feedNewCaseFields">
+                                <div class="field">
+                                    <label class="label">Case Name</label>
+                                    <div class="control">
+                                        <input class="input" type="text" id="feedCaseName" placeholder="e.g. Investigation: CVE-2024-XXXX">
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="label">Description</label>
+                                    <div class="control">
+                                        <textarea class="textarea" id="feedCaseDesc" rows="3" placeholder="Case details..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Associated IOCs / CVE</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="feedCaseIocs" readonly style="background-color: #111927; color: #38bdf8; border: 1px solid #1e293b;">
+                                </div>
+                            </div>
+                            <div id="feedCaseResult" class="mt-3"></div>
+                            <div class="buttons is-right mt-4">
+                                <button type="button" class="button" id="feedCaseCancelBtn">Cancel</button>
+                                <button type="submit" class="button is-success" id="feedCaseSubmitBtn">
+                                    <span class="icon"><i class="material-icons">work</i></span>
+                                    <span>Create / Update Case</span>
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            </div>
         `;
 
         // Bind event handler to the dynamic filter dropdown
@@ -147,7 +201,7 @@ export class FeedController {
         }
 
         // Map matching items to Bulma markup components
-        listContainer.innerHTML = filteredItems.map(item => {
+        listContainer.innerHTML = filteredItems.map((item, index) => {
             // Tag colors depending on threat Intel source
             let tagColor = 'is-link';
             if (item.source === 'CISA') tagColor = 'is-danger';
@@ -316,13 +370,157 @@ export class FeedController {
                             ${item.published ? `<p class="is-size-7 has-text-grey-light mt-2">Cached/Published: ${new Date(item.published).toLocaleString()}</p>` : ''}
                         </div>
                         <div class="column is-narrow">
-                            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="button is-small is-info is-outlined">
-                                <span class="icon"><i class="material-icons">open_in_new</i></span>
-                            </a>
+                            <div class="buttons">
+                                <button class="button is-small is-success is-outlined btn-feed-open-case mr-1 mb-0" data-index="${index}" title="Open Case for this CVE">
+                                    <span class="icon"><i class="material-icons">work_outline</i></span>
+                                    
+                                </button>
+                                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="button is-small is-info is-outlined mb-0" title="Open reference link">
+                                    <span class="icon"><i class="material-icons">open_in_new</i></span>
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
+
+        listContainer.querySelectorAll('.btn-feed-open-case').forEach(btn => {
+            btn.onclick = (e) => {
+                const idx = parseInt(e.currentTarget.dataset.index);
+                const item = filteredItems[idx];
+                if (item) {
+                    this.openCaseModal(item);
+                }
+            };
+        });
+    }
+
+    async openCaseModal(item) {
+        const modal = document.getElementById('feedCaseModal');
+        if (!modal) return;
+
+        const cveMatch = item.title ? item.title.match(/CVE-\d{4}-\d+/i) : null;
+        const primaryCve = cveMatch ? cveMatch[0].toUpperCase() : (item.title ? item.title.split(':')[0].trim() : 'CVE');
+        const defaultName = `Case: ${primaryCve}`;
+        const defaultDesc = `${item.description || 'No description provided.'}\n\nSource: ${item.source || 'Intel Feed'}\nReference: ${item.url || 'N/A'}`;
+
+        const iocSet = new Set();
+        if (primaryCve) iocSet.add(primaryCve);
+        if (item.title && item.title !== primaryCve) iocSet.add(item.title);
+        if (item.iocs && Array.isArray(item.iocs)) {
+            item.iocs.forEach(ioc => {
+                if (ioc && !ioc.startsWith('Event ID:')) iocSet.add(ioc);
+            });
+        }
+        const iocList = Array.from(iocSet);
+
+        // Fetch user cases to populate select options
+        let userCases = [];
+        try {
+            const res = await this.app._fetch('/cases/list?limit=100&type=user');
+            if (res.ok) {
+                userCases = await res.json() || [];
+            }
+        } catch (e) {
+            console.error("Failed to fetch cases for modal:", e);
+        }
+
+        const select = document.getElementById('feedTargetCaseId');
+        const newFields = document.getElementById('feedNewCaseFields');
+        const caseNameInput = document.getElementById('feedCaseName');
+        const caseDescText = document.getElementById('feedCaseDesc');
+        const caseIocsInput = document.getElementById('feedCaseIocs');
+        const resultBox = document.getElementById('feedCaseResult');
+
+        if (select) {
+            select.innerHTML = `
+                <option value="">-- Create New Case --</option>
+                ${userCases.filter(c => c.status === 'Open').map(c => `
+                    <option value="${c.id}">${escapeHtml(c.name)}</option>
+                `).join('')}
+            `;
+            select.value = '';
+        }
+
+        if (newFields) newFields.style.display = 'block';
+        if (caseNameInput) caseNameInput.value = defaultName;
+        if (caseDescText) caseDescText.value = defaultDesc;
+        if (caseIocsInput) caseIocsInput.value = iocList.join(', ');
+        if (resultBox) resultBox.innerHTML = '';
+
+        const closeModal = () => {
+            modal.classList.remove('is-active');
+        };
+
+        modal.querySelectorAll('.delete, .modal-background, #feedCaseCancelBtn').forEach(el => {
+            el.onclick = closeModal;
+        });
+
+        if (select) {
+            select.onchange = () => {
+                newFields.style.display = select.value ? 'none' : 'block';
+            };
+        }
+
+        const form = document.getElementById('feedCaseForm');
+        if (form) {
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const submitBtn = document.getElementById('feedCaseSubmitBtn');
+                submitBtn.classList.add('is-loading');
+
+                const targetId = select ? select.value : '';
+                try {
+                    if (targetId) {
+                        // Append IOCs to existing case
+                        const getRes = await this.app._fetch(`/cases/get?id=${targetId}`);
+                        if (!getRes.ok) throw new Error("Could not retrieve target case.");
+                        const caseData = await getRes.json();
+
+                        if (!caseData.iocs) caseData.iocs = [];
+                        iocList.forEach(ioc => {
+                            if (!caseData.iocs.includes(ioc)) {
+                                caseData.iocs.push(ioc);
+                            }
+                        });
+
+                        const updateRes = await this.app._fetch('/cases/update', {
+                            method: 'POST',
+                            body: JSON.stringify(caseData)
+                        });
+                        if (!updateRes.ok) throw new Error(await updateRes.text());
+                    } else {
+                        // Create new case
+                        const name = caseNameInput.value.trim();
+                        const desc = caseDescText.value.trim();
+                        if (!name) throw new Error("Case Name is required.");
+
+                        const createRes = await this.app._fetch('/cases/create', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                name: name,
+                                description: desc,
+                                is_auto: false,
+                                iocs: iocList
+                            })
+                        });
+                        if (!createRes.ok) throw new Error(await createRes.text());
+                    }
+
+                    resultBox.innerHTML = `<div class="notification is-success is-light">Successfully saved to case!</div>`;
+                    setTimeout(() => {
+                        submitBtn.classList.remove('is-loading');
+                        closeModal();
+                    }, 1200);
+
+                } catch (err) {
+                    submitBtn.classList.remove('is-loading');
+                    resultBox.innerHTML = `<div class="notification is-danger is-dark">${escapeHtml(err.message)}</div>`;
+                }
+            };
+        }
+
+        modal.classList.add('is-active');
     }
 }
