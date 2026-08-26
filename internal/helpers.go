@@ -1419,7 +1419,7 @@ func GetMispCategory(attrType string) string {
 		return "Payload delivery"
 
 	// External analysis links -> External analysis
-	case "link", "text", "comment", "other":
+	case "link", "text", "comment", "other", "vulnerability":
 		return "External analysis"
 
 	// Financial

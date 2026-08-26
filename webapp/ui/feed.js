@@ -126,11 +126,9 @@ export class FeedController {
         this.updateList();
     }
 
-    /**
-     * Filters, maps, and injects item list HTML depending on filter criteria.
-     */
+
     updateList() {
-        const listContainer = document.getElementById('feedListItems');
+        const listContainer = document.getElementById(this.containerId ? 'feedListItems' : 'feedListItems');
         if (!listContainer) return;
 
         // Filter feed items safely by testing source matching
@@ -153,7 +151,9 @@ export class FeedController {
             // Tag colors depending on threat Intel source
             let tagColor = 'is-link';
             if (item.source === 'CISA') tagColor = 'is-danger';
-            else if (item.source === 'NIST') tagColor = 'is-info';
+            else if (item.source === 'NIST' || item.source === 'NIST/CIRCL') tagColor = 'is-info';
+            else if (item.source === 'Red Hat') tagColor = 'is-danger is-light';
+            else if (item.source === 'Canonical') tagColor = 'is-warning is-light';
             
             // Generate inline CWE elements if present on the record
             let cweHtml = '';
@@ -186,8 +186,64 @@ export class FeedController {
                 }).join('');
             }
 
-            // Defensively check for arrays to prevent rendering pipeline breakage
-            // Defensively check for arrays to prevent rendering pipeline breakage
+            // Generate Campaign tags if present
+            let campaignHtml = '';
+            if (item.campaigns && Array.isArray(item.campaigns) && item.campaigns.length > 0) {
+                campaignHtml = `
+                    <div class="is-flex is-align-items-center is-flex-wrap-wrap mt-2">
+                        <span class="is-flex is-align-items-center mr-2 mb-1">
+                            <span class="icon is-small has-text-danger mr-1">
+                                <i class="material-icons" style="font-size: 14px;">flag</i>
+                            </span>
+                            <strong class="is-size-7 has-text-danger uppercase mr-2" style="letter-spacing: 0.5px;">
+                                Campaigns / Actors:
+                            </strong>
+                        </span>
+                        <div class="tags mb-0">
+                            ${item.campaigns.map(camp => `
+                                <span class="tag is-danger is-light is-family-code is-small mb-1" style="border: 1px solid rgba(255, 56, 96, 0.3); height: 1.6em;">
+                                    ${camp}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Generate CAPEC Attack Pattern tags if present from CIRCL
+            let capecHtml = '';
+            if (item.capec && Array.isArray(item.capec) && item.capec.length > 0) {
+                capecHtml = `
+                    <div class="is-flex is-align-items-center is-flex-wrap-wrap mt-2">
+                        <span class="is-flex is-align-items-center mr-2 mb-1">
+                            <span class="icon is-small has-text-info mr-1">
+                                <i class="material-icons" style="font-size: 14px;">security</i>
+                            </span>
+                            <strong class="is-size-7 has-text-info uppercase mr-2" style="letter-spacing: 0.5px;">
+                                CAPEC Patterns:
+                            </strong>
+                        </span>
+                        <div class="tags mb-0">
+                            ${item.capec.map(capec => {
+                                const capecId = typeof capec === 'string' ? capec : (capec.id || 'CAPEC');
+                                const capecName = typeof capec === 'object' && capec.name ? `: ${capec.name}` : '';
+                                const numericCapec = capecId.replace(/\D/g, '');
+                                const capecUrl = numericCapec ? `https://capec.mitre.org/data/definitions/${numericCapec}.html` : 'https://capec.mitre.org/';
+                                return `
+                                    <a href="${capecUrl}" 
+                                       target="_blank" 
+                                       rel="noopener noreferrer" 
+                                       class="tag is-info is-light is-family-code is-small mb-1" 
+                                       style="border: 1px solid rgba(50, 115, 220, 0.3); height: 1.6em; text-decoration: none;">
+                                        ${capecId}${capecName}
+                                    </a>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             // Defensively check for arrays to prevent rendering pipeline breakage
             let iocHtml = '';
             if (item.iocs && Array.isArray(item.iocs) && item.iocs.length > 0) {
@@ -209,7 +265,7 @@ export class FeedController {
                                 <i class="material-icons" style="font-size: 14px;">hub</i>
                             </span>
                             <strong class="is-size-7 has-text-warning uppercase mr-2" style="letter-spacing: 0.5px;">
-                                MISP Indicators:
+                                Indicators / IOCs:
                             </strong>
                             ${eventId ? `
                                 <span class="tag is-dark is-small is-family-code" style="border: 1px solid rgba(255, 221, 87, 0.35); color: #ffdd57; height: 1.6em; padding: 0 6px;">
@@ -253,6 +309,8 @@ export class FeedController {
                             
                             <p class="has-text-white-ter is-size-6 mt-1">${item.description || 'No description provided.'}</p>
                             
+                            ${campaignHtml}
+                            ${capecHtml}
                             ${iocHtml}
                             
                             ${item.published ? `<p class="is-size-7 has-text-grey-light mt-2">Cached/Published: ${new Date(item.published).toLocaleString()}</p>` : ''}

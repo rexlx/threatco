@@ -108,6 +108,8 @@ type VulnerabilityItem struct {
 	Published   time.Time `json:"published"`
 	IOCs        []string  `json:"iocs"`
 	CWEs        []string  `json:"cwes"`
+	Campaigns   []string  `json:"campaigns,omitempty"`
+	CAPEC       []string  `json:"capec,omitempty"`
 }
 
 type Coord struct {
@@ -1155,14 +1157,6 @@ func (s *Server) PollVulnerabilityFeeds() {
 		mu.Unlock()
 	}()
 
-	// go func() {
-	// 	defer wg.Done()
-	// 	asItems := s.pollAssureStartFeedRaw()
-	// 	mu.Lock()
-	// 	rawItems = append(rawItems, asItems...)
-	// 	mu.Unlock()
-	// }()
-
 	wg.Wait()
 
 	if len(rawItems) == 0 {
@@ -1213,7 +1207,9 @@ func (s *Server) PollVulnerabilityFeeds() {
 			var combinedIOCs []string
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 
+			// 1. MISP Threat Intel & IOC Enrichment
 			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
 			if err == nil && len(mispPayload) > 0 {
 				mispIOCs := ExtractValuesFromMispResponse(mispPayload)
@@ -1226,19 +1222,58 @@ func (s *Server) PollVulnerabilityFeeds() {
 				}
 			}
 
-			otxPayload, err := s.FetchPublicOtxIOCsByCVE(ctx, cveID)
-			if err == nil && len(otxPayload) > 0 {
-				otxIOCs := s.extractValuesFromOtxResponse(otxPayload)
-				for _, ioc := range otxIOCs {
-					trimmed := strings.TrimSpace(ioc)
-					if trimmed != "" && !uniqueIOCs[trimmed] {
-						uniqueIOCs[trimmed] = true
-						combinedIOCs = append(combinedIOCs, trimmed)
-					}
-				}
-			}
+			// 2. AlienVault OTX Community Pulse Enrichment
+			// otxPayload, err := s.FetchPublicOtxIOCsByCVE(ctx, cveID)
+			// fmt.Println(err, string(otxPayload))
+			// if err == nil && len(otxPayload) > 0 {
+			// 	otxIOCs := s.extractValuesFromOtxResponse(otxPayload)
+			// 	for _, ioc := range otxIOCs {
+			// 		trimmed := strings.TrimSpace(ioc)
+			// 		if trimmed != "" && !uniqueIOCs[trimmed] {
+			// 			uniqueIOCs[trimmed] = true
+			// 			combinedIOCs = append(combinedIOCs, trimmed)
+			// 		}
+			// 	}
+			// }
 
-			cancel() // Release timer resources immediately upon request lifecycle completion
+			// 3. CIRCL Attack Pattern (CAPEC) & Weakness Enrichment
+			// circlData, err := s.FetchCirclEnrichment(ctx, cveID)
+			// if err != nil {
+			// 	s.LogInfo(fmt.Sprintf("CIRCL enrichment for %s failed: %v", cveID, err))
+			// } else if circlData != nil {
+			// 	// 1. Backfill or append unique CWEs discovered by CNA / CISA ADP
+			// 	if len(circlData.CWEs) > 0 {
+			// 		uniqueCWE := make(map[string]bool)
+			// 		for _, existing := range vItem.CWEs {
+			// 			uniqueCWE[existing] = true
+			// 		}
+			// 		for _, cwe := range circlData.CWEs {
+			// 			if !uniqueCWE[cwe] {
+			// 				uniqueCWE[cwe] = true
+			// 				vItem.CWEs = append(vItem.CWEs, cwe)
+			// 			}
+			// 		}
+			// 	}
+
+			// 	// 2. Backfill empty description if missing from upstream feed
+			// 	if vItem.Description == "" && circlData.Description != "" {
+			// 		vItem.Description = circlData.Description
+			// 	}
+
+			// 	// 3. Flag KEV active exploitation campaign if verified in CISA ADP
+			// 	if circlData.IsKEV {
+			// 		hasKevTag := false
+			// 		for _, c := range vItem.Campaigns {
+			// 			if c == "CISA KEV" {
+			// 				hasKevTag = true
+			// 				break
+			// 			}
+			// 		}
+			// 		if !hasKevTag {
+			// 			vItem.Campaigns = append(vItem.Campaigns, "CISA KEV")
+			// 		}
+			// 	}
+			// }
 
 			if len(combinedIOCs) > 0 {
 				vItem.IOCs = combinedIOCs
@@ -1254,7 +1289,7 @@ func (s *Server) PollVulnerabilityFeeds() {
 
 	enrichWg.Wait()
 
-	// 4. COMMIT SECURELY TO THE CACHE FOR FEED.JS VIEW ACCESS
+	// Commit back into cache for feed.js
 	s.Memory.Lock()
 	s.Cache.VulnerabilityFeed = enrichedItems
 	s.Memory.Unlock()
@@ -2044,4 +2079,110 @@ func (s *Server) pollAssureStartFeedRaw() []VulnerabilityItem {
 	}
 
 	return localizedFeed
+}
+
+type CirclCVEResponse struct {
+	ID      string `json:"id"`
+	Summary string `json:"summary"`
+	CWE     string `json:"cwe"`
+	CAPEC   []struct {
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Summary string `json:"summary"`
+	} `json:"capec"`
+}
+
+type EnrichedCirclData struct {
+	CVEID       string
+	Description string
+	CWEs        []string
+	Campaigns   []string
+	IsKEV       bool
+}
+
+func (s *Server) FetchCirclEnrichment(ctx context.Context, cveID string) (*EnrichedCirclData, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("https://vulnerability.circl.lu/api/cve/%s", strings.ToUpper(cveID))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ThreatCo/2.0 Threat Intel Sync Component")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("circl api returned status: %d", resp.StatusCode)
+	}
+
+	var raw vendors.CirclCVE5Record
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+
+	out := &EnrichedCirclData{
+		CVEID:     raw.CveMetadata.CveID,
+		CWEs:      make([]string, 0),
+		Campaigns: make([]string, 0),
+	}
+
+	// 1. CNA Description
+	for _, desc := range raw.Containers.CNA.Descriptions {
+		if strings.HasPrefix(desc.Lang, "en") {
+			out.Description = desc.Value
+			break
+		}
+	}
+
+	// 2. CNA Problem Types (CWEs)
+	seenCWE := make(map[string]bool)
+	for _, pt := range raw.Containers.CNA.ProblemTypes {
+		for _, d := range pt.Descriptions {
+			if d.CweID != "" && !seenCWE[d.CweID] {
+				seenCWE[d.CweID] = true
+				out.CWEs = append(out.CWEs, d.CweID)
+			}
+		}
+	}
+
+	// 3. CISA ADP Container (CWEs, KEV, SSVC decisions, PoC links)
+	for _, adp := range raw.Containers.ADP {
+		for _, pt := range adp.ProblemTypes {
+			for _, d := range pt.Descriptions {
+				if d.CweID != "" && !seenCWE[d.CweID] {
+					seenCWE[d.CweID] = true
+					out.CWEs = append(out.CWEs, d.CweID)
+				}
+			}
+		}
+
+		for _, m := range adp.Metrics {
+			if m.Other.Type == "kev" {
+				out.IsKEV = true
+				out.Campaigns = append(out.Campaigns, "CISA KEV")
+			}
+			if m.Other.Type == "ssvc" {
+				rawSSVC := string(m.Other.Content)
+				if strings.Contains(rawSSVC, `"Exploitation":"active"`) || strings.Contains(rawSSVC, `"Exploitation": "active"`) {
+					out.Campaigns = append(out.Campaigns, "Active Exploitation")
+				}
+			}
+		}
+
+		for _, ref := range adp.References {
+			lowerURL := strings.ToLower(ref.URL)
+			if strings.Contains(lowerURL, "github.com") && strings.Contains(lowerURL, "cve-") {
+				out.Campaigns = append(out.Campaigns, "Public PoC Available")
+				break
+			}
+		}
+	}
+
+	return out, nil
 }
