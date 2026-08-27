@@ -3458,6 +3458,8 @@ func (s *Server) GetVulnerabilityFeedHandler(w http.ResponseWriter, r *http.Requ
 		return feed[i].Published.After(feed[j].Published)
 	})
 
+	feed = s.EnrichVulnerabilityItemsWithCases(feed)
+
 	fmt.Println("Serving vulnerability feed with", len(feed), "items")
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(feed); err != nil {

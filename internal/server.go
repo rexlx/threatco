@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -110,6 +111,7 @@ type VulnerabilityItem struct {
 	CWEs        []string  `json:"cwes"`
 	Campaigns   []string  `json:"campaigns,omitempty"`
 	CAPEC       []string  `json:"capec,omitempty"`
+	CaseID      string    `json:"case_id,omitempty"`
 }
 
 type Coord struct {
@@ -1187,6 +1189,18 @@ func (s *Server) PollVulnerabilityFeeds() {
 	var enrichWg sync.WaitGroup
 	var enrichMu sync.Mutex
 
+	// Query existing internal cases to check for matching CVE IDs in case titles
+	var internalCases []Case
+	if s.DB != nil {
+		if cases, err := s.DB.SearchCases("%", 0); err == nil {
+			internalCases = cases
+		} else if cases, err := s.DB.GetCases(1000, 0, ""); err == nil {
+			internalCases = cases
+		}
+	}
+
+	cveRegex := regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
+
 	// Bounded Concurrency Semaphore: Safeguards outbound tracking connection lookups
 	sem := make(chan struct{}, 20)
 
@@ -1201,6 +1215,24 @@ func (s *Server) PollVulnerabilityFeeds() {
 			cveID := vItem.Title
 			if strings.Contains(cveID, ":") {
 				cveID = strings.TrimSpace(strings.Split(cveID, ":")[0])
+			}
+
+			// Extract standard CVE identifier or fallback to title prefix
+			targetCVE := ""
+			if match := cveRegex.FindString(vItem.Title); match != "" {
+				targetCVE = strings.ToUpper(match)
+			} else if strings.TrimSpace(cveID) != "" {
+				targetCVE = strings.ToUpper(strings.TrimSpace(cveID))
+			}
+
+			// Match against internal cases where the case title contains targetCVE
+			if targetCVE != "" && len(internalCases) > 0 {
+				for _, c := range internalCases {
+					if strings.Contains(strings.ToUpper(c.Name), targetCVE) {
+						vItem.CaseID = c.ID
+						break
+					}
+				}
 			}
 
 			uniqueIOCs := make(map[string]bool)
@@ -1289,12 +1321,100 @@ func (s *Server) PollVulnerabilityFeeds() {
 
 	enrichWg.Wait()
 
+	// Enrich items with matching internal cases
+	enrichedItems = s.EnrichVulnerabilityItemsWithCases(enrichedItems)
+
 	// Commit back into cache for feed.js
 	s.Memory.Lock()
 	s.Cache.VulnerabilityFeed = enrichedItems
 	s.Memory.Unlock()
 
 	s.LogInfo(fmt.Sprintf("Vulnerability cache successfully rebuilt. Saved %d verified records.", len(enrichedItems)))
+}
+
+func (s *Server) EnrichVulnerabilityItemsWithCases(items []VulnerabilityItem) []VulnerabilityItem {
+	if len(items) == 0 {
+		return items
+	}
+
+	var internalCases []Case
+	if s.DB != nil {
+		if cases, err := s.DB.SearchCases("%", 0); err == nil && len(cases) > 0 {
+			internalCases = cases
+		} else if cases, err := s.DB.GetCases(1000, 0, ""); err == nil {
+			internalCases = cases
+		}
+	}
+
+	cveRegex := regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
+
+	for i := range items {
+		cveID := items[i].Title
+		if strings.Contains(cveID, ":") {
+			cveID = strings.TrimSpace(strings.Split(cveID, ":")[0])
+		}
+
+		targetCVE := ""
+		if match := cveRegex.FindString(items[i].Title); match != "" {
+			targetCVE = strings.ToUpper(match)
+		} else if match := cveRegex.FindString(cveID); match != "" {
+			targetCVE = strings.ToUpper(match)
+		} else if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cveID)), "CVE-") {
+			targetCVE = strings.ToUpper(strings.TrimSpace(cveID))
+		}
+
+		matchedCaseID := ""
+		if len(internalCases) > 0 {
+			for _, c := range internalCases {
+				caseNameUpper := strings.ToUpper(c.Name)
+				// 1. Check if case name contains targetCVE
+				if targetCVE != "" && strings.Contains(caseNameUpper, targetCVE) {
+					matchedCaseID = c.ID
+					break
+				}
+				// 2. Check if case IOCs contains targetCVE
+				if targetCVE != "" {
+					matchedInIOC := false
+					for _, ioc := range c.IOCs {
+						if strings.EqualFold(ioc, targetCVE) {
+							matchedInIOC = true
+							break
+						}
+					}
+					if matchedInIOC {
+						matchedCaseID = c.ID
+						break
+					}
+				}
+				// 3. Check if any case IOC matches any item IOC
+				if len(items[i].IOCs) > 0 {
+					matchedInIOC := false
+					for _, itemIOC := range items[i].IOCs {
+						if itemIOC == "" || strings.HasPrefix(itemIOC, "Event ID:") {
+							continue
+						}
+						for _, caseIOC := range c.IOCs {
+							if strings.EqualFold(caseIOC, itemIOC) {
+								matchedInIOC = true
+								break
+							}
+						}
+						if matchedInIOC {
+							break
+						}
+					}
+					if matchedInIOC {
+						matchedCaseID = c.ID
+						break
+					}
+				}
+			}
+		}
+
+		items[i].CaseID = matchedCaseID
+	}
+
+	return items
 }
 
 // FetchPublicOtxIOCsByCVE executes a keyless public lookup to capture open community pulse indicators tied to a CVE

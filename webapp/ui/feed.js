@@ -371,9 +371,14 @@ export class FeedController {
                         </div>
                         <div class="column is-narrow">
                             <div class="buttons">
-                                <button class="button is-small is-success is-outlined btn-feed-open-case mr-1 mb-0" data-index="${index}" title="Open Case for this CVE">
+                                ${item.case_id ? `
+                                    <button class="button is-small is-warning is-outlined btn-feed-view-case mr-1 mb-0" data-case-id="${item.case_id}" title="View existing associated case">
+                                        <span class="icon"><i class="material-icons">visibility</i></span>
+                                    </button>
+                                ` : ''}
+                                <button class="button is-small is-success is-outlined btn-feed-open-case mr-1 mb-0" data-index="${index}" title="Open or update case for this CVE">
                                     <span class="icon"><i class="material-icons">work_outline</i></span>
-                                    
+
                                 </button>
                                 <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="button is-small is-info is-outlined mb-0" title="Open reference link">
                                     <span class="icon"><i class="material-icons">open_in_new</i></span>
@@ -384,6 +389,15 @@ export class FeedController {
                 </div>
             `;
         }).join('');
+
+        listContainer.querySelectorAll('.btn-feed-view-case').forEach(btn => {
+            btn.onclick = (e) => {
+                const caseId = e.currentTarget.dataset.caseId;
+                if (caseId) {
+                    document.dispatchEvent(new CustomEvent('req-open-case', { detail: caseId }));
+                }
+            };
+        });
 
         listContainer.querySelectorAll('.btn-feed-open-case').forEach(btn => {
             btn.onclick = (e) => {

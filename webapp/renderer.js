@@ -75,6 +75,14 @@ document.addEventListener('req-show-responses', () => {
     document.getElementById("sidebarRecentActivity").click();
 });
 
+document.addEventListener('req-open-case', async (e) => {
+    const caseId = e.detail;
+    if (sidebarCases) setActiveSidebar(sidebarCases);
+    hideAll();
+    document.getElementById('casesContainer').classList.remove('is-hidden');
+    await caseCtrl.openCase({ id: caseId });
+});
+
 document.getElementById("sidebarSearch").addEventListener('click', (e) => {
     setActiveSidebar(e.currentTarget);
     showMainView();

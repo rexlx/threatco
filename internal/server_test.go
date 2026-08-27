@@ -197,6 +197,42 @@ func TestAutomatedThreatScan(t *testing.T) {
 	}
 }
 
+func TestEnrichVulnerabilityItemsWithCases(t *testing.T) {
+	s := setupTestServer()
+	db := s.DB.(*MockDB)
+
+	db.cases["cve-case-1"] = Case{
+		ID:   "cve-case-1",
+		Name: "Case: CVE-2024-9999",
+		IOCs: []string{"CVE-2024-9999", "1.1.1.1"},
+	}
+
+	items := []VulnerabilityItem{
+		{
+			Title: "CVE-2024-9999: Critical Vuln",
+			IOCs:  []string{"1.1.1.1"},
+		},
+		{
+			Title: "CVE-2025-0001: Unrelated Vuln",
+			IOCs:  []string{"2.2.2.2"},
+		},
+	}
+
+	enriched := s.EnrichVulnerabilityItemsWithCases(items)
+
+	if len(enriched) != 2 {
+		t.Fatalf("Expected 2 items, got %d", len(enriched))
+	}
+
+	if enriched[0].CaseID != "cve-case-1" {
+		t.Errorf("Expected CaseID 'cve-case-1', got '%s'", enriched[0].CaseID)
+	}
+
+	if enriched[1].CaseID != "" {
+		t.Errorf("Expected empty CaseID for unmatched item, got '%s'", enriched[1].CaseID)
+	}
+}
+
 func TestAddStat(t *testing.T) {
 	s := setupTestServer()
 	s.addStat("test_hits", 10)
