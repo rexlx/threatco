@@ -5,7 +5,7 @@ import "encoding/json"
 var SupportedServices = []ServiceType{
 	{
 		Kind:     "misp",
-		Type:     []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"},
+		Type:     []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename", "cve", "vulnerability"},
 		RouteMap: make([]RouteMap, 0),
 	},
 	{

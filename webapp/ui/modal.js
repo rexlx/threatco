@@ -260,6 +260,7 @@ export class ModalManager {
         if (initialType === 'ipv4') initialType = 'ip-src';
         if (initialType === 'ipv6') initialType = 'ip-src';
         if (initialType === 'email') initialType = 'email-src';
+        if (initialType === 'cve') initialType = 'vulnerability';
         
         let initialInfo = `Investigation of ${initialValue}`;
         if (eventSource.info) {
@@ -310,6 +311,7 @@ export class ModalManager {
                                             <option value="sha256" ${initialType === 'sha256' ? 'selected' : ''}>sha256</option>
                                             <option value="md5" ${initialType === 'md5' ? 'selected' : ''}>md5</option>
                                             <option value="email-src" ${initialType === 'email-src' ? 'selected' : ''}>email-src</option>
+                                            <option value="vulnerability" ${initialType === 'vulnerability' || initialType === 'cve' ? 'selected' : ''}>vulnerability</option>
                                             <option value="other" ${initialType === 'other' || initialType === '' ? 'selected' : ''}>other</option>
                                         </select>
                                     </div>

@@ -16,6 +16,8 @@ func TestGetMispCategory(t *testing.T) {
 		{"iban", "Financial fraud"},
 		{"unknown-type", "Other"},
 		{"url", "Network activity"},
+		{"vulnerability", "External analysis"},
+		{"cve", "External analysis"},
 	}
 
 	for _, tt := range tests {

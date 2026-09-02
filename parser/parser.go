@@ -56,6 +56,7 @@ func NewContextualizer(ignoreIPs bool, ignoreDomains []string, ignoreEmails []st
 			"domain":   regexp.MustCompile(`(?i)\b([a-z0-9.-]+\.[a-z]{2,24})\b`),
 			"filepath": regexp.MustCompile(`\b([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)\b`),
 			"filename": regexp.MustCompile(`(?i)\b[\w\-\.]+\.[a-z0-9]*[a-z][a-z0-9]*\b`),
+			"cve":      regexp.MustCompile(`(?i)\b(CVE-\d{4}-\d{4,7})\b`),
 		},
 	}
 }
@@ -116,6 +117,8 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 		finalValue := match
 		if kind == "domain" || kind == "email" || isHashType(kind) {
 			finalValue = cleanMatch
+		} else if kind == "cve" {
+			finalValue = strings.ToUpper(match)
 		}
 
 		if finalValue != "" {
@@ -225,7 +228,11 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 			}
 
 			seen[cleanVal] = true
-			results[kind] = append(results[kind], Match{Value: cleanVal, Type: kind})
+			outVal := cleanVal
+			if kind == "cve" {
+				outVal = strings.ToUpper(val)
+			}
+			results[kind] = append(results[kind], Match{Value: outVal, Type: kind})
 		}
 	}
 

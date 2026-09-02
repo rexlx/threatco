@@ -86,7 +86,7 @@ THREATCO_DB_LOCATION="user=neo password=morpheus host=127.0.0.1 dbname=threatco"
 "auth_type": "token",
 "key": "",
 "kind": "misp",
-"type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
+"type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename", "cve", "vulnerability"],
 "description": "leave the key empty in the config entry but DO add it to your ENV!"
 },
  ```

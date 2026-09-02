@@ -18,6 +18,7 @@ export class Contextualizer {
       "domain": /\b([a-z0-9.-]+\.[a-z]{2,24})\b/g,
       "filepath": /\b([a-zA-Z0-9.-]+\/[a-zA-Z0-9.-]+)\b/g,
       "filename": /\b[\w\-.]+\.[a-z0-9]*[a-z][a-z0-9]*\b/gi,
+      "cve": /\b(CVE-\d{4}-\d{4,7})\b/gi,
     };
   }
 
@@ -107,7 +108,8 @@ export class Contextualizer {
         }
 
         if (!results[kind]) results[kind] = [];
-        results[kind].push({ value: val, type: kind });
+        const outVal = kind === 'cve' ? val.toUpperCase() : val;
+        results[kind].push({ value: outVal, type: kind });
         seen.add(cleanVal);
       }
     }

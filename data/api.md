@@ -28,7 +28,7 @@ curl http://localhost:8081/events/caf24585-b21a-4616-9958-30b9d90fd45a -H "Autho
 # ACCEPTS:
 # value  : the value to be queried
 # to     : which vendor to proxy to: "misp" "mandiant" "virustotal" (vmray is fileupload only at the moment)
-# type   : type of indicator -> "md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"
+# type   : type of indicator -> "md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename", "cve", "vulnerability"
 # route  : associated route if not the base URL
 curl -X POST http://localhost:8081/pipe -H "Authorization: admin@admin.com:UmLPBz7zDXx1UreAJa+TupuBabP8T9wxr0yLTWiCnfQ=" -d '{"value": "8.8.8.8", "to": "deepfry", "type": "ipv4", "username": "any@string.here"}'
 

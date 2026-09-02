@@ -8,17 +8,19 @@ import (
 )
 
 var IOCToMispMap = map[string]string{
-	"md5":      "md5",
-	"sha1":     "sha1",
-	"sha256":   "sha256",
-	"sha512":   "sha512",
-	"ipv4":     "ip-src",
-	"ipv6":     "ip-src",
-	"email":    "email-src",
-	"url":      "url",
-	"domain":   "domain",
-	"filepath": "filename",
-	"filename": "filename",
+	"md5":           "md5",
+	"sha1":          "sha1",
+	"sha256":        "sha256",
+	"sha512":        "sha512",
+	"ipv4":          "ip-src",
+	"ipv6":          "ip-src",
+	"email":         "email-src",
+	"url":           "url",
+	"domain":        "domain",
+	"filepath":      "filename",
+	"filename":      "filename",
+	"cve":           "vulnerability",
+	"vulnerability": "vulnerability",
 }
 
 type MispEvent struct {

@@ -162,6 +162,7 @@ func TestRegexExpressions(t *testing.T) {
 		{"domain", "test.sub.example.co.uk", true},
 		{"filepath", "path/to/file.txt", true},
 		{"filename", "config.json", true},
+		{"cve", "CVE-2024-1234", true},
 	}
 
 	c := setupContextualizer()

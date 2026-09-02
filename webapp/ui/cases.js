@@ -504,7 +504,7 @@ export class CaseController {
                                 <div class="level-right">
                                     <button class="button is-small is-warning is-light" id="btnOpenMispModal">
                                         <span class="icon is-small"><i class="material-icons">cloud_upload</i></span>
-                                        <span>Send Selected to MISP</span>
+                                        <span>send selected to MISP</span>
                                     </button>
                                 </div>
                             </div>
@@ -752,11 +752,13 @@ export class CaseController {
 
         const attributes = selectedIOCs.map(ioc => {
             let type = "other";
-            if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ioc)) type = "ip-src";
-            else if (/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/.test(ioc)) type = "domain";
-            else if (ioc.length === 32) type = "md5";
-            else if (ioc.length === 64) type = "sha256";
-            return { value: ioc, type: type };
+            const val = ioc.trim();
+            if (/^CVE-\d{4}-\d+/i.test(val)) type = "vulnerability";
+            else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(val)) type = "ip-src";
+            else if (/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/.test(val)) type = "domain";
+            else if (val.length === 32) type = "md5";
+            else if (val.length === 64) type = "sha256";
+            return { value: val, type: type };
         });
 
         const payload = {

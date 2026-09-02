@@ -19,7 +19,7 @@
             "auth_type": "token",
             "key": "",
             "kind": "misp",
-            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename"],
+            "type": ["md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "email", "url", "domain", "filepath", "filename", "cve", "vulnerability"],
             "description": "MISP development instance contact admin@admin.net for access"
         },
         {

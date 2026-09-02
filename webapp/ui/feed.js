@@ -323,7 +323,7 @@ export class FeedController {
                             </strong>
                             ${eventId ? `
                                 <span class="tag is-dark is-small is-family-code" style="border: 1px solid rgba(255, 221, 87, 0.35); color: #ffdd57; height: 1.6em; padding: 0 6px;">
-                                    Event #${eventId}
+                                    Misp Event #${eventId}
                                 </span>
                             ` : ''}
                         </span>
