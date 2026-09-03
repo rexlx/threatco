@@ -2,6 +2,9 @@ package internal
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -179,5 +182,96 @@ func TestRemoveTimestamp(t *testing.T) {
 	res, err := RemoveTimestamp("_", input)
 	if err != nil || res != "prefix.suffix" {
 		t.Errorf("expected 'prefix.suffix', got '%s', err=%v", res, err)
+	}
+}
+
+func TestAddMispTag(t *testing.T) {
+	var receivedTags []string
+	createdTags := make(map[string]bool)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/tags/add" {
+			var payload struct {
+				Tag struct {
+					Name string `json:"name"`
+				} `json:"Tag"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Errorf("failed to decode tag creation body: %v", err)
+			}
+			if payload.Tag.Name == "uncreatable_tag" {
+				w.Write([]byte(`{"saved": false, "errors": "Failed to create"}`))
+			} else {
+				createdTags[payload.Tag.Name] = true
+				w.Write([]byte(`{"saved": true, "Tag": {"id": "100", "name": "` + payload.Tag.Name + `"}}`))
+			}
+			return
+		}
+
+		if r.URL.Path != "/events/addTag" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			return
+		}
+
+		var payload struct {
+			Request struct {
+				Event struct {
+					ID  string `json:"id"`
+					Tag string `json:"tag"`
+				} `json:"Event"`
+			} `json:"request"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("failed to decode request body: %v", err)
+		}
+		if payload.Request.Event.ID != "1727" {
+			t.Errorf("expected event ID '1727', got '%s'", payload.Request.Event.ID)
+		}
+		receivedTags = append(receivedTags, payload.Request.Event.Tag)
+
+		if payload.Request.Event.Tag == "new_tag" && !createdTags["new_tag"] {
+			w.Write([]byte(`{"saved": false, "errors": "Invalid Tag."}`))
+		} else if payload.Request.Event.Tag == "uncreatable_tag" {
+			w.Write([]byte(`{"saved": false, "errors": "Invalid Tag."}`))
+		} else {
+			w.Write([]byte(`{"saved": true, "success": "Tag added"}`))
+		}
+	}))
+	defer ts.Close()
+
+	s := setupTestServer()
+	if s.Targets == nil {
+		s.Targets = make(map[string]*Endpoint)
+	}
+	s.Targets["misp"] = NewEndpoint(ts.URL, &XAPIKeyAuth{Token: "test-key"}, false, nil, "misp")
+
+	// 1. Test multiple comma-separated tags
+	err := s.AddMispTag("1727", "Application:Threatco, tlp:amber")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(receivedTags) != 2 {
+		t.Fatalf("expected 2 tags received, got %d: %v", len(receivedTags), receivedTags)
+	}
+	if receivedTags[0] != "Application:Threatco" || receivedTags[1] != "tlp:amber" {
+		t.Errorf("unexpected tags received: %v", receivedTags)
+	}
+
+	// 2. Test auto-creation on Invalid Tag
+	receivedTags = nil
+	err = s.AddMispTag("1727", "new_tag")
+	if err != nil {
+		t.Fatalf("expected auto-creation to succeed for new_tag, got error: %v", err)
+	}
+	if !createdTags["new_tag"] {
+		t.Errorf("expected new_tag to be auto-created in MISP")
+	}
+
+	// 3. Test failure when tag creation fails
+	receivedTags = nil
+	err = s.AddMispTag("1727", "uncreatable_tag")
+	if err == nil {
+		t.Errorf("expected error for uncreatable_tag, got nil")
 	}
 }

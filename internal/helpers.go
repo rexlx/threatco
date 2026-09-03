@@ -1239,12 +1239,61 @@ func (s *Server) CreateMispEvent(eventDetails vendors.MispEvent) (string, []byte
 	return fmt.Sprintf("%v|%v", link, eventID), respBody, nil
 }
 
+func (s *Server) CreateMispTag(tagName string) error {
+	defer s.addStat("create_misp_tag_calls", 1)
+
+	if strings.TrimSpace(tagName) == "" {
+		return fmt.Errorf("tagName is required")
+	}
+
+	mispTarget, ok := s.Targets["misp"]
+	if !ok {
+		return fmt.Errorf("misp endpoint configuration not found")
+	}
+
+	tagPayload := map[string]interface{}{
+		"Tag": map[string]interface{}{
+			"name":       tagName,
+			"colour":     "#4b3878",
+			"exportable": true,
+		},
+	}
+
+	data, err := json.Marshal(tagPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal create tag payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/tags/add", mispTarget.GetURL())
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create tag creation request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	fmt.Printf("Creating missing MISP tag '%s'...\n", tagName)
+	respBody, err := mispTarget.Do("", req)
+	if err != nil {
+		return fmt.Errorf("failed to create MISP tag: %w", err)
+	}
+
+	respStr := string(respBody)
+	if strings.Contains(respStr, "errors") || (strings.Contains(respStr, `"saved":false`) && !strings.Contains(respStr, "already exists")) {
+		return fmt.Errorf("misp tag creation returned error: %s", respStr)
+	}
+
+	fmt.Printf("Tag '%s' created successfully.\n", tagName)
+	return nil
+}
+
 // targetID: The ID or UUID of the Event or Attribute.
-// tagName: The name of the tag (e.g., "TLP:AMBER").
+// tagName: The name of the tag or comma-separated list of tags (e.g., "TLP:AMBER" or "Application:Threatco, tlp:amber").
 func (s *Server) AddMispTag(eventID string, tagName string) error {
 	defer s.addStat("add_misp_tag_calls", 1)
 
-	if eventID == "" || tagName == "" {
+	if eventID == "" || strings.TrimSpace(tagName) == "" {
 		return fmt.Errorf("eventID and tagName are required")
 	}
 
@@ -1263,44 +1312,90 @@ func (s *Server) AddMispTag(eventID string, tagName string) error {
 		} `json:"request"`
 	}
 
-	// Populate the payload
-	payload := TagRequest{}
-	payload.Request.Event.ID = eventID
-	payload.Request.Event.Tag = tagName
+	rawTags := strings.Split(tagName, ",")
+	var attachedCount int
+	var lastErr error
 
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal tag payload: %w", err)
+	for _, rawTag := range rawTags {
+		tag := strings.TrimSpace(rawTag)
+		if tag == "" {
+			continue
+		}
+
+		payload := TagRequest{}
+		payload.Request.Event.ID = eventID
+		payload.Request.Event.Tag = tag
+
+		data, err := json.Marshal(payload)
+		if err != nil {
+			s.Log.Printf("Failed to marshal tag payload for '%s': %v", tag, err)
+			lastErr = fmt.Errorf("failed to marshal tag payload: %w", err)
+			continue
+		}
+
+		// URL: /events/addTag
+		url := fmt.Sprintf("%s/events/addTag", mispTarget.GetURL())
+
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+		if err != nil {
+			s.Log.Printf("Failed to create tag request for '%s': %v", tag, err)
+			lastErr = fmt.Errorf("failed to create tag request: %w", err)
+			continue
+		}
+
+		// Ensure JSON headers are set
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		fmt.Printf("Attaching tag '%s' to event ID '%s'...\n", tag, eventID)
+		respBody, err := mispTarget.Do("", req)
+		if err != nil {
+			s.Log.Printf("Failed to attach MISP tag '%s': %v", tag, err)
+			lastErr = fmt.Errorf("failed to attach MISP tag: %w", err)
+			continue
+		}
+
+		responseStr := string(respBody)
+
+		// If MISP complains "Invalid Tag.", auto-create the tag via API and retry attachment once
+		if strings.Contains(responseStr, "Invalid Tag.") || strings.Contains(responseStr, "Unknown Tag") {
+			s.Log.Printf("Tag '%s' does not exist in MISP, attempting auto-creation...", tag)
+			if createErr := s.CreateMispTag(tag); createErr != nil {
+				s.Log.Printf("Failed to auto-create tag '%s': %v", tag, createErr)
+				lastErr = fmt.Errorf("failed to auto-create tag '%s': %w", tag, createErr)
+				continue
+			}
+
+			// Retry attaching the tag
+			reqRetry, errRetry := http.NewRequest("POST", url, bytes.NewBuffer(data))
+			if errRetry == nil {
+				reqRetry.Header.Set("Content-Type", "application/json")
+				reqRetry.Header.Set("Accept", "application/json")
+				retryResp, errDo := mispTarget.Do("", reqRetry)
+				if errDo == nil {
+					responseStr = string(retryResp)
+				}
+			}
+		}
+
+		// Check for success
+		// MISP returns {"saved": true, "success": "Tag added"} on success
+		// or {"saved": false, "errors": "Invalid Tag."} / {"name": "Invalid event", ...} on failure
+		if strings.Contains(responseStr, "Invalid event") || strings.Contains(responseStr, "errors") || strings.Contains(responseStr, `"saved":false`) {
+			fmt.Printf("MISP Tag Error Response for '%s': %s\n", tag, responseStr)
+			s.Log.Printf("MISP Tag Error Response for '%s': %s", tag, responseStr)
+			lastErr = fmt.Errorf("misp returned error for tag '%s': %s", tag, responseStr)
+			continue
+		}
+
+		fmt.Printf("Tag '%s' attached successfully.\n", tag)
+		attachedCount++
 	}
 
-	// URL: /events/addTag
-	url := fmt.Sprintf("%s/events/addTag", mispTarget.GetURL())
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
-	if err != nil {
-		return fmt.Errorf("failed to create tag request: %w", err)
+	if attachedCount == 0 && lastErr != nil {
+		return lastErr
 	}
 
-	// Ensure JSON headers are set
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	fmt.Printf("Attaching tag '%s' to event ID '%s'...", tagName, eventID)
-	respBody, err := mispTarget.Do("", req)
-	if err != nil {
-		return fmt.Errorf("failed to attach MISP tag: %w", err)
-	}
-
-	// Check for success
-	// MISP returns {"saved": true, "success": "Tag added"} on success
-	// or {"name": "Invalid event", ...} on failure
-	responseStr := string(respBody)
-	if strings.Contains(responseStr, "Invalid event") || strings.Contains(responseStr, "errors") {
-		fmt.Printf("MISP Tag Error Response: %s", responseStr)
-		return fmt.Errorf("misp returned error: %s", responseStr)
-	}
-
-	fmt.Println("Tag attached successfully.")
 	return nil
 }
 
