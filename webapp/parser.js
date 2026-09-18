@@ -31,13 +31,30 @@ export class Contextualizer {
 
   isLikelyFilename(val) {
     val = val.toLowerCase();
+    if (val.startsWith('www.') || val.startsWith('http://') || val.startsWith('https://') || val.startsWith('ftp://')) {
+      return false;
+    }
     // Indicators that it's a file path
     if (val.includes('/') || val.includes('\\') || val.includes('_') || val.startsWith('./') || val.startsWith('../')) {
       return true;
     }
+    const fileExts = new Set([
+      'exe', 'dll', 'bin', 'dat', 'sys', 'tmp', 'log', 'cfg', 'ini', 'vbs',
+      'ps1', 'bat', 'cmd', 'msi', 'jar', 'csv', 'go', 'cpp', 'h', 'txt',
+      'pdf', 'sh', 'zip', 'tar', 'gz', 'rar', '7z', 'iso', 'img', 'apk',
+      'deb', 'rpm', 'dmg', 'pkg', 'mp3', 'mp4', 'avi', 'mkv', 'mov', 'flv',
+      'wmv', 'wav', 'flac', 'ogg', 'webm', 'app', 'js', 'ts', 'py', 'rb',
+      'php', 'cs', 'rs', 'swift', 'json', 'xml', 'yaml', 'yml', 'sql', 'db',
+      'sqlite', 'md', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'
+    ]);
+    const parts = val.split('.');
+    const ext = parts[parts.length - 1];
+    if (fileExts.has(ext)) {
+      return true;
+    }
     // High dot count (versioning) often indicates a file
     const dots = (val.match(/\./g) || []).length;
-    if (dots > 2 && !val.startsWith('www.')) {
+    if (dots > 2) {
       return true;
     }
     return false;
@@ -97,7 +114,7 @@ export class Contextualizer {
 
         // Domain vs Filename Classification
         if (kind === "domain") {
-          if (this.isLikelyFilename(cleanVal) && !this.isValidTLD(cleanVal)) continue;
+          if (this.isLikelyFilename(cleanVal)) continue;
           if (!this.isValidTLD(cleanVal)) continue;
         }
 

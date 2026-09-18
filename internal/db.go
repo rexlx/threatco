@@ -800,8 +800,7 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 	// 2. Construct the dynamic query while preserving pagination
 	query = fmt.Sprintf(`
         SELECT id, name, description, created_by, created_at, status, 
-               COALESCE(jsonb_array_length(iocs), 0) as ioc_count, 
-               is_auto, response_id
+               iocs, comments, is_auto, response_id
         FROM cases 
         %s 
         ORDER BY %s 
@@ -825,13 +824,21 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 			&c.CreatedBy,
 			&c.CreatedAt,
 			&c.Status,
-			&c.IOCCount,
+			&c.IOCs,
+			&c.Comments,
 			&c.IsAuto,
 			&c.ResponseID,
 		)
 		if err != nil {
 			return nil, err
 		}
+		if c.IOCs == nil {
+			c.IOCs = []string{}
+		}
+		if c.Comments == nil {
+			c.Comments = []Comment{}
+		}
+		c.IOCCount = len(c.IOCs)
 		cases = append(cases, c)
 	}
 	return cases, nil

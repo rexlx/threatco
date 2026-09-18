@@ -274,7 +274,13 @@ func TestIsLikelyFilename(t *testing.T) {
 		expected bool
 	}{
 		{"malware.exe", true},
+		{"script.sh", true},
+		{"archive.zip", true},
+		{"main.go", true},
 		{"google.com", false},
+		{"www.example.zip", false},
+		{"https://example.zip", false},
+		{"http://test.com/file.txt", false},
 		{"./script.sh", true},
 		{"my_data.bin", true},
 		{"app.v1.2.tar.gz", true},
@@ -292,7 +298,7 @@ func TestIsLikelyFilename(t *testing.T) {
 
 func TestExtractAll_DomainVsFile(t *testing.T) {
 	c := setupContextualizer()
-	input := "Check update.exe on download.site.com and output.log"
+	input := "Check update.exe on download.site.com, script.sh, archive.zip and output.log"
 
 	results := c.ExtractAll(input)
 
@@ -302,7 +308,7 @@ func TestExtractAll_DomainVsFile(t *testing.T) {
 		if m.Value == "download.site.com" {
 			foundDomain = true
 		}
-		if m.Value == "update.exe" || m.Value == "output.log" {
+		if m.Value == "update.exe" || m.Value == "output.log" || m.Value == "script.sh" || m.Value == "archive.zip" {
 			t.Errorf("Collision: %s incorrectly matched as domain", m.Value)
 		}
 	}

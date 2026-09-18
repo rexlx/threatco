@@ -216,11 +216,9 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 				}
 
 			case "domain":
-				// Prevent filenames (e.g. config.sys) from being treated as domains
+				// Prevent filenames (e.g. config.sys, script.sh) from being treated as domains
 				if isLikelyFilename(cleanVal) {
-					if !c.isValidTLD(cleanVal) {
-						continue
-					}
+					continue
 				}
 				if !c.isValidTLD(cleanVal) || c.isDomainIgnored(cleanVal) {
 					continue
@@ -278,6 +276,12 @@ func (c *Contextualizer) isValidTLD(domain string) bool {
 func isLikelyFilename(val string) bool {
 	val = strings.ToLower(val)
 
+	// www. prefix and URL schemes are strong domain/URL indicators, not filenames
+	if strings.HasPrefix(val, "www.") || strings.HasPrefix(val, "http://") ||
+		strings.HasPrefix(val, "https://") || strings.HasPrefix(val, "ftp://") {
+		return false
+	}
+
 	// Explicit path indicators are strong filename signals
 	if strings.HasPrefix(val, "./") || strings.HasPrefix(val, "../") ||
 		strings.Contains(val, "/") || strings.Contains(val, "\\") {
@@ -294,7 +298,16 @@ func isLikelyFilename(val string) bool {
 		".tmp": {}, ".log": {}, ".cfg": {}, ".ini": {}, ".vbs": {},
 		".ps1": {}, ".bat": {}, ".cmd": {}, ".msi": {}, ".jar": {},
 		".go": {}, ".cpp": {}, ".h": {}, ".txt": {}, ".pdf": {},
-		".sh": {}, ".zip": {}, ".tar": {}, ".gz": {},
+		".sh": {}, ".zip": {}, ".tar": {}, ".gz": {}, ".rar": {},
+		".7z": {}, ".iso": {}, ".img": {}, ".apk": {}, ".deb": {},
+		".rpm": {}, ".dmg": {}, ".pkg": {}, ".mp3": {}, ".mp4": {},
+		".avi": {}, ".mkv": {}, ".mov": {}, ".flv": {}, ".wmv": {},
+		".wav": {}, ".flac": {}, ".ogg": {}, ".webm": {}, ".app": {},
+		".js": {}, ".ts": {}, ".py": {}, ".rb": {}, ".php": {},
+		".cs": {}, ".rs": {}, ".swift": {}, ".json": {}, ".xml": {},
+		".yaml": {}, ".yml": {}, ".csv": {}, ".sql": {}, ".db": {},
+		".sqlite": {}, ".md": {}, ".doc": {}, ".docx": {}, ".xls": {},
+		".xlsx": {}, ".ppt": {}, ".pptx": {},
 	}
 
 	ext := filepath.Ext(val)
@@ -303,8 +316,7 @@ func isLikelyFilename(val string) bool {
 	}
 
 	// Versioned files (e.g., app.v1.0.2) often have many dots.
-	// We only flag this if it doesn't look like a standard domain.
-	if strings.Count(val, ".") > 3 && !strings.HasPrefix(val, "www.") {
+	if strings.Count(val, ".") > 3 {
 		return true
 	}
 
