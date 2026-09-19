@@ -569,12 +569,15 @@ func (db *PostgresDB) Restore(filePath string) error {
 }
 
 func (db *PostgresDB) CleanResponses(t time.Duration) error {
-	var expiration time.Time = time.Now().Add(t)
+	var expiration time.Time = time.Now().Add(-t)
 	_, err := db.Pool.Exec(context.Background(), "DELETE FROM responses WHERE created < $1", expiration)
 	return err
 }
 
 func (db *PostgresDB) StoreResponse(archive bool, id string, data []byte, vendor string) error {
+	if len(data) == 0 {
+		return nil
+	}
 	tableName := "responses"
 	if archive {
 		tableName = "archived_responses"

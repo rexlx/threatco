@@ -453,6 +453,9 @@ func (s *Server) ProcessTransientResponses() {
 	for {
 		select {
 		case resp := <-s.RespCh:
+			if len(resp.Data) == 0 {
+				continue
+			}
 			s.Memory.RLock()
 			r, exists := s.Cache.Responses[resp.ID]
 			var oldData []byte
@@ -471,6 +474,9 @@ func (s *Server) ProcessTransientResponses() {
 
 			if err != nil {
 				s.Log.Printf("ERROR: could not merge JSON for ID %s: %v", resp.ID, err)
+				continue
+			}
+			if len(finalData) == 0 {
 				continue
 			}
 			resp.Data = finalData
@@ -858,6 +864,12 @@ func (s *Server) AutomatedThreatScan() {
 	}
 	scannedRecords = float64(len(responses))
 
+	allCases, err := s.DB.GetCases(10000, 0, "")
+	if err != nil {
+		s.Log.Println("AutomatedThreatScan error getting cases:", err)
+		return
+	}
+
 	for _, r := range responses {
 		tid, err := ExtractThreatLevelID(r.Data)
 		if err != nil {
@@ -872,54 +884,57 @@ func (s *Server) AutomatedThreatScan() {
 				continue
 			}
 
+			se.Value = strings.TrimSpace(se.Value)
+			if se.Value == "" {
+				s.Log.Printf("AutomatedThreatScan: skipping response %s due to empty IOC value", r.ID)
+				continue
+			}
+
 			botUser := fmt.Sprintf("%v bot", se.SearchedBy)
 			responseMarker := fmt.Sprintf("[response_id:%s]", r.ID)
 
-			existingCases, err := s.DB.SearchCases(se.Value, 0)
-			caseAlreadyExists := false
-
-			if err == nil {
-				for _, ec := range existingCases {
-					if ec.ResponseID == r.ID {
-						caseAlreadyExists = true
-						break
-					}
-					for _, ioc := range ec.IOCs {
-						if ioc == se.Value {
-							caseAlreadyExists = true
-
-							responseAlreadyTracked := false
-							for _, comment := range ec.Comments {
-								if strings.Contains(comment.Text, responseMarker) {
-									responseAlreadyTracked = true
-									break
-								}
-							}
-
-							if !responseAlreadyTracked {
-								newComment := Comment{
-									User:      botUser,
-									Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s. %s", se.Value, r.Vendor, responseMarker),
-									CreatedAt: time.Now(),
-								}
-								ec.Comments = append(ec.Comments, newComment)
-
-								if err := s.DB.UpdateCase(ec); err != nil {
-									s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
-								} else {
-									s.Log.Println(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
-								}
-							}
-							break
-						}
-					}
-					if caseAlreadyExists {
+			var matchedCaseIdx int = -1
+			for i := range allCases {
+				if allCases[i].ResponseID == r.ID {
+					matchedCaseIdx = i
+					break
+				}
+				for _, ioc := range allCases[i].IOCs {
+					if ioc == se.Value {
+						matchedCaseIdx = i
 						break
 					}
 				}
+				if matchedCaseIdx != -1 {
+					break
+				}
 			}
 
-			if !caseAlreadyExists {
+			if matchedCaseIdx != -1 {
+				ec := &allCases[matchedCaseIdx]
+				responseAlreadyTracked := false
+				for _, comment := range ec.Comments {
+					if strings.Contains(comment.Text, responseMarker) {
+						responseAlreadyTracked = true
+						break
+					}
+				}
+
+				if !responseAlreadyTracked {
+					newComment := Comment{
+						User:      botUser,
+						Text:      fmt.Sprintf("Automated scan detected %v again. Vendor: %s. %s", se.Value, r.Vendor, responseMarker),
+						CreatedAt: time.Now(),
+					}
+					ec.Comments = append(ec.Comments, newComment)
+
+					if err := s.DB.UpdateCase(*ec); err != nil {
+						s.Log.Printf("AutomatedThreatScan: failed to update case %s: %v", ec.ID, err)
+					} else {
+						s.Log.Println(fmt.Sprintf("AutomatedThreatScan: Added tracking comment to Case %s", ec.ID))
+					}
+				}
+			} else {
 				newCase := Case{
 					ID:          uuid.New().String(),
 					Name:        fmt.Sprintf("Auto-Case: Critical Threat (%s)", se.Value),
@@ -936,6 +951,7 @@ func (s *Server) AutomatedThreatScan() {
 					s.Log.Println("Failed to create auto-case:", err)
 				} else {
 					casesCreated++
+					allCases = append(allCases, newCase)
 				}
 				go func() {
 					out, err := json.Marshal(newCase)

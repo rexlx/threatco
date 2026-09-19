@@ -1604,7 +1604,11 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 	</tr>`
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
-	responses, err := s.DB.GetResponses(time.Now().Add(-24 * time.Hour))
+	lookbackWindow := s.Cache.ResponseExpiry
+	if lookbackWindow <= 0 {
+		lookbackWindow = 24 * time.Hour
+	}
+	responses, err := s.DB.GetResponses(time.Now().Add(-lookbackWindow))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1708,7 +1712,11 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 
 	// Determine time range
 	searchID := r.URL.Query().Get("id")
-	lookbackTime := time.Now().Add(-24 * time.Hour)
+	lookbackWindow := s.Cache.ResponseExpiry
+	if lookbackWindow <= 0 {
+		lookbackWindow = 24 * time.Hour
+	}
+	lookbackTime := time.Now().Add(-lookbackWindow)
 	if r.URL.Query().Get("archived") == "true" || searchID != "" {
 		lookbackTime = time.Time{}
 	}
@@ -1896,6 +1904,14 @@ func (s *Server) DNSLookupHandler2(w http.ResponseWriter, r *http.Request) {
 
 // applyResponseFilters applies ID, Vendor, and Matched filters to the dataset.
 func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions, searchID string) []ResponseItem {
+	var nonEmpty []ResponseItem
+	for _, v := range responses {
+		if len(v.Data) > 0 {
+			nonEmpty = append(nonEmpty, v)
+		}
+	}
+	responses = nonEmpty
+
 	var filtered []ResponseItem
 
 	// 1. Apply ID Filter (Highest Priority)
@@ -2192,7 +2208,11 @@ func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request
 
 	// 2. Determine time range
 	searchID := r.URL.Query().Get("id")
-	lookbackTime := time.Now().Add(-24 * time.Hour)
+	lookbackWindow := s.Cache.ResponseExpiry
+	if lookbackWindow <= 0 {
+		lookbackWindow = 24 * time.Hour
+	}
+	lookbackTime := time.Now().Add(-lookbackWindow)
 	// If searching by ID or looking at archives, ignore the time limit
 	if r.URL.Query().Get("archived") == "true" || searchID != "" {
 		lookbackTime = time.Time{}
@@ -3285,7 +3305,11 @@ func (s *Server) GetDashboardStatsHandler(w http.ResponseWriter, r *http.Request
 		responseQuery := `SELECT COUNT(*) FROM responses WHERE created > $1`
 
 		// 2. Pass the calculated time as a separate argument
-		cutoff := time.Now().Add(time.Duration(-s.Cache.ResponseExpiry) * time.Second)
+		cutoffWindow := s.Cache.ResponseExpiry
+		if cutoffWindow <= 0 {
+			cutoffWindow = 24 * time.Hour
+		}
+		cutoff := time.Now().Add(-cutoffWindow)
 
 		// 3. Let the driver handle the formatting
 		_ = pgDB.Pool.QueryRow(ctx, responseQuery, cutoff).Scan(&summary.ActiveResponses)
