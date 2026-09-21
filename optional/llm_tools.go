@@ -21,6 +21,40 @@ The report should include the following sections:
    - Any relevant timestamps or additional metadata
 3. Visualizations: Where applicable, include charts or graphs to illustrate trends or patterns observed in the IOCs.
 4. Recommendations: Based on the analysis of the IOCs, provide actionable recommendations for mitigation and response.
+
+IMPORTANT: Return ONLY valid HTML. Do NOT wrap the HTML output in markdown code fences or backticks.
+---
+%v`
+
+const CvePrompt = `You are an expert cybersecurity threat intelligence analyst and vulnerability research engine.
+Your task is to generate a comprehensive, well-structured, professional HTML vulnerability report for the provided CVE / vulnerability details.
+
+The report should be visually engaging and formatted cleanly using standard HTML and CSS.
+It must include the following sections:
+
+1. Executive Summary:
+   - CVE Identifier & Vulnerability Title
+   - Severity / Risk Assessment (CVSS score if available, or estimated risk tier)
+   - High-level executive overview of the threat and potential business/technical impact
+
+2. Technical Analysis & Weaknesses:
+   - Detailed explanation of the underlying vulnerability mechanism
+   - Associated CWEs (Common Weakness Enumeration) with descriptions
+   - Attack vectors, exploitation prerequisites, and complexity
+
+3. Threat Intelligence & Indicators:
+   - Known active exploitation, KEV (Known Exploited Vulnerabilities) status, or campaign details
+   - Associated CAPEC attack patterns and threat actor context
+   - Technical Indicators of Compromise (IOCs) such as hashes, IPs, domains, or MISP event references
+
+4. Remediation & Actionable Recommendations:
+   - Immediate patching / upgrade instructions
+   - Temporary workarounds or mitigations if patches are unavailable
+   - Detection rules and monitoring recommendations (SIEM / EDR)
+
+IMPORTANT: Return ONLY valid HTML. Do NOT wrap the HTML output in markdown code fences or backticks.
+
+Vulnerability Data:
 ---
 %v`
 
@@ -28,6 +62,7 @@ type promptType string
 
 const (
 	LlmToolsBasicPrompt promptType = BasicPrompt
+	LlmToolsCvePrompt   promptType = CvePrompt
 )
 
 type LlmToolsLlmMClient interface {

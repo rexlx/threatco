@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -1988,6 +1989,9 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Mandatory logging with the special string
 	id := r.URL.Query().Get("id")
+	if id == "" {
+		id = r.URL.Query().Get("cve")
+	}
 	s.Log.Printf("__LLM TOOLS__ Processing AI report request for ID: %s", id)
 	fmt.Printf("__LLM TOOLS__ Processing AI report request for ID: %s", id)
 
@@ -2002,36 +2006,79 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Retrieve the stored prompt data from the database
+	var prompt string
+
+	// 3. Retrieve stored prompt data from database if available
 	data, err := s.DB.GetResponse(id)
-	if err != nil {
-		s.LogError(fmt.Errorf("__LLM TOOLS__ database error for %s: %v", id, err))
-		http.Error(w, "Failed to retrieve response data", http.StatusNotFound)
-		return
+	if err == nil && len(data) > 0 {
+		var records []map[string]interface{}
+		if err := json.Unmarshal(data, &records); err == nil && len(records) > 0 {
+			if p, ok := records[0]["prompt"].(string); ok && p != "" {
+				prompt = p
+			}
+		}
 	}
 
-	// 4. Unmarshal data assuming a slice of maps as requested
-	var records []map[string]interface{}
-	if err := json.Unmarshal(data, &records); err != nil {
-		s.LogError(fmt.Errorf("__LLM TOOLS__ unmarshal error for %s: %v", id, err))
-		http.Error(w, "Invalid data format in database", http.StatusInternalServerError)
-		return
+	// 4. If prompt not found in database, construct prompt for CVE / Vulnerability item
+	if prompt == "" {
+		var vItem *VulnerabilityItem
+
+		s.Memory.RLock()
+		for _, item := range s.Cache.VulnerabilityFeed {
+			if strings.EqualFold(item.Title, id) ||
+				strings.Contains(strings.ToUpper(item.Title), strings.ToUpper(id)) ||
+				(item.CaseID != "" && item.CaseID == id) {
+				itemCopy := item
+				vItem = &itemCopy
+				break
+			}
+		}
+		s.Memory.RUnlock()
+
+		if vItem == nil {
+			vItem = &VulnerabilityItem{
+				Title:  id,
+				Source: "Vulnerability Feed Search",
+			}
+			if strings.HasPrefix(strings.ToUpper(id), "CVE-") {
+				ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+				defer cancel()
+				mispPayload, err := s.FetchMispIOCsByCVE(ctx, id)
+				if err == nil && len(mispPayload) > 0 {
+					mispIOCs := ExtractValuesFromMispResponse(mispPayload)
+					vItem.IOCs = mispIOCs
+				}
+			}
+		}
+
+		promptReq := &optional.LlmToolsPromptRequest{
+			Id:           id,
+			MatchList:    []interface{}{vItem},
+			TransactinID: id,
+		}
+
+		p, err := promptReq.BuildPrompt(optional.LlmToolsCvePrompt)
+		if err != nil {
+			s.LogError(fmt.Errorf("__LLM TOOLS__ failed to build CVE prompt for %s: %v", id, err))
+			http.Error(w, "Failed to build report prompt", http.StatusInternalServerError)
+			return
+		}
+		prompt = p
+
+		// Queue response item
+		fullPrompt, _ := promptReq.BuildJSONPrompt(optional.LlmToolsCvePrompt)
+		email, _ := r.Context().Value("email").(string)
+		s.RespCh <- ResponseItem{
+			Email:  email,
+			ID:     id,
+			Notify: false,
+			Data:   fullPrompt,
+			Time:   time.Now(),
+			Vendor: "llm_tools",
+		}
 	}
 
-	if len(records) == 0 {
-		http.Error(w, "No records found in the response object", http.StatusNotFound)
-		return
-	}
-
-	// 5. Extract the "prompt" field from the data
-	prompt, ok := records[0]["prompt"].(string)
-	if !ok || prompt == "" {
-		s.LogError(fmt.Errorf("__LLM TOOLS__ missing or invalid 'prompt' field in record %s", id))
-		http.Error(w, "Record does not contain a valid prompt", http.StatusBadRequest)
-		return
-	}
-
-	// 6. Execute the LLM call using the Gemini model defined in optional/llm_tools.go
+	// 5. Execute the LLM call using the Gemini model defined in optional/llm_tools.go
 	model := &optional.LlmToolsGeminiModel{
 		ApiKey: s.Details.LlmConf.ApiKey,
 		Model:  s.Details.LlmConf.ModelType,
@@ -2045,9 +2092,27 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 7. Write the generated HTML report to the response
+	report = CleanLLMHTMLReport(report)
+
+	// 6. Write the generated HTML report to the response
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(report))
+}
+
+func CleanLLMHTMLReport(report string) string {
+	report = strings.TrimSpace(report)
+	if strings.HasPrefix(report, "```html") {
+		report = strings.TrimPrefix(report, "```html")
+		if idx := strings.LastIndex(report, "```"); idx != -1 {
+			report = report[:idx]
+		}
+	} else if strings.HasPrefix(report, "```") {
+		report = strings.TrimPrefix(report, "```")
+		if idx := strings.LastIndex(report, "```"); idx != -1 {
+			report = report[:idx]
+		}
+	}
+	return strings.TrimSpace(report)
 }
 
 // containsMatch recursively checks if "matched": true exists in the JSON data.

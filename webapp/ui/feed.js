@@ -202,6 +202,9 @@ export class FeedController {
 
         // Map matching items to Bulma markup components
         listContainer.innerHTML = filteredItems.map((item, index) => {
+            const cveMatch = item.title ? item.title.match(/CVE-\d{4}-\d+/i) : null;
+            const cveIdentifier = cveMatch ? cveMatch[0].toUpperCase() : (item.title || '');
+
             // Tag colors depending on threat Intel source
             let tagColor = 'is-link';
             if (item.source === 'CISA') tagColor = 'is-danger';
@@ -376,6 +379,9 @@ export class FeedController {
                                         <span class="icon"><i class="material-icons">visibility</i></span>
                                     </button>
                                 ` : ''}
+                                <a href="/aireport?id=${encodeURIComponent(cveIdentifier)}" target="_blank" class="button is-small is-primary is-light mr-1 mb-0" title="Generate AI Report">
+                                    <span class="icon"><i class="material-icons">auto_awesome</i></span>
+                                </a>
                                 <button class="button is-small is-success is-outlined btn-feed-open-case mr-1 mb-0" data-index="${index}" title="Open or update case for this CVE">
                                     <span class="icon"><i class="material-icons">work_outline</i></span>
 
