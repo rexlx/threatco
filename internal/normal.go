@@ -20,6 +20,7 @@ const (
 	WeightDefault         = 1.0
 	WeightMandiant        = 1.2
 	WeightVirusTotal      = 0.8
+	WeightGTI             = 1.0
 	WeightCloudflare      = 1.0
 	WeightMISP            = 1.0
 	WeightCrowdstrike     = 1.1
@@ -62,8 +63,7 @@ func init() {
 	RegisterNormalizer("abuseipdb", NormalizeStandardScale)
 	RegisterNormalizer("otx", NormalizeStandardScale)
 
-	// virustotal: Malicious count mapping
-	RegisterNormalizer("virustotal", func(maliciousCount int) int {
+	vtNormalizer := func(maliciousCount int) int {
 		switch {
 		case maliciousCount == 0:
 			return 0 // Safe
@@ -74,7 +74,11 @@ func init() {
 		default:
 			return 100 // Critical (Consensus)
 		}
-	})
+	}
+
+	RegisterNormalizer("virustotal", vtNormalizer)
+	RegisterNormalizer("gti", vtNormalizer)
+	RegisterNormalizer("googlethreatintel", vtNormalizer)
 
 	RegisterNormalizer("misp", func(score int) int {
 		switch score {

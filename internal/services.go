@@ -59,6 +59,38 @@ var SupportedServices = []ServiceType{
 			},
 		},
 	},
+	{
+		Kind: "gti",
+		Type: []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "url", "domain", "filepath", "filename"},
+		RouteMap: []RouteMap{
+			{Type: "md5", Route: "files"},
+			{Type: "sha1", Route: "files"},
+			{Type: "sha256", Route: "files"},
+			{Type: "sha512", Route: "files"},
+			{Type: "ipv4", Route: "ip_addresses"},
+			{Type: "ipv6", Route: "ip_addresses"},
+			{Type: "url", Route: "urls"},
+			{Type: "domain", Route: "domains"},
+			{Type: "filepath", Route: "files"},
+			{Type: "filename", Route: "files"},
+		},
+	},
+	{
+		Kind: "googlethreatintel",
+		Type: []string{"md5", "sha1", "sha256", "sha512", "ipv4", "ipv6", "url", "domain", "filepath", "filename"},
+		RouteMap: []RouteMap{
+			{Type: "md5", Route: "files"},
+			{Type: "sha1", Route: "files"},
+			{Type: "sha256", Route: "files"},
+			{Type: "sha512", Route: "files"},
+			{Type: "ipv4", Route: "ip_addresses"},
+			{Type: "ipv6", Route: "ip_addresses"},
+			{Type: "url", Route: "urls"},
+			{Type: "domain", Route: "domains"},
+			{Type: "filepath", Route: "files"},
+			{Type: "filename", Route: "files"},
+		},
+	},
 }
 
 type ServiceType struct {

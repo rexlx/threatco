@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,8 @@ var ProxyOperators = map[string]ProxyOperator{
 	"deepfry":             DeepFryProxyHelper,
 	"mandiant":            MandiantProxyHelper,
 	"virustotal":          VirusTotalProxyHelper,
+	"gti":                 VirusTotalProxyHelper,
+	"googlethreatintel":   VirusTotalProxyHelper,
 	"crowdstrike":         CrowdstrikeProxyHelper,
 	"splunk":              SplunkProxyHelper,
 	"domaintools":         DomainToolsProxyHelper,
@@ -440,8 +443,13 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 }
 
 func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]byte, error) {
+	targetVal := req.Value
+	if (req.Route == "urls" || req.Type == "url") && (strings.HasPrefix(req.Value, "http://") || strings.HasPrefix(req.Value, "https://") || strings.Contains(req.Value, "://") || strings.Contains(req.Value, "/")) {
+		targetVal = strings.TrimRight(base64.RawURLEncoding.EncodeToString([]byte(req.Value)), "=")
+	}
 
-	thisUrl := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, req.Value)
+	thisUrl := fmt.Sprintf("%s/%s/%s", ep.GetURL(), req.Route, targetVal)
+	fmt.Println("VirusTotalHelper: thisUrl", thisUrl)
 	request, err := http.NewRequest("GET", thisUrl, nil)
 
 	if err != nil {
@@ -486,19 +494,21 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 
-	// FIX: Fallback to the requested value if the vendor ID is missing
 	displayValue := response.Data.ID
 	if displayValue == "" {
 		displayValue = req.Value
 	}
 
-	// Calculate Match and Background based on stats
 	stats := response.Data.Attributes.LastAnalysisStats
 	matched := stats.Malicious > 0 || stats.Suspicious > 0
 
 	maliciousCount := stats.Malicious
-	threatID := GetThreatLevelID("virustotal", maliciousCount, WeightVirusTotal)
-	// Default to dark/neutral for safe
+	weight := WeightVirusTotal
+	if req.To == "gti" || req.To == "googlethreatintel" {
+		weight = WeightGTI
+	}
+	threatID := GetThreatLevelID(req.To, maliciousCount, weight)
+
 	background := "has-background-primary-dark"
 	if stats.Malicious > 0 {
 		background = "has-background-warning-dark"
@@ -506,7 +516,66 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		background = "has-background-warning"
 	}
 
-	info := fmt.Sprintf(`harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d`, stats.Harmless, stats.Malicious, stats.Suspicious, stats.Undetected, stats.Timeout)
+	infoParts := []string{
+		fmt.Sprintf("harmless: %d, malicious: %d, suspicious: %d, undetected: %d, timeout: %d",
+			stats.Harmless, stats.Malicious, stats.Suspicious, stats.Undetected, stats.Timeout),
+	}
+
+	attrs := response.Data.Attributes
+	if attrs.GTIAssessment != nil && (attrs.GTIAssessment.Verdict != "" || attrs.GTIAssessment.Severity != "") {
+		gtiInfo := "GTI Verdict: "
+		if attrs.GTIAssessment.Verdict != "" {
+			gtiInfo += attrs.GTIAssessment.Verdict
+		}
+		if attrs.GTIAssessment.Severity != "" {
+			gtiInfo += fmt.Sprintf(" (%s)", attrs.GTIAssessment.Severity)
+		}
+		infoParts = append(infoParts, gtiInfo)
+
+		if strings.EqualFold(attrs.GTIAssessment.Verdict, "MALICIOUS") || strings.EqualFold(attrs.GTIAssessment.Severity, "HIGH") || strings.EqualFold(attrs.GTIAssessment.Severity, "CRITICAL") {
+			matched = true
+			if threatID < ThreatLevelHigh {
+				threatID = ThreatLevelHigh
+			}
+			background = "has-background-warning-dark"
+		} else if strings.EqualFold(attrs.GTIAssessment.Verdict, "SUSPICIOUS") || strings.EqualFold(attrs.GTIAssessment.Severity, "MEDIUM") {
+			matched = true
+			if threatID < ThreatLevelMedium {
+				threatID = ThreatLevelMedium
+			}
+			if background == "has-background-primary-dark" {
+				background = "has-background-warning"
+			}
+		}
+	}
+
+	if attrs.PopularThreatClassification != nil && attrs.PopularThreatClassification.SuggestedThreatLabel != "" {
+		infoParts = append(infoParts, fmt.Sprintf("Threat: %s", attrs.PopularThreatClassification.SuggestedThreatLabel))
+	}
+
+	var actorNames []string
+	for _, actor := range attrs.ThreatActors {
+		if actor.Name != "" {
+			actorNames = append(actorNames, actor.Name)
+		}
+	}
+	if len(actorNames) > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Actors: %s", strings.Join(uniqueStrings(actorNames), ", ")))
+		matched = true
+	}
+
+	var assocNames []string
+	for _, assoc := range attrs.MandiantAssociations {
+		if assoc.Name != "" {
+			assocNames = append(assocNames, assoc.Name)
+		}
+	}
+	if len(assocNames) > 0 {
+		infoParts = append(infoParts, fmt.Sprintf("Mandiant: %s", strings.Join(uniqueStrings(assocNames), ", ")))
+		matched = true
+	}
+
+	info := strings.Join(infoParts, " | ")
 	sum := SummarizedEvent{
 		Timestamp:     time.Now(),
 		Background:    background,
@@ -515,8 +584,11 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		From:          req.To,
 		Value:         displayValue,
 		Link:          req.TransactionID,
-		Matched:       matched, // Use the calculated boolean
+		Matched:       matched,
 		SearchedBy:    req.Username,
+		AttrCount:     len(actorNames) + len(assocNames) + len(attrs.Tags),
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
 }

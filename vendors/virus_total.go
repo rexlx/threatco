@@ -15,27 +15,68 @@ type VirusTotalLinks struct {
 	Self string `json:"self"`
 }
 
+type GTIAssessment struct {
+	Verdict     string `json:"verdict,omitempty"`
+	Severity    string `json:"severity,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+type PopularThreatCategory struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+type PopularThreatName struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+type PopularThreatClassification struct {
+	SuggestedThreatLabel  string                  `json:"suggested_threat_label,omitempty"`
+	PopularThreatCategory []PopularThreatCategory `json:"popular_threat_category,omitempty"`
+	PopularThreatName     []PopularThreatName     `json:"popular_threat_name,omitempty"`
+}
+
+type GTIThreatActor struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+type GTIMandiantAssociation struct {
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type VirusTotalAttributes struct {
-	Whois                    string                        `json:"whois"`
+	Whois                    string                        `json:"whois,omitempty"`
 	LastAnalysisStats        VirusTotalLastAnalysisStats   `json:"last_analysis_stats"`
-	Continent                string                        `json:"continent"`
+	Continent                string                        `json:"continent,omitempty"`
 	TotalVotes               VirusTotalTotalVotes          `json:"total_votes"`
-	AsOwner                  string                        `json:"as_owner"`
-	Country                  string                        `json:"country"`
+	AsOwner                  string                        `json:"as_owner,omitempty"`
+	Country                  string                        `json:"country,omitempty"`
 	LastAnalysisResults      VirusTotalLastAnalysisResults `json:"last_analysis_results"`
 	Reputation               int                           `json:"reputation"`
-	LastAnalysisDate         int                           `json:"last_analysis_date"`
-	WhoisDate                int                           `json:"whois_date"`
-	Network                  string                        `json:"network"`
-	LastModificationDate     int                           `json:"last_modification_date"`
-	Tags                     []string                      `json:"tags"`
-	RegionalInternetRegistry string                        `json:"regional_internet_registry"`
-	ASN                      int                           `json:"asn"`
-	Categories               struct{}                      `json:"categories"`
-	WhoisRegistrar           string                        `json:"whois_registrar"`
-	WhoisCountry             string                        `json:"whois_country"`
-	LastDNSRecordsDate       int                           `json:"last_dns_records_date"`
-	LastDNSRecords           []DNSRecord                   `json:"last_dns_records"`
+	LastAnalysisDate         int                           `json:"last_analysis_date,omitempty"`
+	WhoisDate                int                           `json:"whois_date,omitempty"`
+	Network                  string                        `json:"network,omitempty"`
+	LastModificationDate     int                           `json:"last_modification_date,omitempty"`
+	Tags                     []string                      `json:"tags,omitempty"`
+	RegionalInternetRegistry string                        `json:"regional_internet_registry,omitempty"`
+	ASN                      int                           `json:"asn,omitempty"`
+	Categories               map[string]string             `json:"categories,omitempty"`
+	WhoisRegistrar           string                        `json:"whois_registrar,omitempty"`
+	WhoisCountry             string                        `json:"whois_country,omitempty"`
+	LastDNSRecordsDate       int                           `json:"last_dns_records_date,omitempty"`
+	LastDNSRecords           []DNSRecord                   `json:"last_dns_records,omitempty"`
+
+	// Google Threat Intelligence (GTI) & Mandiant additions
+	GTIAssessment               *GTIAssessment               `json:"gti_assessment,omitempty"`
+	PopularThreatClassification *PopularThreatClassification `json:"popular_threat_classification,omitempty"`
+	MandiantAssociations        []GTIMandiantAssociation     `json:"mandiant_associations,omitempty"`
+	ThreatActors                []GTIThreatActor             `json:"threat_actors,omitempty"`
+	MandiantRiskScore           int                          `json:"mandiant_risk_score,omitempty"`
 }
 
 type DNSRecord struct {
