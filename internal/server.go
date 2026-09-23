@@ -99,6 +99,14 @@ type Cache struct {
 	StatsHistory      []StatItem              `json:"stats_history"`
 	Responses         map[string]ResponseItem `json:"responses"`
 	VulnerabilityFeed []VulnerabilityItem     `json:"vulnerability_feed"`
+	AIReports         map[string]AIReport     `json:"ai_reports"`
+}
+
+type AIReport struct {
+	ID        string    `json:"id"`
+	CVE       string    `json:"cve"`
+	HTML      string    `json:"html"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type VulnerabilityItem struct {
@@ -162,6 +170,7 @@ func NewServer(id string, address string, dbType string, dbLocation string, logg
 		Responses:         make(map[string]ResponseItem),
 		Charts:            []byte(views.NoDataView),
 		VulnerabilityFeed: make([]VulnerabilityItem, 0),
+		AIReports:         make(map[string]AIReport),
 	}
 
 	stopCh := make(chan bool)
@@ -768,6 +777,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.Handle("/users", http.HandlerFunc(s.ValidateSessionToken(s.AllUsersViewHandler)))
 	s.Gateway.HandleFunc("/add-service", http.HandlerFunc(s.ValidateSessionToken(s.AddServicesHandler)))
 	s.Gateway.HandleFunc("/aireport", s.ValidateSessionToken(s.AIReportHandler))
+	s.Gateway.HandleFunc("/aireport/check", s.ValidateSessionToken(s.AIReportCheckHandler))
 	s.Gateway.HandleFunc("/addservice", http.HandlerFunc(s.ValidateSessionToken(s.AddServiceHandler)))
 	s.Gateway.HandleFunc("/assisteddeath", http.HandlerFunc(s.ValidateSessionToken(s.KillServerDeadHandler)))
 	s.Gateway.HandleFunc("/backup", http.HandlerFunc(s.ValidateSessionToken(s.BackupHandler)))

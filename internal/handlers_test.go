@@ -179,3 +179,49 @@ func TestToolsChecksumHandler(t *testing.T) {
 		t.Error("expected non-empty checksum response")
 	}
 }
+
+func TestAIReportCache(t *testing.T) {
+	s := setupTestServer()
+
+	// 1. Check status for non-existent report
+	reqCheck := httptest.NewRequest("GET", "/aireport/check?id=CVE-2026-99999", nil)
+	rrCheck := httptest.NewRecorder()
+	s.AIReportCheckHandler(rrCheck, reqCheck)
+
+	if rrCheck.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rrCheck.Code)
+	}
+	var checkRes map[string]interface{}
+	json.Unmarshal(rrCheck.Body.Bytes(), &checkRes)
+	if checkRes["exists"] != false {
+		t.Errorf("expected exists=false for new CVE, got %v", checkRes["exists"])
+	}
+
+	// 2. Save a report manually
+	s.saveCachedAIReport("CVE-2026-99999", "<h1>Test Report</h1>")
+
+	// 3. Check status again -> should exist
+	rrCheck2 := httptest.NewRecorder()
+	s.AIReportCheckHandler(rrCheck2, reqCheck)
+	if rrCheck2.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rrCheck2.Code)
+	}
+	var checkRes2 map[string]interface{}
+	json.Unmarshal(rrCheck2.Body.Bytes(), &checkRes2)
+	if checkRes2["exists"] != true {
+		t.Errorf("expected exists=true after caching, got %v", checkRes2["exists"])
+	}
+
+	// 4. Call AIReportHandler -> should return cached HTML directly
+	s.Details.LlmConf.Enabled = true
+	reqReport := httptest.NewRequest("GET", "/aireport?id=CVE-2026-99999", nil)
+	rrReport := httptest.NewRecorder()
+	s.AIReportHandler(rrReport, reqReport)
+
+	if rrReport.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rrReport.Code)
+	}
+	if !strings.Contains(rrReport.Body.String(), "<h1>Test Report</h1>") {
+		t.Errorf("expected cached report body, got %s", rrReport.Body.String())
+	}
+}

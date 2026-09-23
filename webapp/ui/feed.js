@@ -160,6 +160,35 @@ export class FeedController {
                     </section>
                 </div>
             </div>
+
+            <div class="modal" id="feedAiReportModal">
+                <div class="modal-background"></div>
+                <div class="modal-card">
+                    <header class="modal-card-head">
+                        <p class="modal-card-title">Cached AI Report Available</p>
+                        <button class="delete" aria-label="close" id="feedAiReportModalClose"></button>
+                    </header>
+                    <section class="modal-card-body">
+                        <p class="is-size-6 mb-3">
+                            An AI Report for <strong id="feedAiReportCveText" class="has-text-info">CVE-XXXX-YYYY</strong> was previously generated on <span id="feedAiReportDateText" class="has-text-weight-bold">--</span>.
+                        </p>
+                        <p class="is-size-6 has-text-grey-light">
+                            Would you like to view the cached report or rerun the report to fetch fresh data?
+                        </p>
+                    </section>
+                    <footer class="modal-card-foot is-justify-content-space-between">
+                        <button type="button" class="button is-info" id="feedAiReportViewBtn">
+                            <span class="icon"><i class="material-icons">visibility</i></span>
+                            <span>View Cached Report</span>
+                        </button>
+                        <button type="button" class="button is-warning" id="feedAiReportRerunBtn">
+                            <span class="icon"><i class="material-icons">refresh</i></span>
+                            <span>Rerun Report</span>
+                        </button>
+                        <button type="button" class="button" id="feedAiReportCancelBtn">Cancel</button>
+                    </footer>
+                </div>
+            </div>
         `;
 
         // Bind event handler to the dynamic filter dropdown
@@ -379,9 +408,9 @@ export class FeedController {
                                         <span class="icon"><i class="material-icons">visibility</i></span>
                                     </button>
                                 ` : ''}
-                                <a href="/aireport?id=${encodeURIComponent(cveIdentifier)}" target="_blank" class="button is-small is-primary is-light mr-1 mb-0" title="Generate AI Report">
+                                <button class="button is-small is-primary is-light is-outlined btn-feed-ai-report mr-1 mb-0" data-cve="${cveIdentifier}" title="Generate AI Report">
                                     <span class="icon"><i class="material-icons">auto_awesome</i></span>
-                                </a>
+                                </button>
                                 <button class="button is-small is-success is-outlined btn-feed-open-case mr-1 mb-0" data-index="${index}" title="Open or update case for this CVE">
                                     <span class="icon"><i class="material-icons">work_outline</i></span>
 
@@ -405,6 +434,14 @@ export class FeedController {
             };
         });
 
+        listContainer.querySelectorAll('.btn-feed-ai-report').forEach(btn => {
+            btn.onclick = async (e) => {
+                const cve = e.currentTarget.dataset.cve;
+                if (!cve) return;
+                await this.handleAiReportClick(cve);
+            };
+        });
+
         listContainer.querySelectorAll('.btn-feed-open-case').forEach(btn => {
             btn.onclick = (e) => {
                 const idx = parseInt(e.currentTarget.dataset.index);
@@ -414,6 +451,66 @@ export class FeedController {
                 }
             };
         });
+    }
+
+    async handleAiReportClick(cve) {
+        try {
+            const res = await fetch(`/aireport/check?id=${encodeURIComponent(cve)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.exists) {
+                    this.showAiReportModal(cve, data.created_at);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to check AI report cache status:", err);
+        }
+        window.open(`/aireport?id=${encodeURIComponent(cve)}`, '_blank');
+    }
+
+    showAiReportModal(cve, createdAt) {
+        const modal = document.getElementById('feedAiReportModal');
+        if (!modal) {
+            window.open(`/aireport?id=${encodeURIComponent(cve)}`, '_blank');
+            return;
+        }
+
+        const cveText = document.getElementById('feedAiReportCveText');
+        const dateText = document.getElementById('feedAiReportDateText');
+        if (cveText) cveText.textContent = cve;
+        if (dateText) {
+            dateText.textContent = createdAt ? new Date(createdAt).toLocaleString() : 'a previous session';
+        }
+
+        const viewBtn = document.getElementById('feedAiReportViewBtn');
+        const rerunBtn = document.getElementById('feedAiReportRerunBtn');
+        const cancelBtn = document.getElementById('feedAiReportCancelBtn');
+        const closeBtn = document.getElementById('feedAiReportModalClose');
+
+        const closeModal = () => modal.classList.remove('is-active');
+
+        if (viewBtn) {
+            viewBtn.onclick = () => {
+                closeModal();
+                window.open(`/aireport?id=${encodeURIComponent(cve)}`, '_blank');
+            };
+        }
+
+        if (rerunBtn) {
+            rerunBtn.onclick = () => {
+                closeModal();
+                window.open(`/aireport?id=${encodeURIComponent(cve)}&force=true`, '_blank');
+            };
+        }
+
+        if (cancelBtn) cancelBtn.onclick = closeModal;
+        if (closeBtn) closeBtn.onclick = closeModal;
+
+        const bg = modal.querySelector('.modal-background');
+        if (bg) bg.onclick = closeModal;
+
+        modal.classList.add('is-active');
     }
 
     async openCaseModal(item) {

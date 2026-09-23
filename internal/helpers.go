@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -460,8 +459,12 @@ func ExtractThreatLevelID(rawData []byte) (int, error) {
 	var finalScore int = 6
 	var data []map[string]interface{}
 	if err := json.Unmarshal(rawData, &data); err != nil {
-		fmt.Println("ExtractThreatLevelID: failed to unmarshal data:", err, string(rawData))
-		return 0, fmt.Errorf("failed to unmarshal response data: %w", err)
+		var single map[string]interface{}
+		if errSingle := json.Unmarshal(rawData, &single); errSingle == nil {
+			data = []map[string]interface{}{single}
+		} else {
+			return 0, fmt.Errorf("failed to unmarshal response data: %w", err)
+		}
 	}
 
 	for _, obj := range data {
@@ -485,7 +488,6 @@ func ExtractThreatLevelID(rawData []byte) (int, error) {
 				}
 				// return tid, nil
 			default:
-				fmt.Println("ExtractThreatLevelID got an unsupported type:", reflect.TypeOf(val))
 				continue // Unsupported type, try next object
 			}
 		}

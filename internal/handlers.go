@@ -97,7 +97,7 @@ func (s *Server) ParserHandler(w http.ResponseWriter, r *http.Request) {
 		reqOut, _ := json.Marshal(req)
 		s.Log.Println("__ProxyHandler__ took:", time.Since(start), req.Username, string(reqOut))
 	}(start, pr)
-	fmt.Println(pr)
+	// fmt.Println(pr)
 	// 1. Extract or classify indicators based on the 'Parsed' flag
 	out := s.extractIndicators(pr)
 
@@ -1986,6 +1986,125 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 	return finalResults
 }
 
+func (s *Server) getCachedAIReport(id string) (AIReport, bool) {
+	rawKey := strings.TrimSpace(id)
+	if rawKey == "" {
+		return AIReport{}, false
+	}
+
+	cleanKey := strings.ToUpper(rawKey)
+	for strings.HasPrefix(cleanKey, "AIREPORT_") {
+		cleanKey = strings.TrimPrefix(cleanKey, "AIREPORT_")
+	}
+
+	keysToCheck := []string{
+		cleanKey,
+		rawKey,
+		strings.ToLower(cleanKey),
+		"aireport_" + cleanKey,
+		"aireport_" + strings.ToLower(cleanKey),
+	}
+
+	s.Memory.RLock()
+	if s.Cache.AIReports != nil {
+		for _, k := range keysToCheck {
+			if report, exists := s.Cache.AIReports[k]; exists && report.HTML != "" {
+				s.Memory.RUnlock()
+				return report, true
+			}
+		}
+	}
+	s.Memory.RUnlock()
+
+	if s.DB != nil {
+		dbKeys := []string{
+			"aireport_" + cleanKey,
+			"aireport_" + strings.ToLower(cleanKey),
+			cleanKey,
+			rawKey,
+			"aireport_" + rawKey,
+		}
+		for _, dbk := range dbKeys {
+			if data, err := s.DB.GetResponse(dbk); err == nil && len(data) > 0 {
+				var dbReport AIReport
+				if err := json.Unmarshal(data, &dbReport); err == nil && dbReport.HTML != "" {
+					s.Memory.Lock()
+					if s.Cache.AIReports == nil {
+						s.Cache.AIReports = make(map[string]AIReport)
+					}
+					s.Cache.AIReports[cleanKey] = dbReport
+					s.Cache.AIReports[rawKey] = dbReport
+					s.Memory.Unlock()
+					return dbReport, true
+				}
+			}
+		}
+	}
+
+	return AIReport{}, false
+}
+
+func (s *Server) saveCachedAIReport(id string, htmlReport string) AIReport {
+	rawKey := strings.TrimSpace(id)
+	cleanKey := strings.ToUpper(rawKey)
+	for strings.HasPrefix(cleanKey, "AIREPORT_") {
+		cleanKey = strings.TrimPrefix(cleanKey, "AIREPORT_")
+	}
+
+	report := AIReport{
+		ID:        cleanKey,
+		CVE:       cleanKey,
+		HTML:      htmlReport,
+		CreatedAt: time.Now(),
+	}
+
+	s.Memory.Lock()
+	if s.Cache.AIReports == nil {
+		s.Cache.AIReports = make(map[string]AIReport)
+	}
+	s.Cache.AIReports[cleanKey] = report
+	s.Cache.AIReports[rawKey] = report
+	s.Memory.Unlock()
+
+	if s.DB != nil {
+		if data, err := json.Marshal(report); err == nil {
+			_ = s.DB.StoreResponse(false, "aireport_"+cleanKey, data, "llm_tools")
+			if rawKey != cleanKey {
+				_ = s.DB.StoreResponse(false, "aireport_"+rawKey, data, "llm_tools")
+			}
+		}
+	}
+
+	return report
+}
+
+func (s *Server) AIReportCheckHandler(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		id = r.URL.Query().Get("cve")
+	}
+	if id == "" {
+		http.Error(w, "Missing 'id' parameter", http.StatusBadRequest)
+		return
+	}
+
+	report, exists := s.getCachedAIReport(id)
+
+	w.Header().Set("Content-Type", "application/json")
+	if exists {
+		json.NewEncoder(w).Encode(map[string]any{
+			"exists":     true,
+			"cve":        report.CVE,
+			"created_at": report.CreatedAt,
+		})
+	} else {
+		json.NewEncoder(w).Encode(map[string]any{
+			"exists": false,
+			"cve":    id,
+		})
+	}
+}
+
 func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Mandatory logging with the special string
 	id := r.URL.Query().Get("id")
@@ -1993,7 +2112,6 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 		id = r.URL.Query().Get("cve")
 	}
 	s.Log.Printf("__LLM TOOLS__ Processing AI report request for ID: %s", id)
-	fmt.Printf("__LLM TOOLS__ Processing AI report request for ID: %s", id)
 
 	if id == "" {
 		http.Error(w, "Missing 'id' parameter", http.StatusBadRequest)
@@ -2006,20 +2124,39 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isForce := r.URL.Query().Get("force") == "true" || r.URL.Query().Get("rerun") == "true"
+
+	// 3. Return cached report if available and force rerun is not requested
+	if !isForce {
+		if cachedReport, exists := s.getCachedAIReport(id); exists {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(cachedReport.HTML))
+			return
+		}
+	}
+
 	var prompt string
 
-	// 3. Retrieve stored prompt data from database if available
+	// 4. Retrieve stored prompt data from database if available
 	data, err := s.DB.GetResponse(id)
 	if err == nil && len(data) > 0 {
-		var records []map[string]interface{}
-		if err := json.Unmarshal(data, &records); err == nil && len(records) > 0 {
-			if p, ok := records[0]["prompt"].(string); ok && p != "" {
+		var singleRecord map[string]interface{}
+		if err := json.Unmarshal(data, &singleRecord); err == nil {
+			if p, ok := singleRecord["prompt"].(string); ok && p != "" {
 				prompt = p
+			}
+		}
+		if prompt == "" {
+			var records []map[string]interface{}
+			if err := json.Unmarshal(data, &records); err == nil && len(records) > 0 {
+				if p, ok := records[0]["prompt"].(string); ok && p != "" {
+					prompt = p
+				}
 			}
 		}
 	}
 
-	// 4. If prompt not found in database, construct prompt for CVE / Vulnerability item
+	// 5. If prompt not found in database, construct prompt for CVE / Vulnerability item
 	if prompt == "" {
 		var vItem *VulnerabilityItem
 
@@ -2078,7 +2215,7 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 5. Execute the LLM call using the Gemini model defined in optional/llm_tools.go
+	// 6. Execute the LLM call using the Gemini model defined in optional/llm_tools.go
 	model := &optional.LlmToolsGeminiModel{
 		ApiKey: s.Details.LlmConf.ApiKey,
 		Model:  s.Details.LlmConf.ModelType,
@@ -2094,7 +2231,10 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 
 	report = CleanLLMHTMLReport(report)
 
-	// 6. Write the generated HTML report to the response
+	// 7. Save generated report to memory cache and database
+	s.saveCachedAIReport(id, report)
+
+	// 8. Write the generated HTML report to the response
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(report))
 }
@@ -2177,7 +2317,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
         <td>
             <div class="field is-grouped">
                 <p class="control">
-                    <a href="/events/%v" class="button is-small is-info is-light" title="View Event">
+                    <a href="%s" class="button is-small is-info is-light" title="View Event">
                         <span class="icon is-small"><i class="material-icons">visibility</i></span>
                     </a>
                 </p>
@@ -2195,6 +2335,14 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 
 	for _, v := range responses {
 		displayValue, matched := extractDisplayValue(v.Data)
+
+		// Determine the link for viewing event details vs AI reports
+		var viewLink string
+		if v.Vendor == "llm_tools" {
+			viewLink = fmt.Sprintf("/aireport?id=%s", v.ID)
+		} else {
+			viewLink = fmt.Sprintf("/events/%s", v.ID)
+		}
 
 		// actions stores the HTML for conditional buttons
 		var actions string
@@ -2223,7 +2371,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 		}
 
 		// Inject the time, vendor, value, and consolidated actions into the row template
-		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayHtml, v.ID, v.ID, actions)
+		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayHtml, viewLink, v.ID, actions)
 		buffer.WriteString(row)
 	}
 

@@ -149,11 +149,18 @@ func TestCleanUserServices(t *testing.T) {
 }
 
 func TestExtractThreatLevelID(t *testing.T) {
-	// Valid data
+	// Valid data array
 	data := []byte(`[{"threat_level_id": 4}]`)
 	tid, err := ExtractThreatLevelID(data)
 	if err != nil || tid != 4 {
 		t.Errorf("expected tid=4, got tid=%d, err=%v", tid, err)
+	}
+
+	// Valid single JSON object
+	singleObj := []byte(`{"threat_level_id": 2, "id": "CVE-2026-1234"}`)
+	tidSingle, err := ExtractThreatLevelID(singleObj)
+	if err != nil || tidSingle != 2 {
+		t.Errorf("expected tid=2, got tid=%d, err=%v", tidSingle, err)
 	}
 
 	// Invalid JSON
