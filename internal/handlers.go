@@ -1166,7 +1166,7 @@ func (s *Server) EventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.URL.Path[len(pathPrefix):]
-	if _, err := uuid.Parse(id); err != nil {
+	if id == "" || strings.Contains(id, "/") {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
@@ -2478,13 +2478,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 	for _, v := range responses {
 		displayValue, matched := extractDisplayValue(v.Data)
 
-		// Determine the link for viewing event details vs AI reports
-		var viewLink string
-		if v.Vendor == "llm_tools" {
-			viewLink = fmt.Sprintf("/aireport?id=%s", v.ID)
-		} else {
-			viewLink = fmt.Sprintf("/events/%s", v.ID)
-		}
+		viewLink := fmt.Sprintf("/events/%s", v.ID)
 
 		// actions stores the HTML for conditional buttons
 		var actions string
