@@ -788,6 +788,7 @@ func (s *Server) InitializeFromConfig(cfg *Configuration, fromFile bool) {
 	s.Gateway.HandleFunc("/cases/list", http.HandlerFunc(s.ValidateSessionToken(s.GetCasesHandler)))
 	s.Gateway.HandleFunc("/cases/search", http.HandlerFunc(s.ValidateSessionToken(s.SearchCasesHandler)))
 	s.Gateway.HandleFunc("/cases/update", http.HandlerFunc(s.ValidateSessionToken(s.UpdateCaseHandler)))
+	s.Gateway.HandleFunc("/cases/aireport", http.HandlerFunc(s.ValidateSessionToken(s.GenerateCaseAIReportHandler)))
 	s.Gateway.HandleFunc("/charts", s.ChartViewHandler)
 	s.Gateway.HandleFunc("/coordinate", http.HandlerFunc(s.ValidateSessionToken(s.GetCoordinateHandler)))
 	s.Gateway.HandleFunc("/create-user", http.HandlerFunc(s.ValidateSessionToken(s.CreateUserViewHandler)))
@@ -1112,7 +1113,7 @@ func CreateFakeResponse() []byte {
 
 func (s *Server) ManageCases() {
 	fmt.Println("Running case management routine...")
-	query := "SELECT * FROM cases"
+	query := "SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '') FROM cases"
 	pgDB, ok := s.DB.(*PostgresDB)
 	if !ok {
 		fmt.Println("DB is not Postgres, cannot run case management")
@@ -1127,7 +1128,7 @@ func (s *Server) ManageCases() {
 
 	for rows.Next() {
 		var c Case
-		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID)
+		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport)
 		if err != nil {
 			fmt.Printf("Error scanning case row: %v\n", err)
 			continue

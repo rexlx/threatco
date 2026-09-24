@@ -589,6 +589,24 @@ export class FeedController {
 
                 const targetId = select ? select.value : '';
                 try {
+                    let cachedAiReport = null;
+                    if (primaryCve) {
+                        try {
+                            const checkRes = await this.app._fetch(`/aireport/check?id=${encodeURIComponent(primaryCve)}`);
+                            if (checkRes.ok) {
+                                const checkData = await checkRes.json();
+                                if (checkData.exists) {
+                                    const repRes = await fetch(`/aireport?id=${encodeURIComponent(primaryCve)}`);
+                                    if (repRes.ok) {
+                                        cachedAiReport = await repRes.text();
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("Could not check/fetch cached AI report for case creation:", e);
+                        }
+                    }
+
                     if (targetId) {
                         // Append IOCs to existing case
                         const getRes = await this.app._fetch(`/cases/get?id=${targetId}`);
@@ -601,6 +619,10 @@ export class FeedController {
                                 caseData.iocs.push(ioc);
                             }
                         });
+
+                        if (cachedAiReport && !caseData.ai_report) {
+                            caseData.ai_report = cachedAiReport;
+                        }
 
                         const updateRes = await this.app._fetch('/cases/update', {
                             method: 'POST',
@@ -619,7 +641,8 @@ export class FeedController {
                                 name: name,
                                 description: desc,
                                 is_auto: false,
-                                iocs: iocList
+                                iocs: iocList,
+                                ai_report: cachedAiReport || ''
                             })
                         });
                         if (!createRes.ok) throw new Error(await createRes.text());

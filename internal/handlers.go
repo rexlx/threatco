@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -280,6 +281,18 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		c.Comments = []Comment{}
 	}
 
+	if c.AIReport == "" {
+		cveRegex := regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
+		for _, str := range append([]string{c.Name, c.Description}, c.IOCs...) {
+			if match := cveRegex.FindString(str); match != "" {
+				if report, exists := s.getCachedAIReport(match); exists {
+					c.AIReport = report.HTML
+					break
+				}
+			}
+		}
+	}
+
 	if err := s.DB.CreateCase(c); err != nil {
 		s.Log.Println("Error creating case:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -336,7 +349,7 @@ func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "SELECT id, name, status, created_at, is_auto, iocs FROM cases"
+	query := "SELECT id, COALESCE(name, ''), COALESCE(status, ''), created_at, COALESCE(is_auto, FALSE), iocs FROM cases"
 	if filter == "user" {
 		query += " WHERE is_auto = FALSE"
 	} else if filter == "auto" {
@@ -454,6 +467,9 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	existing.Comments = incoming.Comments
 	// this is how we "promote" to a user case
 	existing.IsAuto = incoming.IsAuto
+	if incoming.AIReport != "" {
+		existing.AIReport = incoming.AIReport
+	}
 
 	if err := s.DB.UpdateCase(existing); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -465,6 +481,132 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (s *Server) GenerateCaseAIReportHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID    string `json:"id"`
+		Force bool   `json:"force"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "Missing case 'id'", http.StatusBadRequest)
+		return
+	}
+
+	c, err := s.DB.GetCase(req.ID)
+	if err != nil {
+		http.Error(w, "Case not found", http.StatusNotFound)
+		return
+	}
+
+	if !s.Details.LlmConf.Enabled {
+		http.Error(w, "AI features are currently disabled", http.StatusForbidden)
+		return
+	}
+
+	if !req.Force && c.AIReport != "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":    "ok",
+			"ai_report": c.AIReport,
+			"case_id":   c.ID,
+		})
+		return
+	}
+
+	cveRegex := regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
+	var targetCVE string
+	for _, str := range append([]string{c.Name, c.Description}, c.IOCs...) {
+		if match := cveRegex.FindString(str); match != "" {
+			targetCVE = strings.ToUpper(match)
+			break
+		}
+	}
+
+	if !req.Force && targetCVE != "" {
+		if cached, exists := s.getCachedAIReport(targetCVE); exists {
+			c.AIReport = cached.HTML
+			_ = s.DB.UpdateCase(c)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"status":    "ok",
+				"ai_report": c.AIReport,
+				"case_id":   c.ID,
+			})
+			return
+		}
+	}
+
+	vItem := VulnerabilityItem{
+		Title:       c.Name,
+		Description: c.Description,
+		IOCs:        c.IOCs,
+		CaseID:      c.ID,
+		Source:      "Internal Case",
+	}
+
+	if targetCVE != "" {
+		vItem.Title = targetCVE + ": " + c.Name
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		mispPayload, err := s.FetchMispIOCsByCVE(ctx, targetCVE)
+		if err == nil && len(mispPayload) > 0 {
+			mispIOCs := ExtractValuesFromMispResponse(mispPayload)
+			for _, ioc := range mispIOCs {
+				if !slices.Contains(vItem.IOCs, ioc) {
+					vItem.IOCs = append(vItem.IOCs, ioc)
+				}
+			}
+		}
+	}
+
+	promptReq := &optional.LlmToolsPromptRequest{
+		Id:           c.ID,
+		MatchList:    []interface{}{vItem},
+		TransactinID: c.ID,
+	}
+
+	prompt, err := promptReq.BuildPrompt(optional.LlmToolsCvePrompt)
+	if err != nil {
+		s.LogError(fmt.Errorf("Failed to build prompt for case %s: %v", c.ID, err))
+		http.Error(w, "Failed to build report prompt", http.StatusInternalServerError)
+		return
+	}
+
+	model := &optional.LlmToolsGeminiModel{
+		ApiKey: s.Details.LlmConf.ApiKey,
+		Model:  s.Details.LlmConf.ModelType,
+	}
+
+	report, err := model.CallPrompt(r.Context(), prompt)
+	if err != nil {
+		s.LogError(fmt.Errorf("Gemini API call failed for case %s: %v", c.ID, err))
+		http.Error(w, "AI report generation failed", http.StatusBadGateway)
+		return
+	}
+
+	cleanReport := CleanLLMHTMLReport(report)
+	c.AIReport = cleanReport
+	if err := s.DB.UpdateCase(c); err != nil {
+		s.LogError(fmt.Errorf("Failed to update case with AI report: %v", err))
+	}
+
+	if targetCVE != "" {
+		s.saveCachedAIReport(targetCVE, cleanReport)
+	}
+	s.saveCachedAIReport(c.ID, cleanReport)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":    "ok",
+		"ai_report": cleanReport,
+		"case_id":   c.ID,
+	})
 }
 
 func (s *Server) ToolsInspectArchiveHandler(w http.ResponseWriter, r *http.Request) {

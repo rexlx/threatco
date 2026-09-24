@@ -225,3 +225,45 @@ func TestAIReportCache(t *testing.T) {
 		t.Errorf("expected cached report body, got %s", rrReport.Body.String())
 	}
 }
+
+func TestGenerateCaseAIReportHandler(t *testing.T) {
+	s := setupTestServer()
+	s.Details.LlmConf.Enabled = true
+
+	// Create a test case in mock DB
+	c := Case{
+		ID:          "case-ai-test-1",
+		Name:        "Case for CVE-2026-8888",
+		Description: "Test description for case",
+		Status:      "Open",
+		IOCs:        []string{"CVE-2026-8888", "1.1.1.1"},
+	}
+	s.DB.CreateCase(c)
+
+	// Save a cached report for CVE-2026-8888
+	s.saveCachedAIReport("CVE-2026-8888", "<html>Case Report</html>")
+
+	// Call GenerateCaseAIReportHandler without force -> should link cached report
+	body := strings.NewReader(`{"id":"case-ai-test-1","force":false}`)
+	req := httptest.NewRequest("POST", "/cases/aireport", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.GenerateCaseAIReportHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	var res map[string]interface{}
+	json.Unmarshal(rr.Body.Bytes(), &res)
+	if res["ai_report"] != "<html>Case Report</html>" {
+		t.Errorf("expected ai_report to be '<html>Case Report</html>', got %v", res["ai_report"])
+	}
+
+	// Verify case in DB now has AIReport populated
+	updatedCase, _ := s.DB.GetCase("case-ai-test-1")
+	if updatedCase.AIReport != "<html>Case Report</html>" {
+		t.Errorf("expected updatedCase.AIReport to be populated, got '%s'", updatedCase.AIReport)
+	}
+}

@@ -67,6 +67,7 @@ type Case struct {
 	IOCCount    int       `json:"ioc_count"`
 	IsAuto      bool      `json:"is_auto"`
 	ResponseID  string    `json:"response_id"`
+	AIReport    string    `json:"ai_report,omitempty"`
 }
 
 type Comment struct {
@@ -441,7 +442,8 @@ func (db *PostgresDB) createTables() error {
             iocs JSONB,
             comments JSONB,
 			is_auto BOOLEAN DEFAULT FALSE,
-			response_id TEXT
+			response_id TEXT,
+			ai_report TEXT
         );
 		CREATE TABLE IF NOT EXISTS search_history (
 			id TEXT PRIMARY KEY,
@@ -485,6 +487,7 @@ func (db *PostgresDB) createTables() error {
 		
 		-- Cleanup Optimization
 		CREATE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email);
+		ALTER TABLE cases ADD COLUMN IF NOT EXISTS ai_report TEXT;
     `)
 
 	return err
@@ -769,9 +772,9 @@ func (db *PostgresDB) SaveToken(t Token) error {
 
 func (db *PostgresDB) CreateCase(c Case) error {
 	_, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto, c.ResponseID,
+		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id, ai_report)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto, c.ResponseID, c.AIReport,
 	)
 	return err
 }
@@ -802,8 +805,8 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 
 	// 2. Construct the dynamic query while preserving pagination
 	query = fmt.Sprintf(`
-        SELECT id, name, description, created_by, created_at, status, 
-               iocs, comments, is_auto, response_id
+        SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), 
+               iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '')
         FROM cases 
         %s 
         ORDER BY %s 
@@ -831,6 +834,7 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 			&c.Comments,
 			&c.IsAuto,
 			&c.ResponseID,
+			&c.AIReport,
 		)
 		if err != nil {
 			return nil, err
@@ -849,17 +853,18 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 
 func (db *PostgresDB) GetCase(id string) (Case, error) {
 	var c Case
-	err := db.Pool.QueryRow(context.Background(), "SELECT * FROM cases WHERE id = $1", id).Scan(
-		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID,
+	err := db.Pool.QueryRow(context.Background(),
+		`SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '') FROM cases WHERE id = $1`, id).Scan(
+		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport,
 	)
 	return c, err
 }
 
 func (db *PostgresDB) UpdateCase(c Case) error {
 	_, err := db.Pool.Exec(context.Background(),
-		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8, is_auto = $9
-		WHERE id = $10`,
-		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.IsAuto, c.ID,
+		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8, is_auto = $9, ai_report = $10
+		WHERE id = $11`,
+		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.IsAuto, c.AIReport, c.ID,
 	)
 	return err
 }
@@ -877,7 +882,7 @@ func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
 	}
 
 	sql := fmt.Sprintf(`
-        SELECT id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id
+        SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '')
         FROM cases 
         WHERE (
 			id ILIKE $1
@@ -898,7 +903,7 @@ func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport); err != nil {
 			return nil, err
 		}
 		c.IOCCount = len(c.IOCs)

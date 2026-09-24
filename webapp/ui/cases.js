@@ -577,8 +577,66 @@ export class CaseController {
                                     <span>View Source Response</span>
                                 </button>
                             ` : ''}
+                        </div>
+                    </div>                    </div>
+                    <div class="box has-background-custom mt-5" id="caseAiReportSection">
+                        <div class="level mb-3">
+                            <div class="level-left">
+                                <h4 class="title is-5 has-text-info mb-0">
+                                    <span class="icon mr-2"><i class="material-icons">auto_awesome</i></span>
+                                    <span>AI Threat & Vulnerability Report</span>
+                                </h4>
+                            </div>
+                            <div class="level-right">
+                                <div class="buttons">
+                                    ${c.ai_report ? `
+                                        <button class="button is-small is-info is-outlined" id="btnOpenCaseAiModal">
+                                            <span class="icon"><i class="material-icons">open_in_full</i></span>
+                                            <span>Open Modal</span>
+                                        </button>
+                                    ` : ''}
+                                    <button class="button is-small is-primary" id="btnGenerateCaseAiReport">
+                                        <span class="icon"><i class="material-icons">${c.ai_report ? 'refresh' : 'auto_awesome'}</i></span>
+                                        <span>${c.ai_report ? 'Rerun AI Report' : 'Generate AI Report'}</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        <div id="caseAiReportViewport">
+                            ${c.ai_report ? `
+                                <div class="box has-background-white p-2" style="border-radius: 6px; border: 1px solid #3e8ed0;">
+                                    <iframe id="caseAiReportIframe" style="width: 100%; height: 500px; border: none; background: #fff; border-radius: 4px;"></iframe>
+                                </div>
+                            ` : `
+                                <div class="notification is-dark has-text-grey-light is-italic">
+                                    No AI Report linked to this case yet. Click <strong>Generate AI Report</strong> to generate an analysis based on the case IOCs/CVE.
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal" id="caseAiModal">
+                    <div class="modal-background"></div>
+                    <div class="modal-card" style="width: 90%; max-width: 1200px;">
+                        <header class="modal-card-head has-background-dark">
+                            <p class="modal-card-title has-text-info">
+                                <span class="icon mr-2"><i class="material-icons">auto_awesome</i></span>
+                                AI Threat & Vulnerability Report
+                            </p>
+                            <button class="delete" aria-label="close" id="btnCloseCaseAiModal"></button>
+                        </header>
+                        <section class="modal-card-body p-0" style="height: 75vh; background: #fff;">
+                            <iframe id="caseAiReportModalIframe" style="width:100%; height:100%; border:none; background:#fff;"></iframe>
+                        </section>
+                        <footer class="modal-card-foot has-background-dark is-justify-content-space-between">
+                            <button class="button is-primary" id="btnModalRerunCaseAiReport">
+                                <span class="icon"><i class="material-icons">refresh</i></span>
+                                <span>Rerun Report</span>
+                            </button>
+                            <button class="button is-dark" id="btnModalCloseCaseAiModal">Close</button>
+                        </footer>
                     </div>
                 </div>
 
@@ -633,6 +691,86 @@ export class CaseController {
 
     attachDetailListeners(c) {
         document.getElementById('btnBackList').onclick = () => this.render();
+
+        const mainIframe = document.getElementById('caseAiReportIframe');
+        if (mainIframe && c.ai_report) {
+            mainIframe.srcdoc = c.ai_report;
+        }
+
+        const runCaseAiReport = async (force = false) => {
+            const genBtn = document.getElementById('btnGenerateCaseAiReport');
+            const modalGenBtn = document.getElementById('btnModalRerunCaseAiReport');
+            if (genBtn) genBtn.classList.add('is-loading');
+            if (modalGenBtn) modalGenBtn.classList.add('is-loading');
+
+            try {
+                const res = await this.app._fetch('/cases/aireport', {
+                    method: 'POST',
+                    body: JSON.stringify({ id: c.id, force: force })
+                });
+
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+
+                if (data.ai_report) {
+                    this.currentCase.ai_report = data.ai_report;
+                    const iframe = document.getElementById('caseAiReportIframe');
+                    const modalIframe = document.getElementById('caseAiReportModalIframe');
+                    if (iframe) iframe.srcdoc = data.ai_report;
+                    if (modalIframe) modalIframe.srcdoc = data.ai_report;
+
+                    const viewport = document.getElementById('caseAiReportViewport');
+                    if (viewport && !iframe) {
+                        viewport.innerHTML = `
+                            <div class="box has-background-white p-2" style="border-radius: 6px; border: 1px solid #3e8ed0;">
+                                <iframe id="caseAiReportIframe" style="width: 100%; height: 500px; border: none; background: #fff; border-radius: 4px;"></iframe>
+                            </div>
+                        `;
+                        const newIframe = document.getElementById('caseAiReportIframe');
+                        if (newIframe) newIframe.srcdoc = data.ai_report;
+                    }
+
+                    if (genBtn) {
+                        genBtn.innerHTML = `<span class="icon"><i class="material-icons">refresh</i></span><span>Rerun AI Report</span>`;
+                    }
+                }
+            } catch (err) {
+                alert("Failed to generate AI report: " + err.message);
+            } finally {
+                if (genBtn) genBtn.classList.remove('is-loading');
+                if (modalGenBtn) modalGenBtn.classList.remove('is-loading');
+            }
+        };
+
+        const btnGen = document.getElementById('btnGenerateCaseAiReport');
+        if (btnGen) btnGen.onclick = () => runCaseAiReport(this.currentCase.ai_report ? true : false);
+
+        const btnModalRerun = document.getElementById('btnModalRerunCaseAiReport');
+        if (btnModalRerun) btnModalRerun.onclick = () => runCaseAiReport(true);
+
+        const aiModal = document.getElementById('caseAiModal');
+        const openModalBtn = document.getElementById('btnOpenCaseAiModal');
+        if (openModalBtn && aiModal) {
+            openModalBtn.onclick = () => {
+                const modalIframe = document.getElementById('caseAiReportModalIframe');
+                if (modalIframe && this.currentCase.ai_report) {
+                    modalIframe.srcdoc = this.currentCase.ai_report;
+                }
+                aiModal.classList.add('is-active');
+            };
+        }
+
+        const closeAiModal = () => {
+            if (aiModal) aiModal.classList.remove('is-active');
+        };
+        const closeBtn1 = document.getElementById('btnCloseCaseAiModal');
+        const closeBtn2 = document.getElementById('btnModalCloseCaseAiModal');
+        if (closeBtn1) closeBtn1.onclick = closeAiModal;
+        if (closeBtn2) closeBtn2.onclick = closeAiModal;
+        if (aiModal) {
+            const bg = aiModal.querySelector('.modal-background');
+            if (bg) bg.onclick = closeAiModal;
+        }
 
         const mispModal = document.getElementById('mispModal');
         const closeMisp = () => mispModal.classList.remove('is-active');
