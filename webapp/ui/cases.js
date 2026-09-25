@@ -606,7 +606,7 @@ export class CaseController {
                         <div id="caseAiReportViewport">
                             ${c.ai_report ? `
                                 <div class="box has-background-white p-2" style="border-radius: 6px; border: 1px solid #3e8ed0;">
-                                    <iframe id="caseAiReportIframe" style="width: 100%; height: 500px; border: none; background: #fff; border-radius: 4px;"></iframe>
+                                    <iframe id="caseAiReportIframe" sandbox="allow-popups allow-popups-to-escape-sandbox" style="width: 100%; height: 500px; border: none; background: #fff; border-radius: 4px;"></iframe>
                                 </div>
                             ` : `
                                 <div class="notification is-dark has-text-grey-light is-italic">
@@ -628,7 +628,7 @@ export class CaseController {
                             <button class="delete" aria-label="close" id="btnCloseCaseAiModal"></button>
                         </header>
                         <section class="modal-card-body p-0" style="height: 75vh; background: #fff;">
-                            <iframe id="caseAiReportModalIframe" style="width:100%; height:100%; border:none; background:#fff;"></iframe>
+                            <iframe id="caseAiReportModalIframe" sandbox="allow-popups allow-popups-to-escape-sandbox" style="width:100%; height:100%; border:none; background:#fff;"></iframe>
                         </section>
                         <footer class="modal-card-foot has-background-dark is-justify-content-space-between">
                             <button class="button is-primary" id="btnModalRerunCaseAiReport">
@@ -723,7 +723,7 @@ export class CaseController {
                     if (viewport && !iframe) {
                         viewport.innerHTML = `
                             <div class="box has-background-white p-2" style="border-radius: 6px; border: 1px solid #3e8ed0;">
-                                <iframe id="caseAiReportIframe" style="width: 100%; height: 500px; border: none; background: #fff; border-radius: 4px;"></iframe>
+                                <iframe id="caseAiReportIframe" sandbox="allow-popups allow-popups-to-escape-sandbox" style="width: 100%; height: 500px; border: none; background: #fff; border-radius: 4px;"></iframe>
                             </div>
                         `;
                         const newIframe = document.getElementById('caseAiReportIframe');

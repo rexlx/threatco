@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +40,7 @@ import (
 	"github.com/rexlx/threatco/parser"
 	"github.com/rexlx/threatco/vendors"
 	"golang.org/x/crypto/ssh"
+	xhtml "golang.org/x/net/html"
 )
 
 var store *UploadStore
@@ -281,7 +283,9 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		c.Comments = []Comment{}
 	}
 
-	if c.AIReport == "" {
+	if c.AIReport != "" {
+		c.AIReport = CleanLLMHTMLReport(c.AIReport)
+	} else {
 		cveRegex := regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
 		for _, str := range append([]string{c.Name, c.Description}, c.IOCs...) {
 			if match := cveRegex.FindString(str); match != "" {
@@ -468,7 +472,7 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	// this is how we "promote" to a user case
 	existing.IsAuto = incoming.IsAuto
 	if incoming.AIReport != "" {
-		existing.AIReport = incoming.AIReport
+		existing.AIReport = CleanLLMHTMLReport(incoming.AIReport)
 	}
 
 	if err := s.DB.UpdateCase(existing); err != nil {
@@ -2187,6 +2191,7 @@ func (s *Server) getCachedAIReport(id string) (AIReport, bool) {
 }
 
 func (s *Server) saveCachedAIReport(id string, htmlReport string) AIReport {
+	htmlReport = CleanLLMHTMLReport(htmlReport)
 	rawKey := strings.TrimSpace(id)
 	cleanKey := strings.ToUpper(rawKey)
 	for strings.HasPrefix(cleanKey, "AIREPORT_") {
@@ -2271,7 +2276,9 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 	// 3. Return cached report if available and force rerun is not requested
 	if !isForce {
 		if cachedReport, exists := s.getCachedAIReport(id); exists {
-			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; sandbox allow-popups;")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Write([]byte(cachedReport.HTML))
 			return
 		}
@@ -2377,12 +2384,106 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 	s.saveCachedAIReport(id, report)
 
 	// 8. Write the generated HTML report to the response
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; sandbox allow-popups;")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Write([]byte(report))
 }
 
+var disallowedHTMLTags = map[string]bool{
+	"script":   true,
+	"iframe":   true,
+	"embed":    true,
+	"object":   true,
+	"form":     true,
+	"link":     true,
+	"frame":    true,
+	"frameset": true,
+	"applet":   true,
+}
+
+func isSafeHref(href string) bool {
+	trimmed := strings.TrimSpace(href)
+	if trimmed == "" {
+		return true
+	}
+
+	// Check if a scheme colon is present before any path/query/fragment separator
+	colonIdx := strings.Index(trimmed, ":")
+	slashIdx := strings.IndexAny(trimmed, "/?#")
+
+	if colonIdx != -1 && (slashIdx == -1 || colonIdx < slashIdx) {
+		scheme := strings.ToLower(strings.TrimSpace(trimmed[:colonIdx]))
+		if scheme != "https" {
+			return false
+		}
+	}
+
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+
+	if u.Scheme != "" && !strings.EqualFold(u.Scheme, "https") {
+		return false
+	}
+
+	return true
+}
+
+func sanitizeHTMLNode(n *xhtml.Node) {
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		if c.Type == xhtml.ElementNode {
+			tag := strings.ToLower(c.Data)
+
+			// 1. Strip Executable and Embedded Elements: Disallow and purge script and frame tags
+			if disallowedHTMLTags[tag] {
+				n.RemoveChild(c)
+				c = next
+				continue
+			}
+
+			// 2 & 3. Remove inline event handlers and enforce safe URI schemes on <a href>
+			var filteredAttrs []xhtml.Attribute
+			for _, attr := range c.Attr {
+				attrKey := strings.ToLower(attr.Key)
+
+				// Remove Inline Event Handlers: Strip all JavaScript hooks (onload, onerror, onclick, etc.)
+				if strings.HasPrefix(attrKey, "on") {
+					continue
+				}
+
+				// Enforce Safe URI Schemes: Validate link destinations on <a href>
+				if tag == "a" && attrKey == "href" {
+					if !isSafeHref(attr.Val) {
+						continue
+					}
+				}
+
+				filteredAttrs = append(filteredAttrs, attr)
+			}
+			c.Attr = filteredAttrs
+		}
+
+		sanitizeHTMLNode(c)
+		c = next
+	}
+}
+
+const MaxAIReportSize = 500 * 1024 // 500 KB quota to mitigate RAM/DB bloat and DoS
+
 func CleanLLMHTMLReport(report string) string {
 	report = strings.TrimSpace(report)
+	if report == "" {
+		return ""
+	}
+
+	// Tier A Quota: Cap raw input before parsing HTML to protect xhtml.Parse from CPU/memory DoS
+	if len(report) > MaxAIReportSize {
+		report = report[:MaxAIReportSize]
+	}
+
 	if strings.HasPrefix(report, "```html") {
 		report = strings.TrimPrefix(report, "```html")
 		if idx := strings.LastIndex(report, "```"); idx != -1 {
@@ -2394,7 +2495,36 @@ func CleanLLMHTMLReport(report string) string {
 			report = report[:idx]
 		}
 	}
-	return strings.TrimSpace(report)
+	report = strings.TrimSpace(report)
+	if report == "" {
+		return ""
+	}
+
+	doc, err := xhtml.Parse(strings.NewReader(report))
+	if err != nil {
+		if len(report) > MaxAIReportSize {
+			return report[:MaxAIReportSize]
+		}
+		return report
+	}
+
+	sanitizeHTMLNode(doc)
+
+	var buf bytes.Buffer
+	if err := xhtml.Render(&buf, doc); err != nil {
+		if len(report) > MaxAIReportSize {
+			return report[:MaxAIReportSize]
+		}
+		return report
+	}
+
+	result := buf.String()
+	// Tier B Quota: Cap final rendered output before returning for RAM cache or DB persistence
+	if len(result) > MaxAIReportSize {
+		result = result[:MaxAIReportSize]
+	}
+
+	return result
 }
 
 // containsMatch recursively checks if "matched": true exists in the JSON data.

@@ -255,15 +255,91 @@ func TestGenerateCaseAIReportHandler(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
 
+	expectedClean := "<html><head></head><body>Case Report</body></html>"
 	var res map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &res)
-	if res["ai_report"] != "<html>Case Report</html>" {
-		t.Errorf("expected ai_report to be '<html>Case Report</html>', got %v", res["ai_report"])
+	if res["ai_report"] != expectedClean {
+		t.Errorf("expected ai_report to be '%s', got %v", expectedClean, res["ai_report"])
 	}
 
 	// Verify case in DB now has AIReport populated
 	updatedCase, _ := s.DB.GetCase("case-ai-test-1")
-	if updatedCase.AIReport != "<html>Case Report</html>" {
+	if updatedCase.AIReport != expectedClean {
 		t.Errorf("expected updatedCase.AIReport to be populated, got '%s'", updatedCase.AIReport)
+	}
+}
+
+func TestCleanLLMHTMLReport(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string
+		exclude  []string
+	}{
+		{
+			name:     "Strip script tags and contents",
+			input:    "<div><h1>Report</h1><script>alert('xss')</script></div>",
+			contains: []string{"<h1>Report</h1>"},
+			exclude:  []string{"<script>", "alert('xss')", "</script>"},
+		},
+		{
+			name:     "Strip iframe, embed, object, form, link tags and contents",
+			input:    "<div><iframe src='http://evil.com'></iframe><embed src='x'></embed><object data='y'></object><form action='z'></form><link rel='stylesheet' href='a'></div>",
+			contains: []string{"<div>", "</div>"},
+			exclude:  []string{"<iframe", "<embed", "<object", "<form", "<link", "evil.com"},
+		},
+		{
+			name:     "Remove inline event handlers",
+			input:    "<div onload='doBad()' onerror='alert(1)' onclick='clickMe()' onmouseover='hover()'><p id='1'>Text</p></div>",
+			contains: []string{"<p id=\"1\">Text</p>", "<div>"},
+			exclude:  []string{"onload", "onerror", "onclick", "onmouseover", "doBad", "clickMe"},
+		},
+		{
+			name:  "Enforce safe URI schemes on <a href>",
+			input: "<a href='javascript:alert(1)'>JS Link</a><a href='data:text/html,abc'>Data Link</a><a href='http://insecure.com'>HTTP Link</a><a href='https://secure.com'>HTTPS Link</a><a href='/relative/path'>Relative Link</a>",
+			contains: []string{
+				"<a href=\"https://secure.com\">HTTPS Link</a>",
+				"<a href=\"/relative/path\">Relative Link</a>",
+				"<a>JS Link</a>",
+				"<a>Data Link</a>",
+				"<a>HTTP Link</a>",
+			},
+			exclude: []string{
+				"href=\"javascript:",
+				"href=\"data:",
+				"href=\"http:",
+			},
+		},
+		{
+			name:     "Strip markdown backtick fences",
+			input:    "```html\n<h1>Markdown Wrapped</h1>\n```",
+			contains: []string{"<h1>Markdown Wrapped</h1>"},
+			exclude:  []string{"```"},
+		},
+		{
+			name:     "Enforce MaxAIReportSize quota on oversized inputs",
+			input:    "<div>" + strings.Repeat("A", MaxAIReportSize+1000) + "</div>",
+			contains: []string{"<div>"},
+			exclude:  []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CleanLLMHTMLReport(tt.input)
+			if len(got) > MaxAIReportSize {
+				t.Errorf("expected length <= %d, got %d", MaxAIReportSize, len(got))
+			}
+			for _, c := range tt.contains {
+				if !strings.Contains(got, c) {
+					t.Errorf("expected output to contain %q, got: %s", c, got)
+				}
+			}
+			for _, e := range tt.exclude {
+				if strings.Contains(got, e) {
+					t.Errorf("expected output NOT to contain %q, got: %s", e, got)
+				}
+			}
+		})
 	}
 }
