@@ -38,12 +38,12 @@ export class CaseController {
 
     getPriorityBadge(priority) {
         const p = priority || 'Medium';
-        let colorClass = 'is-info';
-        if (p === 'Critical') colorClass = 'is-danger';
-        else if (p === 'High') colorClass = 'is-warning';
-        else if (p === 'Medium') colorClass = 'is-info';
-        else if (p === 'Low') colorClass = 'is-dark';
-        return `<span class="tag ${colorClass}">${escapeHtml(p)}</span>`;
+        let textColor = 'has-text-info';
+        if (p === 'Critical') textColor = 'has-text-danger';
+        else if (p === 'High') textColor = 'has-text-warning';
+        else if (p === 'Medium') textColor = 'has-text-info';
+        else if (p === 'Low') textColor = 'has-text-grey-light';
+        return `<span class="${textColor} is-size-7 ml-2" style="font-weight: 600;">[${escapeHtml(p)}]</span>`;
     }
 
     async render() {
@@ -452,8 +452,8 @@ export class CaseController {
             box.onclick = () => this.openCase(c);
 
             const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
-            const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2">AUTO</span>' : '';
-            const priorityBadge = this.getPriorityBadge(c.priority);
+            const autoText = c.is_auto ? '<span class="has-text-grey-light is-size-7 ml-2">(Automated)</span>' : '';
+            const priorityText = this.getPriorityBadge(c.priority);
             const assignedText = c.assigned_to ? escapeHtml(c.assigned_to) : 'Unassigned';
 
             box.innerHTML = `
@@ -468,8 +468,8 @@ export class CaseController {
                         <div class="content">
                             <p style="overflow: hidden; text-overflow: ellipsis;">
                                 <strong class="has-text-info is-size-5" style="word-break: break-word;">${escapeHtml(c.name)}</strong> 
-                                ${priorityBadge}
-                                ${autoBadge}
+                                ${priorityText}
+                                ${autoText}
                                 <span class="has-text-info-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
                                 <span class="tag is-dark is-outlined is-small ml-2" title="Assigned To">
                                     <span class="icon is-small mr-1"><i class="material-icons">person_outline</i></span>${assignedText}
