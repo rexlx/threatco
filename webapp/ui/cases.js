@@ -13,6 +13,37 @@ export class CaseController {
 
         // NEW: Track selected case IDs for grouping
         this.selectedCaseIds = new Set();
+
+        // Cache user list for case assignment
+        this.usersList = [];
+    }
+
+    async fetchUsers() {
+        if (this.usersList && this.usersList.length > 0) {
+            return this.usersList;
+        }
+        try {
+            const res = await this.app._fetch('/getusers');
+            if (res.ok) {
+                this.usersList = await res.json() || [];
+            } else {
+                this.usersList = [];
+            }
+        } catch (e) {
+            console.error("Failed to fetch users:", e);
+            this.usersList = [];
+        }
+        return this.usersList;
+    }
+
+    getPriorityBadge(priority) {
+        const p = priority || 'Medium';
+        let colorClass = 'is-info';
+        if (p === 'Critical') colorClass = 'is-danger';
+        else if (p === 'High') colorClass = 'is-warning';
+        else if (p === 'Medium') colorClass = 'is-info';
+        else if (p === 'Low') colorClass = 'is-dark';
+        return `<span class="tag ${colorClass}">${escapeHtml(p)}</span>`;
     }
 
     async render() {
@@ -67,6 +98,9 @@ export class CaseController {
                     </li>
                     <li class="${this.currentFilter === 'most_iocs' ? 'is-active' : ''}" data-filter="most_iocs">
                         <a><span class="icon is-small"><i class="material-icons">summarize</i></span><span>Most IOCs</span></a>
+                    </li>
+                    <li class="${this.currentFilter === 'priority' ? 'is-active' : ''}" data-filter="priority">
+                        <a><span class="icon is-small"><i class="material-icons">flag</i></span><span>By Priority</span></a>
                     </li>
                 </ul>
             </div>
@@ -129,6 +163,29 @@ export class CaseController {
                             <div class="control"><input class="input" type="text" id="newCaseName" placeholder="e.g. Phishing Campaign Dec 2025"></div>
                         </div>
                         <div class="field">
+                            <label class="label">Priority</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="newCasePriority">
+                                        <option value="Low">Low</option>
+                                        <option value="Medium" selected>Medium</option>
+                                        <option value="High">High</option>
+                                        <option value="Critical">Critical</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="label">Assign To</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="newCaseAssignee">
+                                        <option value="">Unassigned</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field">
                             <label class="label">Description</label>
                             <div class="control"><textarea class="textarea" id="newCaseDesc" placeholder="Brief summary..."></textarea></div>
                         </div>
@@ -180,9 +237,17 @@ export class CaseController {
             document.getElementById('btnSaveCase').onclick = () => this.saveNewCase();
         };
 
-        document.getElementById('btnNewCase').onclick = () => {
+        document.getElementById('btnNewCase').onclick = async () => {
             document.getElementById('newCaseName').value = '';
             document.getElementById('newCaseDesc').value = '';
+            document.getElementById('newCasePriority').value = 'Medium';
+
+            const users = await this.fetchUsers();
+            const assigneeSelect = document.getElementById('newCaseAssignee');
+            if (assigneeSelect) {
+                assigneeSelect.innerHTML = '<option value="">Unassigned</option>' +
+                    users.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+            }
             modal.classList.add('is-active');
         };
         document.getElementById('btnCancelCase').onclick = closeModal;
@@ -231,12 +296,14 @@ export class CaseController {
     async saveNewCase(predefinedIocs = []) {
         const name = document.getElementById('newCaseName').value;
         const desc = document.getElementById('newCaseDesc').value;
+        const priority = document.getElementById('newCasePriority')?.value || 'Medium';
+        const assigned_to = document.getElementById('newCaseAssignee')?.value || '';
         if (!name) return alert("Name is required");
 
         try {
             const res = await this.app._fetch('/cases/create', {
                 method: 'POST',
-                body: JSON.stringify({ name, description: desc, is_auto: false })
+                body: JSON.stringify({ name, description: desc, is_auto: false, priority, assigned_to })
             });
             if (!res.ok) throw new Error(await res.text());
 
@@ -386,6 +453,8 @@ export class CaseController {
 
             const iocCount = (c.ioc_count !== undefined) ? c.ioc_count : (c.iocs ? c.iocs.length : 0);
             const autoBadge = c.is_auto ? '<span class="tag is-info is-light is-small ml-2">AUTO</span>' : '';
+            const priorityBadge = this.getPriorityBadge(c.priority);
+            const assignedText = c.assigned_to ? escapeHtml(c.assigned_to) : 'Unassigned';
 
             box.innerHTML = `
                 <article class="media is-vcentered" style="overflow: hidden;"> <div class="media-left">
@@ -399,8 +468,12 @@ export class CaseController {
                         <div class="content">
                             <p style="overflow: hidden; text-overflow: ellipsis;">
                                 <strong class="has-text-info is-size-5" style="word-break: break-word;">${escapeHtml(c.name)}</strong> 
+                                ${priorityBadge}
                                 ${autoBadge}
                                 <span class="has-text-info-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
+                                <span class="tag is-dark is-outlined is-small ml-2" title="Assigned To">
+                                    <span class="icon is-small mr-1"><i class="material-icons">person_outline</i></span>${assignedText}
+                                </span>
                                 <br>
                                 <span class="has-text-light is-size-7" style="word-break: break-word; display: block; margin-top: 4px;">
                                     ${escapeHtml(desc)}
@@ -444,7 +517,10 @@ export class CaseController {
         document.getElementById('btnBackList').onclick = () => this.render();
 
         try {
-            const res = await this.app._fetch(`/cases/get?id=${cSummary.id}`);
+            const [res, users] = await Promise.all([
+                this.app._fetch(`/cases/get?id=${cSummary.id}`),
+                this.fetchUsers()
+            ]);
             if (!res.ok) throw new Error(await res.text());
 
             const c = await res.json();
@@ -564,6 +640,35 @@ export class CaseController {
                                 <p><strong>Status:</strong> ${escapeHtml(c.status)}</p>
                                 <p><strong>ID:</strong> <span class="is-family-code is-size-7">${c.id}</span></p>
                                 <p><strong>Type:</strong> ${c.is_auto ? 'Automated System Case' : 'User Created'}</p>
+
+                                <div class="field mt-3">
+                                    <label class="label is-small has-text-light">Priority</label>
+                                    <div class="control">
+                                        <div class="select is-small is-fullwidth">
+                                            <select id="selectCasePriority">
+                                                <option value="Low" ${c.priority === 'Low' ? 'selected' : ''}>Low</option>
+                                                <option value="Medium" ${(!c.priority || c.priority === 'Medium') ? 'selected' : ''}>Medium</option>
+                                                <option value="High" ${c.priority === 'High' ? 'selected' : ''}>High</option>
+                                                <option value="Critical" ${c.priority === 'Critical' ? 'selected' : ''}>Critical</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="field mt-2">
+                                    <label class="label is-small has-text-light">Assigned To</label>
+                                    <div class="control">
+                                        <div class="select is-small is-fullwidth">
+                                            <select id="selectCaseAssignee">
+                                                <option value="" ${!c.assigned_to ? 'selected' : ''}>Unassigned</option>
+                                                ${users.map(u => `
+                                                    <option value="${escapeHtml(u)}" ${c.assigned_to === u ? 'selected' : ''}>${escapeHtml(u)}</option>
+                                                `).join('')}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 ${c.is_auto ? `
                                 <button class="button is-small is-info is-outlined is-fullwidth mt-3" id="btnPromoteCase">
                                     <span class="icon is-small"><i class="material-icons">upgrade</i></span>
@@ -692,6 +797,22 @@ export class CaseController {
     attachDetailListeners(c) {
         document.getElementById('btnBackList').onclick = () => this.render();
 
+        const prioritySelect = document.getElementById('selectCasePriority');
+        if (prioritySelect) {
+            prioritySelect.onchange = async (e) => {
+                this.currentCase.priority = e.target.value;
+                await this.updateCase();
+            };
+        }
+
+        const assigneeSelect = document.getElementById('selectCaseAssignee');
+        if (assigneeSelect) {
+            assigneeSelect.onchange = async (e) => {
+                this.currentCase.assigned_to = e.target.value;
+                await this.updateCase();
+            };
+        }
+
         const mainIframe = document.getElementById('caseAiReportIframe');
         if (mainIframe && c.ai_report) {
             mainIframe.srcdoc = c.ai_report;
@@ -804,7 +925,11 @@ export class CaseController {
         };
 
         document.getElementById('btnExportCaseJson').onclick = () => {
-            const caseData = JSON.stringify(this.currentCase, null, 4);
+            const exportObj = {
+                ...this.currentCase,
+                ai_report: this.currentCase.ai_report ? "present" : ""
+            };
+            const caseData = JSON.stringify(exportObj, null, 4);
             const blob = new Blob([caseData], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');

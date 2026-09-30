@@ -276,6 +276,9 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	c.CreatedBy = email
 	c.CreatedAt = time.Now()
 	c.Status = "Open"
+	if c.Priority == "" {
+		c.Priority = "Medium"
+	}
 	if c.IOCs == nil {
 		c.IOCs = []string{}
 	}
@@ -353,7 +356,7 @@ func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "SELECT id, COALESCE(name, ''), COALESCE(status, ''), created_at, COALESCE(is_auto, FALSE), iocs FROM cases"
+	query := "SELECT id, COALESCE(name, ''), COALESCE(status, ''), created_at, COALESCE(is_auto, FALSE), iocs, COALESCE(assigned_to, ''), COALESCE(priority, 'Medium') FROM cases"
 	if filter == "user" {
 		query += " WHERE is_auto = FALSE"
 	} else if filter == "auto" {
@@ -375,15 +378,15 @@ func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
 
-	writer.Write([]string{"ID", "Name", "Status", "Date", "Auto-Generated", "IOCs"})
+	writer.Write([]string{"ID", "Name", "Status", "Priority", "Assigned To", "Date", "Auto-Generated", "IOCs"})
 
 	for rows.Next() {
-		var id, name, status string
+		var id, name, status, assignedTo, priority string
 		var createdAt time.Time
 		var isAuto bool
 		var iocs []string
 
-		if err := rows.Scan(&id, &name, &status, &createdAt, &isAuto, &iocs); err != nil {
+		if err := rows.Scan(&id, &name, &status, &createdAt, &isAuto, &iocs, &assignedTo, &priority); err != nil {
 			continue
 		}
 
@@ -391,6 +394,8 @@ func (s *Server) ExportCasesCSVHandler(w http.ResponseWriter, r *http.Request) {
 			id,
 			name,
 			status,
+			priority,
+			assignedTo,
 			createdAt.String(),
 			strconv.FormatBool(isAuto),
 			strings.Join(iocs, "; "),
@@ -471,6 +476,12 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	existing.Comments = incoming.Comments
 	// this is how we "promote" to a user case
 	existing.IsAuto = incoming.IsAuto
+	existing.AssignedTo = incoming.AssignedTo
+	if incoming.Priority != "" {
+		existing.Priority = incoming.Priority
+	} else if existing.Priority == "" {
+		existing.Priority = "Medium"
+	}
 	if incoming.AIReport != "" {
 		existing.AIReport = CleanLLMHTMLReport(incoming.AIReport)
 	}

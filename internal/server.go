@@ -1113,7 +1113,7 @@ func CreateFakeResponse() []byte {
 
 func (s *Server) ManageCases() {
 	fmt.Println("Running case management routine...")
-	query := "SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '') FROM cases"
+	query := "SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, ''), COALESCE(assigned_to, ''), COALESCE(priority, 'Medium') FROM cases"
 	pgDB, ok := s.DB.(*PostgresDB)
 	if !ok {
 		fmt.Println("DB is not Postgres, cannot run case management")
@@ -1128,7 +1128,7 @@ func (s *Server) ManageCases() {
 
 	for rows.Next() {
 		var c Case
-		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport)
+		err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport, &c.AssignedTo, &c.Priority)
 		if err != nil {
 			fmt.Printf("Error scanning case row: %v\n", err)
 			continue

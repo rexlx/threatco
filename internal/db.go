@@ -68,6 +68,8 @@ type Case struct {
 	IsAuto      bool      `json:"is_auto"`
 	ResponseID  string    `json:"response_id"`
 	AIReport    string    `json:"ai_report,omitempty"`
+	AssignedTo  string    `json:"assigned_to,omitempty"`
+	Priority    string    `json:"priority,omitempty"` // "Low", "Medium", "High", "Critical"
 }
 
 type Comment struct {
@@ -443,7 +445,9 @@ func (db *PostgresDB) createTables() error {
             comments JSONB,
 			is_auto BOOLEAN DEFAULT FALSE,
 			response_id TEXT,
-			ai_report TEXT
+			ai_report TEXT,
+			assigned_to TEXT,
+			priority TEXT DEFAULT 'Medium'
         );
 		CREATE TABLE IF NOT EXISTS search_history (
 			id TEXT PRIMARY KEY,
@@ -488,6 +492,8 @@ func (db *PostgresDB) createTables() error {
 		-- Cleanup Optimization
 		CREATE INDEX IF NOT EXISTS idx_tokens_email ON tokens(email);
 		ALTER TABLE cases ADD COLUMN IF NOT EXISTS ai_report TEXT;
+		ALTER TABLE cases ADD COLUMN IF NOT EXISTS assigned_to TEXT;
+		ALTER TABLE cases ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Medium';
     `)
 
 	return err
@@ -771,10 +777,13 @@ func (db *PostgresDB) SaveToken(t Token) error {
 }
 
 func (db *PostgresDB) CreateCase(c Case) error {
+	if c.Priority == "" {
+		c.Priority = "Medium"
+	}
 	_, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id, ai_report)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto, c.ResponseID, c.AIReport,
+		`INSERT INTO cases (id, name, description, created_by, created_at, status, iocs, comments, is_auto, response_id, ai_report, assigned_to, priority)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		c.ID, c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.IsAuto, c.ResponseID, c.AIReport, c.AssignedTo, c.Priority,
 	)
 	return err
 }
@@ -798,6 +807,8 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 		orderBy = "COALESCE(jsonb_array_length(iocs), 0) DESC"
 	case "newest":
 		orderBy = "created_at DESC"
+	case "priority":
+		orderBy = "CASE COALESCE(priority, 'Medium') WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, created_at DESC"
 	default:
 		// "all" or any other value defaults to newest
 		orderBy = "created_at DESC"
@@ -806,7 +817,8 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 	// 2. Construct the dynamic query while preserving pagination
 	query = fmt.Sprintf(`
         SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), 
-               iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '')
+               iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, ''),
+               COALESCE(assigned_to, ''), COALESCE(priority, 'Medium')
         FROM cases 
         %s 
         ORDER BY %s 
@@ -835,6 +847,8 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 			&c.IsAuto,
 			&c.ResponseID,
 			&c.AIReport,
+			&c.AssignedTo,
+			&c.Priority,
 		)
 		if err != nil {
 			return nil, err
@@ -845,6 +859,9 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 		if c.Comments == nil {
 			c.Comments = []Comment{}
 		}
+		if c.Priority == "" {
+			c.Priority = "Medium"
+		}
 		c.IOCCount = len(c.IOCs)
 		cases = append(cases, c)
 	}
@@ -854,17 +871,23 @@ func (db *PostgresDB) GetCases(limit, offset int, filter string) ([]Case, error)
 func (db *PostgresDB) GetCase(id string) (Case, error) {
 	var c Case
 	err := db.Pool.QueryRow(context.Background(),
-		`SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '') FROM cases WHERE id = $1`, id).Scan(
-		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport,
+		`SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, ''), COALESCE(assigned_to, ''), COALESCE(priority, 'Medium') FROM cases WHERE id = $1`, id).Scan(
+		&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport, &c.AssignedTo, &c.Priority,
 	)
+	if c.Priority == "" {
+		c.Priority = "Medium"
+	}
 	return c, err
 }
 
 func (db *PostgresDB) UpdateCase(c Case) error {
+	if c.Priority == "" {
+		c.Priority = "Medium"
+	}
 	_, err := db.Pool.Exec(context.Background(),
-		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8, is_auto = $9, ai_report = $10
-		WHERE id = $11`,
-		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.IsAuto, c.AIReport, c.ID,
+		`UPDATE cases SET name = $1, description = $2, created_by = $3, created_at = $4, status = $5, iocs = $6, comments = $7, response_id = $8, is_auto = $9, ai_report = $10, assigned_to = $11, priority = $12
+		WHERE id = $13`,
+		c.Name, c.Description, c.CreatedBy, c.CreatedAt, c.Status, c.IOCs, c.Comments, c.ResponseID, c.IsAuto, c.AIReport, c.AssignedTo, c.Priority, c.ID,
 	)
 	return err
 }
@@ -882,13 +905,15 @@ func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
 	}
 
 	sql := fmt.Sprintf(`
-        SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, '')
+        SELECT id, COALESCE(name, ''), COALESCE(description, ''), COALESCE(created_by, ''), created_at, COALESCE(status, 'Open'), iocs, comments, COALESCE(is_auto, FALSE), COALESCE(response_id, ''), COALESCE(ai_report, ''), COALESCE(assigned_to, ''), COALESCE(priority, 'Medium')
         FROM cases 
         WHERE (
 			id ILIKE $1
             OR name ILIKE $1 
             OR description ILIKE $1 
             OR iocs::text ILIKE $1
+            OR assigned_to ILIKE $1
+            OR priority ILIKE $1
         )
         ORDER BY created_at DESC
         %s`, limitStr)
@@ -903,8 +928,11 @@ func (db *PostgresDB) SearchCases(query string, limit int) ([]Case, error) {
 	var cases []Case
 	for rows.Next() {
 		var c Case
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.Status, &c.IOCs, &c.Comments, &c.IsAuto, &c.ResponseID, &c.AIReport, &c.AssignedTo, &c.Priority); err != nil {
 			return nil, err
+		}
+		if c.Priority == "" {
+			c.Priority = "Medium"
 		}
 		c.IOCCount = len(c.IOCs)
 		cases = append(cases, c)

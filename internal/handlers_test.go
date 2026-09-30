@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -266,6 +267,59 @@ func TestGenerateCaseAIReportHandler(t *testing.T) {
 	updatedCase, _ := s.DB.GetCase("case-ai-test-1")
 	if updatedCase.AIReport != expectedClean {
 		t.Errorf("expected updatedCase.AIReport to be populated, got '%s'", updatedCase.AIReport)
+	}
+}
+
+func TestCasePriorityAndAssignment(t *testing.T) {
+	s := setupTestServer()
+
+	// 1. Create case with Priority and AssignedTo
+	c := Case{
+		ID:          "case-assign-test-1",
+		Name:        "Test High Priority Case",
+		Description: "Testing assignment and priority",
+		Priority:    "High",
+		AssignedTo:  "uncop@aol.com",
+		Status:      "Open",
+	}
+	if err := s.DB.CreateCase(c); err != nil {
+		t.Fatalf("failed to create case: %v", err)
+	}
+
+	// 2. Fetch case from DB and verify
+	fetched, err := s.DB.GetCase("case-assign-test-1")
+	if err != nil {
+		t.Fatalf("failed to get case: %v", err)
+	}
+	if fetched.Priority != "High" {
+		t.Errorf("expected priority 'High', got '%s'", fetched.Priority)
+	}
+	if fetched.AssignedTo != "uncop@aol.com" {
+		t.Errorf("expected assigned_to 'uncop@aol.com', got '%s'", fetched.AssignedTo)
+	}
+
+	// 3. Update case via UpdateCaseHandler
+	updatePayload := `{"id":"case-assign-test-1","priority":"Critical","assigned_to":"admin@aol.com","status":"Open"}`
+	req := httptest.NewRequest("POST", "/cases/update", strings.NewReader(updatePayload))
+	req = req.WithContext(context.WithValue(req.Context(), "email", "admin@aol.com"))
+	rr := httptest.NewRecorder()
+
+	s.UpdateCaseHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 on update, got %d", rr.Code)
+	}
+
+	// 4. Verify updated case
+	updated, err := s.DB.GetCase("case-assign-test-1")
+	if err != nil {
+		t.Fatalf("failed to get updated case: %v", err)
+	}
+	if updated.Priority != "Critical" {
+		t.Errorf("expected priority 'Critical', got '%s'", updated.Priority)
+	}
+	if updated.AssignedTo != "admin@aol.com" {
+		t.Errorf("expected assigned_to 'admin@aol.com', got '%s'", updated.AssignedTo)
 	}
 }
 
