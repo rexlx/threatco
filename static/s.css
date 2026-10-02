@@ -400,6 +400,48 @@ pre {
     background-color: rgba(34, 34, 34, 0.8);
 }
 
+/* Normal state */
+.button.is-danger {
+  background-color: #d32f2f; /* Deep crimson/firebrick red */
+  border-color: transparent;
+  color: #ffffff;
+}
+
+/* Hover and active states */
+.button.is-danger:hover,
+.button.is-danger.is-hovered {
+  background-color: #b71c1c;
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.button.is-danger:focus,
+.button.is-danger.is-focused {
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.button.is-danger:active,
+.button.is-danger.is-active {
+  background-color: #9a0007;
+  border-color: transparent;
+  color: #ffffff;
+}
+
+/* Outlined buttons (if you use .is-outlined) */
+.button.is-danger.is-outlined {
+  background-color: transparent;
+  border-color: #d32f2f;
+  color: #d32f2f;
+}
+
+.button.is-danger.is-outlined:hover,
+.button.is-danger.is-outlined:focus {
+  background-color: #d32f2f;
+  border-color: #d32f2f;
+  color: #ffffff;
+}
+
 /* Prevent the main content column from expanding wider than viewport */
 #mainColumns > .column {
     min-width: 0;

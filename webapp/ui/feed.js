@@ -254,7 +254,7 @@ export class FeedController {
                     // Contextual risk-based color-coding
                     let cweColorStyle = 'background-color: #3273dc; color: #fff;'; 
                     if (['CWE-787', 'CWE-119', 'CWE-94', 'CWE-89'].includes(cwe)) {
-                        cweColorStyle = 'background-color: #ff3860; color: #fff;'; 
+                        cweColorStyle = 'background-color: #83021b; color: #fff;'; 
                     } else if (['CWE-20', 'CWE-22', 'CWE-287', 'CWE-416'].includes(cwe)) {
                         cweColorStyle = 'background-color: #ffdd57; color: #4a4a4a;'; 
                     }
