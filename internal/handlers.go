@@ -447,6 +447,25 @@ func (s *Server) GetCaseHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(c)
 }
 
+// sendNotification sends a real-time notification via WebSocket Hub and persists it to the user's notification database.
+func (s *Server) sendNotification(user string, msg string, isError bool) {
+	uClean := strings.TrimSpace(user)
+	if uClean == "" {
+		return
+	}
+	n := Notification{
+		Created: time.Now(),
+		Info:    msg,
+		Error:   isError,
+	}
+	if s.Hub != nil {
+		_ = s.Hub.SendToUser(s.RespCh, uClean, n)
+	}
+	if s.DB != nil {
+		_ = s.DB.AddNotification(uClean, n)
+	}
+}
+
 func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	email, ok := r.Context().Value("email").(string)
 	if !ok || email == "" {
@@ -470,6 +489,9 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hasNewComments := len(incoming.Comments) > len(existing.Comments)
+	oldComments := existing.Comments
+
 	existing.Status = incoming.Status
 	existing.Description = incoming.Description
 	existing.IOCs = incoming.IOCs
@@ -491,8 +513,33 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existing.CreatedBy != "" {
-		_ = GlobalNotify(existing.CreatedBy, fmt.Sprintf("Case '%s' has been updated by user %s", existing.Name, email), false)
+	currentEmailClean := strings.TrimSpace(strings.ToLower(email))
+	previousCommenters := make(map[string]bool)
+
+	if hasNewComments {
+		// Collect unique previous commenters on this case, excluding the current commenter
+		for _, c := range oldComments {
+			uClean := strings.TrimSpace(strings.ToLower(c.User))
+			if uClean != "" && uClean != currentEmailClean {
+				previousCommenters[c.User] = true
+			}
+		}
+
+		caseTitle := existing.Name
+		if caseTitle == "" {
+			caseTitle = existing.ID
+		}
+		commentNotifMsg := fmt.Sprintf("New comment on case '%s' by %s", caseTitle, email)
+		for recipient := range previousCommenters {
+			s.sendNotification(recipient, commentNotifMsg, false)
+		}
+	}
+
+	// Notify case creator if they are not the current updater and haven't already received a comment notification
+	if existing.CreatedBy != "" && strings.TrimSpace(strings.ToLower(existing.CreatedBy)) != currentEmailClean {
+		if !previousCommenters[existing.CreatedBy] {
+			s.sendNotification(existing.CreatedBy, fmt.Sprintf("Case '%s' has been updated by user %s", existing.Name, email), false)
+		}
 	}
 
 	w.Write([]byte(`{"status":"ok"}`))

@@ -14,9 +14,10 @@ import (
 )
 
 type MockDB struct {
-	responses []ResponseItem
-	cases     map[string]Case
-	users     []User
+	responses     []ResponseItem
+	cases         map[string]Case
+	users         []User
+	notifications map[string][]Notification
 }
 
 func (m *MockDB) CleanResponses(t time.Duration) error { return nil }
@@ -76,12 +77,28 @@ func (m *MockDB) SearchCases(query string, limit int) ([]Case, error) {
 	}
 	return res, nil
 }
-func (m *MockDB) RecordSearchBatch(values []string, email string) error        { return nil }
-func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)          { return SearchRecord{}, nil }
-func (m *MockDB) CleanSearchHistory(days int) error                            { return nil }
-func (m *MockDB) AddNotification(email string, n Notification) error           { return nil }
-func (m *MockDB) GetNotifications(email string) ([]Notification, error)        { return nil, nil }
-func (m *MockDB) ClearNotifications(email string) error                        { return nil }
+func (m *MockDB) RecordSearchBatch(values []string, email string) error { return nil }
+func (m *MockDB) GetSearchHistory(value string) (SearchRecord, error)   { return SearchRecord{}, nil }
+func (m *MockDB) CleanSearchHistory(days int) error                     { return nil }
+func (m *MockDB) AddNotification(email string, n Notification) error {
+	if m.notifications == nil {
+		m.notifications = make(map[string][]Notification)
+	}
+	m.notifications[email] = append(m.notifications[email], n)
+	return nil
+}
+func (m *MockDB) GetNotifications(email string) ([]Notification, error) {
+	if m.notifications == nil {
+		return []Notification{}, nil
+	}
+	return m.notifications[email], nil
+}
+func (m *MockDB) ClearNotifications(email string) error {
+	if m.notifications != nil {
+		delete(m.notifications, email)
+	}
+	return nil
+}
 func (m *MockDB) AddFailedRequest(email string, req ProxyRequest) error        { return nil }
 func (m *MockDB) GetFailedRequests(email string) ([]ProxyRequest, error)       { return nil, nil }
 func (m *MockDB) ClearFailedRequests(email string) error                       { return nil }
@@ -93,12 +110,14 @@ func setupTestServer() *Server {
 	aesGCM, _ := cipher.NewGCM(block)
 
 	db := &MockDB{
-		cases: make(map[string]Case),
+		cases:         make(map[string]Case),
+		notifications: make(map[string][]Notification),
 	}
 
 	s := &Server{
 		Log:     log.New(io.Discard, "", 0),
 		DB:      db,
+		Hub:     NewHub(),
 		Memory:  &sync.RWMutex{},
 		Session: scs.New(),
 		Cache: &Cache{

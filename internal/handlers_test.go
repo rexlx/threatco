@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestContainsMatch(t *testing.T) {
@@ -320,6 +321,96 @@ func TestCasePriorityAndAssignment(t *testing.T) {
 	}
 	if updated.AssignedTo != "admin@aol.com" {
 		t.Errorf("expected assigned_to 'admin@aol.com', got '%s'", updated.AssignedTo)
+	}
+}
+
+func TestCommentNotifications(t *testing.T) {
+	s := setupTestServer()
+
+	// 1. Create initial case owned by user1@aol.com
+	testCase := Case{
+		ID:        "case-comment-test",
+		Name:      "Investigation Alpha",
+		CreatedBy: "user1@aol.com",
+		Status:    "Open",
+		Comments:  []Comment{},
+	}
+	_ = s.DB.CreateCase(testCase)
+
+	// Helper to send comment
+	addComment := func(fromUser, commentText string, prevComments []Comment) {
+		newComments := append(prevComments, Comment{
+			User:      fromUser,
+			Text:      commentText,
+			CreatedAt: time.Now(),
+		})
+		payload, _ := json.Marshal(Case{
+			ID:       "case-comment-test",
+			Name:     "Investigation Alpha",
+			Status:   "Open",
+			Comments: newComments,
+		})
+		req := httptest.NewRequest("POST", "/cases/update", bytes.NewReader(payload))
+		req = req.WithContext(context.WithValue(req.Context(), "email", fromUser))
+		rr := httptest.NewRecorder()
+		s.UpdateCaseHandler(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+	}
+
+	// Step 1: user1@aol.com posts first comment
+	c1, _ := s.DB.GetCase("case-comment-test")
+	addComment("user1@aol.com", "First comment by user1", c1.Comments)
+
+	user1Notifs, _ := s.DB.GetNotifications("user1@aol.com")
+	if len(user1Notifs) != 0 {
+		t.Errorf("expected 0 notifications for user1 on their first comment, got %d", len(user1Notifs))
+	}
+
+	// Step 2: user1@aol.com posts second comment
+	c2, _ := s.DB.GetCase("case-comment-test")
+	addComment("user1@aol.com", "Second comment by user1", c2.Comments)
+
+	user1Notifs2, _ := s.DB.GetNotifications("user1@aol.com")
+	if len(user1Notifs2) != 0 {
+		t.Errorf("expected 0 notifications for user1 on their second comment, got %d", len(user1Notifs2))
+	}
+
+	// Step 3: user2@gmail.com posts a comment
+	c3, _ := s.DB.GetCase("case-comment-test")
+	addComment("user2@gmail.com", "Comment by user2", c3.Comments)
+
+	user1Notifs3, _ := s.DB.GetNotifications("user1@aol.com")
+	if len(user1Notifs3) != 1 {
+		t.Fatalf("expected 1 notification for user1 after user2 commented, got %d", len(user1Notifs3))
+	}
+	if !strings.Contains(user1Notifs3[0].Info, "by user2@gmail.com") {
+		t.Errorf("unexpected notification content: %s", user1Notifs3[0].Info)
+	}
+
+	user2Notifs3, _ := s.DB.GetNotifications("user2@gmail.com")
+	if len(user2Notifs3) != 0 {
+		t.Errorf("expected 0 notifications for user2 (the commenter), got %d", len(user2Notifs3))
+	}
+
+	// Step 4: user3@yahoo.com posts a comment
+	c4, _ := s.DB.GetCase("case-comment-test")
+	addComment("user3@yahoo.com", "Comment by user3", c4.Comments)
+
+	user1Notifs4, _ := s.DB.GetNotifications("user1@aol.com")
+	if len(user1Notifs4) != 2 {
+		t.Errorf("expected 2 total notifications for user1, got %d", len(user1Notifs4))
+	}
+
+	user2Notifs4, _ := s.DB.GetNotifications("user2@gmail.com")
+	if len(user2Notifs4) != 1 {
+		t.Errorf("expected 1 notification for user2 after user3 commented, got %d", len(user2Notifs4))
+	}
+
+	user3Notifs4, _ := s.DB.GetNotifications("user3@yahoo.com")
+	if len(user3Notifs4) != 0 {
+		t.Errorf("expected 0 notifications for user3 (the commenter), got %d", len(user3Notifs4))
 	}
 }
 

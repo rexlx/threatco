@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Handle Logout Button
-        if (e.target.closest('.logout-btn')) {
+        if (e.target.closest('.logout-btn') || e.target.closest('#logoutButton')) {
             console.log("Logout button clicked");
             fetch('/logout', { method: 'POST' })
                 .then(() => {
