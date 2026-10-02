@@ -438,16 +438,8 @@ export class CaseController {
             if (desc.length > 250) desc = desc.substring(0, 250) + '...';
 
             const box = document.createElement('div');
-            box.className = 'box has-background-black has-text-light mb-2';
+            box.className = 'box has-background-black has-text-light mb-2 item-card';
             box.style.cursor = 'pointer';
-
-            if (c.status === 'Open') {
-                box.style.border = '1px solid rgba(21, 140, 149, 0.3)';
-                box.style.boxShadow = '0 0 15px rgba(21, 140, 149, 0.15)';
-            } else {
-                box.style.border = '1px solid rgba(83, 87, 106, 0.3)';
-                box.style.boxShadow = 'none';
-            }
 
             box.onclick = () => this.openCase(c);
 

@@ -379,7 +379,7 @@ export class FeedController {
             }
             
             return `
-                <div class="box has-background-custom mb-3">
+                <div class="box has-background-black has-text-light mb-3 item-card">
                     <div class="columns is-mobile is-vcentered">
                         <div class="column">
                             <div class="is-flex is-align-items-center is-flex-wrap-wrap mb-2">

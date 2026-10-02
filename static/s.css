@@ -154,6 +154,19 @@ pre {
     box-shadow: -10px 10px 20px #3232a8;
 }
 
+/* --- Shared Item Cards (Feed & Cases) --- */
+.item-card {
+    background-color: #000000 !important;
+    border: 1px solid rgba(50, 152, 220, 0.35) !important;
+    border-radius: 6px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.item-card:hover {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.35) !important;
+}
+
 /* --- Modern Dark Notifications UI --- */
 .notif-controls {
     background-color: var(--background-light);
