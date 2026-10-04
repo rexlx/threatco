@@ -158,11 +158,11 @@ export class NotificationManager {
             <div class="level mb-3">
                 <div class="level-left">
                     <div>
-                        <h1 class="title is-4 has-text-info mb-1" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <h1 class="title has-text-info mb-1" style="display: flex; align-items: center; gap: 0.5rem;">
                             <span>Notifications</span>
                             <span class="tag is-dark is-rounded">${totalCount}</span>
                         </h1>
-                        <p class="subtitle is-7 has-text-grey">Real-time alerts, system activity, and security event logs</p>
+                        <p class="subtitle is-6 has-text-grey-light mb-0">Real-time alerts, system activity, and security event logs</p>
                     </div>
                 </div>
                 <div class="level-right">

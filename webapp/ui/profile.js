@@ -14,7 +14,7 @@ export class ProfileController {
             <div class="block">
                 <h1 class="title has-text-info">Profile & Settings</h1>
             </div>
-            <div class="box has-background-custom" id="profileBox">
+            <div id="profileBox">
                 <form>
                     <div class="field">
                         <label class="label">Email</label>

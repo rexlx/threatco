@@ -169,10 +169,6 @@ pre {
 
 /* --- Modern Dark Notifications UI --- */
 .notif-controls {
-    background-color: var(--background-light);
-    border-radius: 8px;
-    padding: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
     margin-bottom: 1.25rem;
 }
 

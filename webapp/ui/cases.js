@@ -523,7 +523,7 @@ export class CaseController {
                 <div class="mb-4">
                     <button class="button is-small is-dark" id="btnBackList"><span class="icon"><i class="material-icons">arrow_back</i></span><span>Back to Cases</span></button>
                 </div>
-                <div class="box has-background-custom">
+                <div>
                     <div class="level">
                         <div class="level-left" style="min-width: 0; flex-shrink: 1;">
                             <div style="max-width: 600px;">
@@ -675,8 +675,9 @@ export class CaseController {
                                 </button>
                             ` : ''}
                         </div>
-                    </div>                    </div>
-                    <div class="box has-background-custom mt-5" id="caseAiReportSection">
+                    </div>
+                    </div>
+                    <div class="box has-background-dark-ter mt-5" id="caseAiReportSection">
                         <div class="level mb-3">
                             <div class="level-left">
                                 <h4 class="title is-5 has-text-info mb-0">

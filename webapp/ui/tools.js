@@ -29,7 +29,6 @@ export class ToolsController {
     render() {
     this.container.classList.remove('is-hidden');
     this.container.innerHTML = `
-        <div class="box has-background-custom">
             <div class="tabs is-boxed is-small mb-5" style="position: sticky; top: 0; z-index: 20; background-color: inherit; padding-top: 10px; border-bottom: 2px solid #2c2c2c;"> 
                 <ul id="tool-main-nav" style="flex-wrap: wrap; border-bottom: none;">
                     <li class="is-active" data-tab="tool-ioc"><a><span class="icon"><i class="material-icons">search</i></span><span>IOC Extractor</span></a></li>
@@ -56,8 +55,7 @@ export class ToolsController {
             <div class="tool-content is-hidden" id="view-tool-signature">${this.signatureTool.render()}</div>
             <div class="tool-content is-hidden" id="view-tool-ssh">${this.sshTool.render()}</div>
             <div class="tool-content is-hidden" id="view-tool-npm">${this.npmTool.render()}</div>
-            <div class="tool-content is-hidden" id="view-tool-generator">${this.generatorTool.render()}</div>
-        </div>`;
+            <div class="tool-content is-hidden" id="view-tool-generator">${this.generatorTool.render()}</div>`;
 
     // Initialize global tool listeners
     this.attachListeners();

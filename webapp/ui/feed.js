@@ -53,13 +53,12 @@ export class FeedController {
     async render() {
         const container = document.getElementById(this.containerId);
         if (!container) return;
+        container.classList.remove('is-hidden');
 
         // Show loading state matching existing styling conventions
         container.innerHTML = `
-            <div class="box has-background-custom">
-                <p class="has-text-grey-light">Loading vulnerabilities from cache...</p>
-                <progress class="progress is-small is-info mt-2" max="100"></progress>
-            </div>
+            <p class="has-text-grey-light">Loading vulnerabilities from cache...</p>
+            <progress class="progress is-small is-info mt-2" max="100"></progress>
         `;
 
         // Fetch and cache raw data via the Application instance wrapper
@@ -67,9 +66,7 @@ export class FeedController {
 
         if (!this.feedItems || this.feedItems.length === 0) {
             container.innerHTML = `
-                <div class="box has-background-custom">
-                    <p class="has-text-warning">No vulnerability feed items found or cache is rebuilding.</p>
-                </div>
+                <p class="has-text-warning">No vulnerability feed items found or cache is rebuilding.</p>
             `;
             return;
         }
@@ -222,9 +219,7 @@ export class FeedController {
 
         if (filteredItems.length === 0) {
             listContainer.innerHTML = `
-                <div class="box has-background-custom">
-                    <p class="has-text-grey-light is-italic">No vulnerabilities match the selected source filter.</p>
-                </div>
+                <p class="has-text-grey-light is-italic my-4">No vulnerabilities match the selected source filter.</p>
             `;
             return;
         }
