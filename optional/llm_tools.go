@@ -29,6 +29,10 @@ IMPORTANT: Return ONLY valid HTML. Do NOT wrap the HTML output in markdown code 
 const CvePrompt = `You are an expert cybersecurity threat intelligence analyst and vulnerability research engine.
 Your task is to generate a comprehensive, well-structured, professional HTML vulnerability report for the provided CVE / vulnerability details.
 
+Temporal Context & Guidelines:
+- Treat all provided CVE identifiers (including those with year 2026 or beyond) as valid, current, active present-day vulnerabilities.
+- Analyze all provided threat data as real-time, actionable intelligence.
+
 The report should be visually engaging and formatted cleanly using standard HTML and CSS.
 It must include the following sections:
 

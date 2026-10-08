@@ -463,9 +463,6 @@ export class CaseController {
                                 ${priorityText}
                                 ${autoText}
                                 <span class="has-text-info-light is-size-7 ml-2">by ${escapeHtml(c.created_by)}</span>
-                                <span class="tag is-dark is-outlined is-small ml-2" title="Assigned To">
-                                    <span class="icon is-small mr-1"><i class="material-icons">person_outline</i></span>${assignedText}
-                                </span>
                                 <br>
                                 <span class="has-text-light is-size-7" style="word-break: break-word; display: block; margin-top: 4px;">
                                     ${escapeHtml(desc)}
@@ -474,10 +471,15 @@ export class CaseController {
                         </div>
                     </div>
 
-                    <div class="media-right has-text-right" style="flex-shrink: 0; min-width: 100px;">
+                    <div class="media-right has-text-right" style="flex-shrink: 0; min-width: 120px;">
                         <small class="has-text-grey is-size-7">${new Date(c.created_at).toLocaleDateString()}</small>
                         <br>
-                        <span class="tag is-dark is-rounded mt-1">${iocCount} IOCs</span>
+                        <div class="is-flex is-align-items-center is-justify-content-flex-end gap-1 mt-1">
+                            <span class="tag is-dark is-outlined is-small" title="Assigned To">
+                                <span class="icon is-small mr-1"><i class="material-icons">person_outline</i></span>${assignedText}
+                            </span>
+                            <span class="tag is-dark is-rounded ml-1">${iocCount} IOCs</span>
+                        </div>
                     </div>
                 </article>
             `;
