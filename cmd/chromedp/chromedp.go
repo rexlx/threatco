@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/remote"
 	"github.com/rexlx/threatco/internal"
 )
 
 func main() {
 	devtoolsURL := "ws://127.0.0.1:9222"
 
-	allocCtx, cancelAlloc := chromedp.NewRemoteAllocator(context.Background(), devtoolsURL)
+	allocCtx, cancelAlloc := remote.NewAllocator(context.Background(), devtoolsURL)
 	defer cancelAlloc()
 
 	ctx, cancelCtx := chromedp.NewContext(allocCtx)
@@ -26,16 +27,16 @@ func main() {
 	defer cancelTimeout()
 
 	var resultHTML string
-	err := chromedp.Run(ctx,
+	err := chromedp.Do(ctx,
 		chromedp.Navigate("http://localhost:8081/app"),
 
-		chromedp.WaitVisible(`#sidebarSearch`, chromedp.ByID),
-		chromedp.Click(`#sidebarSearch`, chromedp.ByID),
+		chromedp.WaitVisible(chromedp.ID("sidebarSearch")),
+		chromedp.Click(chromedp.ID("sidebarSearch")),
 
-		chromedp.WaitVisible(`#userSearch`, chromedp.ByID),
+		chromedp.WaitVisible(chromedp.ID("userSearch")),
 
 		// Set the text via JS and trigger input handlers
-		chromedp.Evaluate(`
+		chromedp.Evaluate[chromedp.Void](`
 			(function() {
 				const textarea = document.getElementById('userSearch');
 				textarea.value = "192.168.1.100\nmalicious-domain.io";
@@ -44,16 +45,16 @@ func main() {
 				textarea.dispatchEvent(new Event('input', { bubbles: true }));
 				textarea.dispatchEvent(new Event('change', { bubbles: true }));
 			})()
-		`, nil),
+		`),
 
 		// Now use chromedp's native click handler directly on the search button
 		// instead of relying entirely on the JS context evaluation.
-		chromedp.WaitVisible(`#searchButton`, chromedp.ByID),
-		chromedp.Click(`#searchButton`, chromedp.ByID),
+		chromedp.WaitVisible(chromedp.ID("searchButton")),
+		chromedp.Click(chromedp.ID("searchButton")),
 
 		// Fallback: If native click fails due to z-indexing or Bulma CSS rendering quirks,
 		// we force an explicit DOM-level click action immediately afterward.
-		chromedp.Evaluate(`
+		chromedp.Evaluate[chromedp.Void](`
 			(function() {
 				const btn = document.getElementById('searchButton');
 				if (btn) {
@@ -61,13 +62,17 @@ func main() {
 					btn.click();
 				}
 			})()
-		`, nil),
+		`),
 
 		// Wait for the UI state change
-		chromedp.WaitVisible(`#iocSelectionArea, #matchBox`, chromedp.ByID),
+		chromedp.WaitVisible(chromedp.CSS("#iocSelectionArea, #matchBox")),
 		chromedp.Sleep(5*time.Second),
 
-		chromedp.InnerHTML(`#matchBox`, &resultHTML, chromedp.ByID),
+		chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+			var err error
+			resultHTML, err = chromedp.InnerHTML(chromedp.ID("matchBox"))(ctx, t)
+			return err
+		}),
 	)
 
 	if err != nil {
