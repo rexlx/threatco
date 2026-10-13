@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -220,10 +221,25 @@ func TestEnrichVulnerabilityItemsWithCases(t *testing.T) {
 	s := setupTestServer()
 	db := s.DB.(*MockDB)
 
+	// Case 1: Specific CVE case (CVE-2024-9999)
 	db.cases["cve-case-1"] = Case{
 		ID:   "cve-case-1",
 		Name: "Case: CVE-2024-9999",
 		IOCs: []string{"CVE-2024-9999", "1.1.1.1"},
+	}
+
+	// Case 2: SonicWall vuln (CVE-2026-83548) with shared bundle IOC / attribute
+	db.cases["sonicwall-case"] = Case{
+		ID:   "sonicwall-case",
+		Name: "Case: CVE-2026-83548",
+		IOCs: []string{"CVE-2026-83548", "shared-bundle-ioc"},
+	}
+
+	// Case 3: Incident case without a specific CVE
+	db.cases["incident-case"] = Case{
+		ID:   "incident-case",
+		Name: "Incident Investigation #12",
+		IOCs: []string{"3.3.3.3"},
 	}
 
 	items := []VulnerabilityItem{
@@ -235,20 +251,94 @@ func TestEnrichVulnerabilityItemsWithCases(t *testing.T) {
 			Title: "CVE-2025-0001: Unrelated Vuln",
 			IOCs:  []string{"2.2.2.2"},
 		},
+		{
+			// Apache Struts vuln that shares an IOC with SonicWall case via bundled MISP event
+			Title: "CVE-2016-3081: Apache Struts Vulnerability",
+			IOCs:  []string{"CVE-2016-3081", "shared-bundle-ioc"},
+		},
+		{
+			// Vuln with technical IOC matching general incident case
+			Title: "CVE-2023-1111: Memory Corruption",
+			IOCs:  []string{"3.3.3.3"},
+		},
 	}
 
 	enriched := s.EnrichVulnerabilityItemsWithCases(items)
 
-	if len(enriched) != 2 {
-		t.Fatalf("Expected 2 items, got %d", len(enriched))
+	if len(enriched) != 4 {
+		t.Fatalf("Expected 4 items, got %d", len(enriched))
 	}
 
+	// Item 0: Matches cve-case-1
 	if enriched[0].CaseID != "cve-case-1" {
 		t.Errorf("Expected CaseID 'cve-case-1', got '%s'", enriched[0].CaseID)
 	}
+	if enriched[0].CaseName != "Case: CVE-2024-9999" {
+		t.Errorf("Expected CaseName 'Case: CVE-2024-9999', got '%s'", enriched[0].CaseName)
+	}
+	if enriched[0].MatchedBy != "CVE: CVE-2024-9999" {
+		t.Errorf("Expected MatchedBy 'CVE: CVE-2024-9999', got '%s'", enriched[0].MatchedBy)
+	}
 
+	// Item 1: Unmatched
 	if enriched[1].CaseID != "" {
 		t.Errorf("Expected empty CaseID for unmatched item, got '%s'", enriched[1].CaseID)
+	}
+
+	// Item 2: Must NOT match sonicwall-case despite sharing "shared-bundle-ioc"
+	if enriched[2].CaseID != "" {
+		t.Errorf("Expected empty CaseID for cross-CVE item (CVE-2016-3081 should not match CVE-2026-83548), got '%s'", enriched[2].CaseID)
+	}
+
+	// Item 3: Matches incident-case via technical IOC "3.3.3.3"
+	if enriched[3].CaseID != "incident-case" {
+		t.Errorf("Expected CaseID 'incident-case', got '%s'", enriched[3].CaseID)
+	}
+	if enriched[3].MatchedBy != "IOC: 3.3.3.3" {
+		t.Errorf("Expected MatchedBy 'IOC: 3.3.3.3', got '%s'", enriched[3].MatchedBy)
+	}
+}
+
+func TestExtractValuesFromMispResponse(t *testing.T) {
+	// Simulated MISP response containing Event #1663 with multiple CVEs and technical IOCs
+	mispPayload := []byte(`{
+		"response": [{
+			"Event": {
+				"id": "1663",
+				"Attribute": [
+					{"type": "vulnerability", "value": "CVE-2016-3081"},
+					{"type": "vulnerability", "value": "CVE-2026-83548"},
+					{"type": "ip-src", "value": "198.51.100.1"},
+					{"type": "domain", "value": "evil.example.com"}
+				]
+			}
+		}]
+	}`)
+
+	// When querying for CVE-2016-3081, unrelated CVE-2026-83548 should be excluded,
+	// but CVE-2016-3081, Event ID, and technical IOCs should be retained.
+	values := ExtractValuesFromMispResponse(mispPayload, "CVE-2016-3081")
+
+	hasEventID := slices.Contains(values, "Event ID: 1663")
+	hasQueriedCVE := slices.Contains(values, "CVE-2016-3081")
+	hasUnrelatedCVE := slices.Contains(values, "CVE-2026-83548")
+	hasIP := slices.Contains(values, "198.51.100.1")
+	hasDomain := slices.Contains(values, "evil.example.com")
+
+	if !hasEventID {
+		t.Error("Expected 'Event ID: 1663' in extracted values")
+	}
+	if !hasQueriedCVE {
+		t.Error("Expected queried CVE 'CVE-2016-3081' in extracted values")
+	}
+	if hasUnrelatedCVE {
+		t.Error("Did NOT expect unrelated 'CVE-2026-83548' in extracted values")
+	}
+	if !hasIP {
+		t.Error("Expected IP '198.51.100.1' in extracted values")
+	}
+	if !hasDomain {
+		t.Error("Expected domain 'evil.example.com' in extracted values")
 	}
 }
 

@@ -618,7 +618,7 @@ func (s *Server) GenerateCaseAIReportHandler(w http.ResponseWriter, r *http.Requ
 		defer cancel()
 		mispPayload, err := s.FetchMispIOCsByCVE(ctx, targetCVE)
 		if err == nil && len(mispPayload) > 0 {
-			mispIOCs := ExtractValuesFromMispResponse(mispPayload)
+			mispIOCs := ExtractValuesFromMispResponse(mispPayload, targetCVE)
 			for _, ioc := range mispIOCs {
 				if !slices.Contains(vItem.IOCs, ioc) {
 					vItem.IOCs = append(vItem.IOCs, ioc)
@@ -2389,7 +2389,7 @@ func (s *Server) AIReportHandler(w http.ResponseWriter, r *http.Request) {
 				defer cancel()
 				mispPayload, err := s.FetchMispIOCsByCVE(ctx, id)
 				if err == nil && len(mispPayload) > 0 {
-					mispIOCs := ExtractValuesFromMispResponse(mispPayload)
+					mispIOCs := ExtractValuesFromMispResponse(mispPayload, id)
 					vItem.IOCs = mispIOCs
 				}
 			}

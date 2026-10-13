@@ -120,6 +120,8 @@ type VulnerabilityItem struct {
 	Campaigns   []string  `json:"campaigns,omitempty"`
 	CAPEC       []string  `json:"capec,omitempty"`
 	CaseID      string    `json:"case_id,omitempty"`
+	CaseName    string    `json:"case_name,omitempty"`
+	MatchedBy   string    `json:"matched_by,omitempty"`
 }
 
 type Coord struct {
@@ -1271,7 +1273,7 @@ func (s *Server) PollVulnerabilityFeeds() {
 			// 1. MISP Threat Intel & IOC Enrichment
 			mispPayload, err := s.FetchMispIOCsByCVE(ctx, cveID)
 			if err == nil && len(mispPayload) > 0 {
-				mispIOCs := ExtractValuesFromMispResponse(mispPayload)
+				mispIOCs := ExtractValuesFromMispResponse(mispPayload, targetCVE)
 				for _, ioc := range mispIOCs {
 					trimmed := strings.TrimSpace(ioc)
 					if trimmed != "" && !uniqueIOCs[trimmed] {
@@ -1391,14 +1393,41 @@ func (s *Server) EnrichVulnerabilityItemsWithCases(items []VulnerabilityItem) []
 		}
 
 		matchedCaseID := ""
+		matchedCaseName := ""
+		matchedBy := ""
+
 		if len(internalCases) > 0 {
 			for _, c := range internalCases {
 				caseNameUpper := strings.ToUpper(c.Name)
+
+				// Determine if this case has a primary CVE associated with it (from title or IOCs)
+				caseCVE := ""
+				if match := cveRegex.FindString(c.Name); match != "" {
+					caseCVE = strings.ToUpper(match)
+				} else {
+					for _, ioc := range c.IOCs {
+						if match := cveRegex.FindString(ioc); match != "" {
+							caseCVE = strings.ToUpper(match)
+							break
+						}
+					}
+				}
+
+				// Strict Primary-CVE Rule:
+				// If both the feed item and the case have a primary CVE, they must match!
+				// A case for CVE-A must NEVER associate with a feed item for CVE-B.
+				if targetCVE != "" && caseCVE != "" && targetCVE != caseCVE {
+					continue
+				}
+
 				// 1. Check if case name contains targetCVE
 				if targetCVE != "" && strings.Contains(caseNameUpper, targetCVE) {
 					matchedCaseID = c.ID
+					matchedCaseName = c.Name
+					matchedBy = "CVE: " + targetCVE
 					break
 				}
+
 				// 2. Check if case IOCs contains targetCVE
 				if targetCVE != "" {
 					matchedInIOC := false
@@ -1410,19 +1439,29 @@ func (s *Server) EnrichVulnerabilityItemsWithCases(items []VulnerabilityItem) []
 					}
 					if matchedInIOC {
 						matchedCaseID = c.ID
+						matchedCaseName = c.Name
+						matchedBy = "CVE: " + targetCVE
 						break
 					}
 				}
+
 				// 3. Check if any case IOC matches any item IOC
 				if len(items[i].IOCs) > 0 {
 					matchedInIOC := false
+					var matchedVal string
 					for _, itemIOC := range items[i].IOCs {
 						if itemIOC == "" || strings.HasPrefix(itemIOC, "Event ID:") {
 							continue
 						}
+						// If itemIOC is a CVE, it can only match if it matches targetCVE
+						if cveRegex.MatchString(itemIOC) && targetCVE != "" && !strings.EqualFold(itemIOC, targetCVE) {
+							continue
+						}
+
 						for _, caseIOC := range c.IOCs {
 							if strings.EqualFold(caseIOC, itemIOC) {
 								matchedInIOC = true
+								matchedVal = itemIOC
 								break
 							}
 						}
@@ -1432,6 +1471,12 @@ func (s *Server) EnrichVulnerabilityItemsWithCases(items []VulnerabilityItem) []
 					}
 					if matchedInIOC {
 						matchedCaseID = c.ID
+						matchedCaseName = c.Name
+						if cveRegex.MatchString(matchedVal) {
+							matchedBy = "CVE: " + strings.ToUpper(matchedVal)
+						} else {
+							matchedBy = "IOC: " + matchedVal
+						}
 						break
 					}
 				}
@@ -1439,6 +1484,8 @@ func (s *Server) EnrichVulnerabilityItemsWithCases(items []VulnerabilityItem) []
 		}
 
 		items[i].CaseID = matchedCaseID
+		items[i].CaseName = matchedCaseName
+		items[i].MatchedBy = matchedBy
 	}
 
 	return items
@@ -1739,7 +1786,7 @@ func (s *Server) pollCisaFeed() []VulnerabilityItem {
 				fmt.Printf("Skipping MISP intelligence enrichment for %s: %v\n", v.CveID, err)
 				extractedIOCs = make([]string, 0)
 			} else {
-				extractedIOCs = ExtractValuesFromMispResponse(mispPayload)
+				extractedIOCs = ExtractValuesFromMispResponse(mispPayload, v.CveID)
 				fmt.Printf("Successfully enriched %s with %d MISP technical indicators\n", v.CveID, len(extractedIOCs))
 			}
 

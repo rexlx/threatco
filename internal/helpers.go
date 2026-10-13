@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1835,8 +1836,16 @@ func (s *Server) normalizeEventToAttributes(eventPayload []byte) []byte {
 
 // raw respone:
 // {"response": [{"Event":{"id":"1725","orgc_id":"1","org_id":"1","date":"2026-08-21","threat_level_id":"3","info":"CVE-2026-72529","published":false,"uuid":"7404d066-f627-4372-ab2c-ddbd4d370c04","attribute_count":"2","analysis":"0","timestamp":"1787321026","distribution":"1","proposal_email_lock":false,"locked":false,"publish_timestamp":"0","first_publication":"0","sharing_group_id":"0","disable_correlation":false,"extends_uuid":"","protected":null,"event_creator_email":"admin@admin.test","Org":{"id":"1","name":"ADMIN","uuid":"218c2558-1e64-49b2-a82d-746ee4cc7c68","local":true},"Orgc":{"id":"1","name":"ADMIN","uuid":"218c2558-1e64-49b2-a82d-746ee4cc7c68","local":true},"Attribute":[{"id":"834783","type":"ip-src","category":"Network activity","to_ids":false,"uuid":"f5c89216-b093-40de-92c0-e16e4fad26c8","event_id":"1725","distribution":"5","timestamp":"1787320624","comment":"CVE-2026-72529","sharing_group_id":"0","deleted":false,"disable_correlation":false,"object_id":"0","object_relation":null,"first_seen":null,"last_seen":null,"value":"8.8.8.8","Galaxy":[],"ShadowAttribute":[]},{"id":"834784","type":"vulnerability","category":"External analysis","to_ids":false,"uuid":"85e01b9e-050e-4f12-b368-564004c2cbe4","event_id":"1725","distribution":"5","timestamp":"1787321026","comment":"","sharing_group_id":"0","deleted":false,"disable_correlation":false,"object_id":"0","object_relation":null,"first_seen":null,"last_seen":null,"value":"CVE-2026-72529","Galaxy":[],"ShadowAttribute":[]}],"ShadowAttribute":[],"RelatedEvent":[{"Event":{"id":"1542","date":"2026-02-12","threat_level_id":"4","info":"Fake 7-Zip downloads are turning home PCs into proxy nodes","published":true,"uuid":"a1ddf106-025e-438c-947d-202ded0ee395","analysis":"0","timestamp":"1772440113","distribution":"3","org_id":"1","orgc_id":"4","Org":{"id":"1","name":"ADMIN","uuid":"218c2558-1e64-49b2-a82d-746ee4cc7c68"},"Orgc":{"id":"4","name":"CIRCL","uuid":"55f6ea5e-2c60-40e5-964f-47a8950d210f"}}}],"Galaxy":[],"Object":[],"EventReport":[],"CryptographicKey":[]}}]}
-func ExtractValuesFromMispResponse(mispPayload []byte) []string {
+func ExtractValuesFromMispResponse(mispPayload []byte, targetCVE ...string) []string {
 	var results []string
+
+	var expectedCVE string
+	if len(targetCVE) > 0 && targetCVE[0] != "" {
+		cveRegex := regexp.MustCompile(`(?i)CVE-\d{4}-\d+`)
+		if match := cveRegex.FindString(targetCVE[0]); match != "" {
+			expectedCVE = strings.ToUpper(match)
+		}
+	}
 
 	// Schema matching MISP /events/restSearch output
 	var responseData struct {
@@ -1844,6 +1853,7 @@ func ExtractValuesFromMispResponse(mispPayload []byte) []string {
 			Event struct {
 				ID        string `json:"id"`
 				Attribute []struct {
+					Type  string `json:"type"`
 					Value string `json:"value"`
 				} `json:"Attribute"`
 			} `json:"Event"`
@@ -1854,14 +1864,28 @@ func ExtractValuesFromMispResponse(mispPayload []byte) []string {
 		return results
 	}
 
+	cveRegex := regexp.MustCompile(`(?i)^CVE-\d{4}-\d+$`)
+
 	for _, item := range responseData.Response {
 		if item.Event.ID != "" {
 			results = append(results, fmt.Sprintf("Event ID: %s", item.Event.ID))
 		}
 		for _, attr := range item.Event.Attribute {
-			if attr.Value != "" {
-				results = append(results, attr.Value)
+			val := strings.TrimSpace(attr.Value)
+			if val == "" {
+				continue
 			}
+
+			// If attribute is a CVE (either by type="vulnerability" or matching CVE format)
+			if strings.EqualFold(attr.Type, "vulnerability") || cveRegex.MatchString(val) {
+				// If expectedCVE is set, only allow the CVE if it matches expectedCVE.
+				// This preserves the queried CVE as an IOC while excluding unrelated CVEs from bundled events.
+				if expectedCVE != "" && !strings.EqualFold(val, expectedCVE) {
+					continue
+				}
+			}
+
+			results = append(results, val)
 		}
 	}
 

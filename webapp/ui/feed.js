@@ -332,11 +332,10 @@ export class FeedController {
                 const eventIdEntry = item.iocs.find(ioc => ioc.startsWith('Event ID:'));
                 const eventId = eventIdEntry ? eventIdEntry.replace('Event ID:', '').trim() : null;
 
-                // Filter out the Event ID and redundant CVE strings
+                // Filter out the Event ID and exact duplicate of the full title
                 const indicators = item.iocs.filter(ioc => 
                     !ioc.startsWith('Event ID:') && 
-                    ioc !== item.title && 
-                    !ioc.startsWith('CVE-')
+                    ioc !== item.title
                 );
 
                 iocHtml = `
@@ -380,6 +379,13 @@ export class FeedController {
                             <div class="is-flex is-align-items-center is-flex-wrap-wrap mb-2">
                                 <span class="tag ${tagColor} is-light mb-1">${item.source}</span>
                                 ${cweHtml}
+                                ${item.case_id ? `
+                                    <span class="tag is-warning is-light mb-1 ml-1" style="border: 1px solid rgba(255, 221, 87, 0.4);" title="Associated with Case: ${escapeHtml(item.case_name || item.case_id)}${item.matched_by ? ' (Matched via ' + escapeHtml(item.matched_by) + ')' : ''}">
+                                        <span class="icon is-small mr-1"><i class="material-icons" style="font-size: 12px;">work</i></span>
+                                        ${escapeHtml(item.case_name || 'Case: ' + item.case_id)}
+                                        ${item.matched_by ? `<span class="is-size-7 ml-1 has-text-grey-dark">(${escapeHtml(item.matched_by)})</span>` : ''}
+                                    </span>
+                                ` : ''}
                             </div>
 
                             <h4 class="title is-size-5 mb-1">
@@ -399,7 +405,7 @@ export class FeedController {
                         <div class="column is-narrow">
                             <div class="buttons">
                                 ${item.case_id ? `
-                                    <button class="button is-small is-warning is-outlined btn-feed-view-case mr-1 mb-0" data-case-id="${item.case_id}" title="View existing associated case">
+                                    <button class="button is-small is-warning is-outlined btn-feed-view-case mr-1 mb-0" data-case-id="${escapeHtml(item.case_id)}" title="View associated case: ${escapeHtml(item.case_name || item.case_id)}${item.matched_by ? ' (Matched via ' + escapeHtml(item.matched_by) + ')' : ''}">
                                         <span class="icon"><i class="material-icons">visibility</i></span>
                                     </button>
                                 ` : ''}
