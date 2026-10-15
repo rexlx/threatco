@@ -141,17 +141,209 @@ pre {
     to { transform: rotate(360deg); }
 }
 
-.logarea {
-    font-family: 'IBMPlexMono', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--text-header);
-    position: relative;
-    width: 800px;
-    height: 800px;
-    overflow-y: scroll;
+/* --- Terminal Log Viewer Window --- */
+.terminal-window {
+    width: 100%;
+    max-width: 1300px;
     margin: 0 auto;
-    box-shadow: -10px 10px 20px #3232a8;
+    background: #070d14;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 20px rgba(56, 189, 248, 0.08);
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    background: #0f1722;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18);
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.terminal-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.terminal-dot.dot-close { background-color: #ef4444; }
+.terminal-dot.dot-min { background-color: #f59e0b; }
+.terminal-dot.dot-expand { background-color: #10b981; }
+
+.terminal-title {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    letter-spacing: 0.03em;
+}
+
+.terminal-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+}
+
+.terminal-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.terminal-search {
+    background-color: #0b141c !important;
+    border-color: rgba(56, 189, 248, 0.25) !important;
+    color: #e2e8f0 !important;
+    min-width: 220px;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.8rem;
+}
+
+.terminal-search::placeholder {
+    color: #64748b;
+}
+
+.terminal-actions .button {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.75rem;
+    height: 2em;
+}
+
+.terminal-body {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #e2e8f0;
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 250px);
+    min-height: 480px;
+    max-height: 820px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0.5rem 0;
+    background-color: #060b11;
+    box-shadow: none;
+}
+
+.terminal-body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.terminal-body::-webkit-scrollbar-track {
+    background: #091018;
+}
+
+.terminal-body::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.22);
+    border-radius: 4px;
+}
+
+.terminal-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.45);
+}
+
+.terminal-statusbar {
+    padding: 0.35rem 1rem;
+    background: #0a111a;
+    border-top: 1px solid rgba(56, 189, 248, 0.12);
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.terminal-placeholder {
+    padding: 2rem;
+    color: #64748b;
+    text-align: center;
+}
+
+/* --- Log Rows --- */
+.log-row {
+    display: flex;
+    align-items: baseline;
+    padding: 3px 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    word-break: break-all;
+    white-space: pre-wrap;
+    transition: background-color 0.1s ease;
+}
+
+.log-row:hover {
+    background-color: rgba(56, 189, 248, 0.05);
+}
+
+.log-row-error {
+    background-color: rgba(239, 68, 68, 0.06);
+}
+
+.log-row-error:hover {
+    background-color: rgba(239, 68, 68, 0.12);
+}
+
+.log-col-time {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin-right: 0.85rem;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.log-col-level {
+    margin-right: 0.85rem;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.log-badge {
+    display: inline-block;
+    padding: 0 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    text-align: center;
+    min-width: 45px;
+}
+
+.log-badge-info {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.log-badge-error {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.log-col-data {
+    color: #cbd5e1;
+    flex-grow: 1;
+}
+
+.log-row-error .log-col-data {
+    color: #fca5a5;
 }
 
 /* --- Shared Item Cards (Feed & Cases) --- */

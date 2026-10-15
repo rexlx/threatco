@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -1053,33 +1054,28 @@ func (s *Server) UpdateCharts() {
 }
 
 func LogItemsToArticle(logs []LogItem) string {
-	out := `<div class="scrollbar"><div class="thumb"></div></div>`
-	templ := `<article class="message is-%s"><div class="message-header"><p>%s</p></div><div class="message-body">%v</div></article>`
-	for _, log := range logs {
-		var color string
-		if log.Error {
-			color = "danger"
-		} else {
-			color = "info"
-		}
-		out += fmt.Sprintf(templ, color, log.Time, log.Data)
-	}
-	return out
+	return LogItemsToPanel(logs)
 }
 
 func LogItemsToPanel(logs []LogItem) string {
-	out := `<div class="scrollbar"><div class="thumb"></div></div>`
-	templ := `<article class="panel is-%s"><p class="panel-heading">%s</p><div class="panel-block">%v</div></article>`
+	var sb strings.Builder
 	for _, log := range logs {
-		var color string
+		level := "INFO"
+		levelClass := "log-badge-info"
+		rowClass := "log-row-info"
 		if log.Error {
-			color = "danger"
-		} else {
-			color = "info"
+			level = "ERROR"
+			levelClass = "log-badge-error"
+			rowClass = "log-row-error"
 		}
-		out += fmt.Sprintf(`<div style="margin-bottom: 1em;">`+templ+`</div>`, color, log.Time, log.Data)
+		timeStr := log.Time.Format("2006-01-02 15:04:05.000")
+		escapedData := html.EscapeString(log.Data)
+		sb.WriteString(fmt.Sprintf(
+			`<div class="log-row %s" data-level="%s"><span class="log-col-time">%s</span><span class="log-col-level"><span class="log-badge %s">%s</span></span><span class="log-col-data">%s</span></div>`,
+			rowClass, level, timeStr, levelClass, level, escapedData,
+		))
 	}
-	return out
+	return sb.String()
 }
 
 func (s *Server) FakeLoggingEvent(n int) {

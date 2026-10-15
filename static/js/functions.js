@@ -149,52 +149,49 @@ function killServer() {
         });
 }
 
-function logToArticle2(log) {
-    if (!log.data || log.data === '') {
-        return;
+function escapeHtml(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatLogTimestamp(timeVal) {
+    if (!timeVal) return '';
+    try {
+        const d = new Date(timeVal);
+        if (isNaN(d.getTime())) return timeVal;
+        const pad = (n, len = 2) => String(n).padStart(len, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+    } catch {
+        return timeVal;
     }
-    const newArticle = document.createElement('article');
-    const messageHeader = document.createElement('div');
-    const messageBody = document.createElement('div');
-    if (log.error) {
-        newArticle.className = 'message is-danger is-dark';
-    }
-    messageHeader.className = 'message-header';
-    messageBody.className = 'message-body';
-    messageHeader.innerHTML = log.time;
-    newArticle.className = 'message is-info';
-    messageBody.innerHTML = log.data;
-    newArticle.appendChild(messageHeader);
-    return newArticle;
 }
 
 function logToArticle(log) {
-    if (!log.data || log.data === '') {
-        return;
+    if (!log || !log.data) {
+        return '';
     }
-    if (log.error) {
-        return `<article class="message is-danger is-dark">
-                <div class="message-header">
-                    <p>${log.time}</p>
-                </div>
-                <div class="message-body">
-                    ${log.data}
-                </div>
-              </article>`;
-    } else {
-        return `<article class="message is-info">
-                <div class="message-header">
-                    <p>${log.time}</p>
-                </div>
-                <div class="message-body">
-                    ${log.data}
-                </div>
-              </article>`;
-    }
+    const level = log.error ? 'ERROR' : 'INFO';
+    const levelClass = log.error ? 'log-badge-error' : 'log-badge-info';
+    const rowClass = log.error ? 'log-row-error' : 'log-row-info';
+    const timeFormatted = formatLogTimestamp(log.time);
+    const dataEscaped = escapeHtml(log.data);
+
+    return `<div class="log-row ${rowClass}" data-level="${level}"><span class="log-col-time">${timeFormatted}</span><span class="log-col-level"><span class="log-badge ${levelClass}">${level}</span></span><span class="log-col-data">${dataEscaped}</span></div>`;
 }
 
-// TODO Rework this so that it detects empty responses and stops fetching
+let isFetchingLogs = false;
+let autoScrollEnabled = true;
+
+// Fetch additional logs on infinite scroll
 function getLogs(start, end) {
+    if (isFetchingLogs) return;
+    isFetchingLogs = true;
+
     fetch('/logs?start=' + start + '&end=' + end, {
         method: 'GET'
     })
@@ -206,33 +203,145 @@ function getLogs(start, end) {
         })
         .then(data => {
             let logs = JSON.parse(data);
-            if (logs.length === 0) {
+            if (!logs || logs.length === 0) {
                 return;
             }
-            for (let i = 0; i < logs.length; i++) {
-                let atc = logToArticle(logs[i]);
-                if (atc) {
-                    document.getElementById('logarea').innerHTML += atc;
+            const logContainer = document.getElementById('logarea');
+            if (logContainer) {
+                let htmlChunk = '';
+                for (let i = 0; i < logs.length; i++) {
+                    htmlChunk += logToArticle(logs[i]);
+                }
+                logContainer.insertAdjacentHTML('beforeend', htmlChunk);
+                applyLogFilters();
+                updateLogCount();
+                if (autoScrollEnabled) {
+                    logContainer.scrollTop = logContainer.scrollHeight;
                 }
             }
-            updateScrollbar();
             startIndex += itemsPerPage;
         })
         .catch(error => {
-            console.error('There was a problem with the fetch operation', error);
-            // document.getElementById('logarea').innerHTML = '<div class="notification is-danger">There was a problem getting the logs</div>';
+            console.error('There was a problem fetching logs:', error);
+        })
+        .finally(() => {
+            isFetchingLogs = false;
         });
 }
 
-function updateScrollbar() {
-    const scrollTop = logarea.scrollTop;
-    const scrollHeight = logarea.scrollHeight - logarea.clientHeight;
-    const scrollPercent = scrollTop / scrollHeight;
+function updateLogCount() {
+    const logContainer = document.getElementById('logarea');
+    const display = document.getElementById('logCountDisplay');
+    if (!logContainer || !display) return;
+    const total = logContainer.querySelectorAll('.log-row').length;
+    const visible = logContainer.querySelectorAll('.log-row:not([style*="display: none"])').length;
+    if (total === visible) {
+        display.textContent = `${total} lines`;
+    } else {
+        display.textContent = `${visible} of ${total} lines shown`;
+    }
+}
 
-    const thumbHeight = Math.max(20, logarea.clientHeight * (logarea.clientHeight / logarea.scrollHeight));
-    const thumbTop = scrollPercent * (logarea.clientHeight - thumbHeight);
-    thumb.style.height = thumbHeight + "px";
-    thumb.style.top = thumbTop + "px";
+function applyLogFilters() {
+    const logContainer = document.getElementById('logarea');
+    if (!logContainer) return;
+
+    const searchInput = document.getElementById('logSearchInput');
+    const errorsOnly = document.getElementById('filterErrorsBtn')?.classList.contains('is-selected');
+    const query = (searchInput?.value || '').trim().toLowerCase();
+
+    const rows = logContainer.querySelectorAll('.log-row');
+    rows.forEach(row => {
+        const level = row.getAttribute('data-level') || 'INFO';
+        const matchesLevel = !errorsOnly || level === 'ERROR';
+        const text = row.textContent.toLowerCase();
+        const matchesText = !query || text.includes(query);
+
+        if (matchesLevel && matchesText) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    updateLogCount();
+}
+
+function setupLogViewerControls() {
+    const logContainer = document.getElementById('logarea');
+    if (!logContainer) return;
+
+    const searchInput = document.getElementById('logSearchInput');
+    const filterAllBtn = document.getElementById('filterAllBtn');
+    const filterErrorsBtn = document.getElementById('filterErrorsBtn');
+    const copyBtn = document.getElementById('copyLogsBtn');
+    const autoScrollBtn = document.getElementById('autoScrollToggle');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyLogFilters);
+    }
+
+    if (filterAllBtn && filterErrorsBtn) {
+        filterAllBtn.addEventListener('click', () => {
+            filterAllBtn.className = 'button is-small is-primary is-selected';
+            filterErrorsBtn.className = 'button is-small is-dark';
+            applyLogFilters();
+        });
+
+        filterErrorsBtn.addEventListener('click', () => {
+            filterErrorsBtn.className = 'button is-small is-danger is-selected';
+            filterAllBtn.className = 'button is-small is-dark';
+            applyLogFilters();
+        });
+    }
+
+    if (autoScrollBtn) {
+        autoScrollBtn.addEventListener('click', () => {
+            autoScrollEnabled = !autoScrollEnabled;
+            if (autoScrollEnabled) {
+                autoScrollBtn.classList.add('is-active');
+                autoScrollBtn.textContent = 'Auto-Scroll: ON';
+                logContainer.scrollTop = logContainer.scrollHeight;
+            } else {
+                autoScrollBtn.classList.remove('is-active');
+                autoScrollBtn.textContent = 'Auto-Scroll: OFF';
+            }
+        });
+    }
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            const rows = logContainer.querySelectorAll('.log-row:not([style*="display: none"])');
+            const lines = Array.from(rows).map(r => r.textContent.trim()).join('\n');
+            navigator.clipboard.writeText(lines).then(() => {
+                const prev = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = prev; }, 1500);
+            }).catch(err => {
+                console.error('Clipboard copy failed:', err);
+            });
+        });
+    }
+
+    // Handle initial HTMX load or reload
+    logContainer.addEventListener('htmx:afterSwap', () => {
+        applyLogFilters();
+        updateLogCount();
+        if (autoScrollEnabled) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    });
+
+    // Infinite scroll
+    logContainer.addEventListener('scroll', () => {
+        const { scrollTop, scrollHeight, clientHeight } = logContainer;
+        if (scrollTop + clientHeight >= scrollHeight - 80) {
+            getLogs(startIndex, startIndex + itemsPerPage);
+        }
+    });
+
+    // Run count update if items already present
+    updateLogCount();
 }
 // Function to open the modal
 function openModal(modalID) {
@@ -280,18 +389,7 @@ function initModals() {
 // Initialize modals on window load
 window.onload = () => {
     initModals();
-    if (logarea) {
-        logarea.addEventListener('scroll', () => {
-            const { scrollTop, scrollHeight, clientHeight } = logarea;
-            const scrollPercent = scrollTop / (scrollHeight - clientHeight);
-            const thumbPosition = scrollPercent * (clientHeight - thumb.clientHeight);
-            thumb.style.top = thumbPosition + 'px';
-            if (scrollPercent > 0.9) {
-                getLogs(startIndex, startIndex + itemsPerPage);
-            }
-
-        });
-    }
+    setupLogViewerControls();
 
     if (addUserForm) {
         addUserForm.addEventListener('submit', function (event) {
