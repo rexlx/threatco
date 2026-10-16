@@ -448,7 +448,27 @@ export class SearchController {
         this.app.errors = [];
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
 
-        this.container.innerHTML = "<p>Analyzing data... please wait...</p><progress class='progress is-link' max='100'></progress>";
+        this.container.innerHTML = `
+        <div class="terminal-window">
+            <div class="terminal-titlebar">
+                <div class="terminal-title">
+                    <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
+                    <span>ioc-analysis.running</span>
+                </div>
+            </div>
+            <div class="terminal-body" style="min-height: 200px; height: auto;">
+                <div class="terminal-placeholder">
+                    <p class="has-text-info mb-3">
+                        <span class="animate-spin" style="display: inline-block; margin-right: 8px;">⏳</span> Analyzing indicators across threat intelligence sources...
+                    </p>
+                    <progress class="progress is-small is-info" max="100"></progress>
+                </div>
+            </div>
+            <div class="terminal-statusbar">
+                <span>query in progress...</span>
+                <span class="is-pulled-right">threatco runtime • active</span>
+            </div>
+        </div>`;
 
         try {
             if (dontParse) {
@@ -494,7 +514,27 @@ export class SearchController {
         this.app.errors = [];
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
 
-        this.container.innerHTML = "<p>Processing reviewed items...</p><progress class='progress is-link' max='100'></progress>";
+        this.container.innerHTML = `
+        <div class="terminal-window">
+            <div class="terminal-titlebar">
+                <div class="terminal-title">
+                    <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
+                    <span>ioc-analysis.queue</span>
+                </div>
+            </div>
+            <div class="terminal-body" style="min-height: 200px; height: auto;">
+                <div class="terminal-placeholder">
+                    <p class="has-text-info mb-3">
+                        <span class="animate-spin" style="display: inline-block; margin-right: 8px;">⏳</span> Processing reviewed indicators...
+                    </p>
+                    <progress class="progress is-small is-info" max="100"></progress>
+                </div>
+            </div>
+            <div class="terminal-statusbar">
+                <span>analyzing selected queue...</span>
+                <span class="is-pulled-right">threatco runtime • active</span>
+            </div>
+        </div>`;
 
         // Combine all selected queue items into a single space-separated string
         const blob = this.currentQueue.map(q => q.value).join(' ');
@@ -584,12 +624,33 @@ export class SearchController {
         this.container.innerHTML = "";
 
         if (!resultsArray || resultsArray.length === 0) {
-            this.container.innerHTML = `<p class="has-text-info">${isHistoryView ? 'History is empty.' : 'No results found.'}</p>`;
-            const backBtn = document.createElement('button');
-            backBtn.className = "button is-small is-dark mt-4";
-            backBtn.textContent = "Back to Search";
-            backBtn.onclick = () => this.renderForm();
-            this.container.appendChild(backBtn);
+            this.container.innerHTML = `
+                <div class="terminal-window">
+                    <div class="terminal-titlebar">
+                        <div class="terminal-title">
+                            <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
+                            <span>ioc-results.log</span>
+                        </div>
+                        <div class="terminal-actions">
+                            <button class="button is-small is-dark" id="emptyBackBtn" type="button">
+                                <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
+                                <span>Back to Search</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="terminal-body" style="min-height: 220px; height: auto;">
+                        <div class="terminal-placeholder">
+                            <p class="has-text-grey-light mb-2"><i class="material-icons" style="font-size: 32px; vertical-align: middle;">search_off</i></p>
+                            <p class="has-text-info">${isHistoryView ? 'History is empty.' : 'No results found.'}</p>
+                        </div>
+                    </div>
+                    <div class="terminal-statusbar">
+                        <span>0 items</span>
+                        <span class="is-pulled-right">threatco ioc analysis • ${isHistoryView ? 'history' : 'live'}</span>
+                    </div>
+                </div>`;
+            const backBtn = this.container.querySelector('#emptyBackBtn');
+            if (backBtn) backBtn.onclick = () => this.renderForm();
             return;
         }
 
@@ -597,89 +658,207 @@ export class SearchController {
             resultsArray.sort((a, b) => (b.threat_level_id || 0) - (a.threat_level_id || 0));
         }
 
-        for (const result of resultsArray) {
-            const article = document.createElement('article');
-            article.className = 'message is-dark';
-            const header = document.createElement('div');
-            header.className = 'message-header';
-            if (typeof result.background === 'string') header.classList.add(escapeHtml(result.background));
-            header.innerHTML = `<p>${escapeHtml(result.from)}</p>`;
+        const matchedCount = resultsArray.filter(r => 
+            r.matched === true || r.matched === 'true' || (typeof r.threat_level_id === 'number' && r.threat_level_id > 0)
+        ).length;
 
-            const body = document.createElement('div');
-            body.className = 'message-body has-background-dark-ter';
-            body.innerHTML = `
-                <p class="has-text-white">Match: <span class="has-text-white">${escapeHtml(String(result.value))}</span></p>
-                <p class="has-text-white">Matched: <span class="has-text-white">${escapeHtml(String(result.matched))}</span></p>
-                <p class="has-text-white">ID: <span class="has-text-white">${escapeHtml(String(result.id))}</span></p>
-                <p class="has-text-white">Server ID: <span class="has-text-white">${escapeHtml(String(result.link))}</span></p>
-                <p class="has-text-white">Info: <span class="has-text-white">${escapeHtml(String(result.info))}</span></p>
-                <p class="has-text-white">Score: <span class="has-text-white">${escapeHtml(String(result.threat_level_id))}</span></p>
-                <p class="has-text-white">Attrs: <span class="has-text-white">${escapeHtml(String(result.attr_count))}</span></p>
+        const terminalWindow = document.createElement('div');
+        terminalWindow.className = 'terminal-window';
+
+        // Titlebar WITHOUT fake window control buttons (no terminal dots)
+        const titlebar = document.createElement('div');
+        titlebar.className = 'terminal-titlebar';
+        titlebar.innerHTML = `
+            <div class="terminal-title">
+                <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
+                <span>${isHistoryView ? 'ioc-history.log' : 'ioc-analysis.results'}</span>
+                <span class="tag is-dark is-small ml-2" id="resultsCountBadge">${resultsArray.length} items</span>
+            </div>
+            <div class="terminal-actions">
+                <input id="iocFilterInput" type="text" class="input is-small terminal-search" placeholder="Filter results (IOC, vendor, info)..." />
+                <div class="buttons has-addons mb-0">
+                    <button id="filterAllResultsBtn" class="button is-small terminal-btn terminal-btn-active" type="button">All (${resultsArray.length})</button>
+                    <button id="filterMatchedOnlyBtn" class="button is-small terminal-btn" type="button">Matches (${matchedCount})</button>
+                </div>
+                <button id="terminalBackBtn" class="button is-small terminal-btn" type="button" title="Back to Search Form">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
+                    <span>Search</span>
+                </button>
+                <button id="terminalClearBtn" class="button is-small terminal-btn terminal-btn-danger" type="button" title="Clear">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">delete_sweep</i></span>
+                    <span>${isHistoryView ? 'Clear History' : 'Clear Results'}</span>
+                </button>
+            </div>
+        `;
+        terminalWindow.appendChild(titlebar);
+
+        // Terminal body container
+        const terminalBody = document.createElement('div');
+        terminalBody.className = 'terminal-body';
+        terminalBody.id = 'iocResultsBody';
+
+        for (const result of resultsArray) {
+            const isMatched = result.matched === true || 
+                              result.matched === 'true' || 
+                              (typeof result.threat_level_id === 'number' && result.threat_level_id > 0);
+
+            const item = document.createElement('div');
+            item.className = `terminal-result-item ${isMatched ? 'is-match' : 'is-clean'}`;
+            item.setAttribute('data-matched', isMatched ? 'true' : 'false');
+
+            const threatScore = result.threat_level_id ?? 0;
+            const threatScoreClass = threatScore > 0 ? 'terminal-v-score-high' : '';
+
+            // Status badge color-coded highlight element
+            const statusBadgeHtml = isMatched ? `
+                <span class="terminal-match-badge match-flagged">
+                    <i class="material-icons" style="font-size: 13px;">warning</i> MATCH
+                </span>
+            ` : `
+                <span class="terminal-match-badge match-clean">
+                    <i class="material-icons" style="font-size: 13px;">check_circle</i> NO MATCH
+                </span>
             `;
 
-            const footer = document.createElement('footer');
-            footer.className = 'card-footer';
+            item.innerHTML = `
+                <div class="terminal-result-header">
+                    <div class="terminal-result-meta-left">
+                        ${statusBadgeHtml}
+                        <span class="tag is-dark is-small terminal-vendor-tag">${escapeHtml(result.from || 'VENDOR')}</span>
+                        <span class="terminal-ioc-val">${escapeHtml(String(result.value || ''))}</span>
+                    </div>
+                    <div class="terminal-result-actions">
+                        <button class="button is-small terminal-action-btn past-searches-btn" type="button" data-val="${escapeHtml(String(result.value || ''))}" title="View past searches for this indicator">
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">history</i></span>
+                            <span>Past Searches</span>
+                        </button>
+                        <button class="button is-small terminal-action-btn view-details-btn" type="button" data-link="${escapeHtml(String(result.link || ''))}" title="View raw vendor response details" ${(!result.link || result.link === "none") ? 'disabled' : ''}>
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">visibility</i></span>
+                            <span>View Details</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="terminal-result-body">
+                    <div class="terminal-kv-row">
+                        <span class="terminal-k">INFO:</span>
+                        <span class="terminal-v terminal-v-info">${escapeHtml(String(result.info || 'No description provided'))}</span>
+                    </div>
+                    <div class="terminal-kv-meta">
+                        <span><span class="terminal-k">SCORE:</span> <span class="terminal-v ${threatScoreClass}">${escapeHtml(String(threatScore))}</span></span>
+                        <span><span class="terminal-k">ATTRS:</span> <span class="terminal-v">${escapeHtml(String(result.attr_count ?? 0))}</span></span>
+                        <span><span class="terminal-k">ID:</span> <span class="terminal-v">${escapeHtml(String(result.id || 'none'))}</span></span>
+                        <span><span class="terminal-k">SERVER ID:</span> <span class="terminal-v">${escapeHtml(String(result.link || 'none'))}</span></span>
+                    </div>
+                </div>
+            `;
 
-            const historyButton = document.createElement('a');
-            historyButton.href = '#';
-            historyButton.className = 'card-footer-item has-background-black has-text-info';
-            historyButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>Past Searches</span></span>`;
+            // Functionality for "Past Searches" button
+            const pastSearchesBtn = item.querySelector('.past-searches-btn');
+            if (pastSearchesBtn) {
+                pastSearchesBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const pastSearches = await this.app.fetchPastSearches(result.value);
+                    if (!pastSearches || pastSearches.length === 0) {
+                        alert(`No past searches found for: ${result.value}`);
+                        return;
+                    }
+                    const historyReport = pastSearches
+                        .map(search => `• ${search.info}`)
+                        .join('\n');
+                    alert(`Historical matches for ${result.value}:\n\n${historyReport}`);
+                });
+            }
 
-            historyButton.addEventListener('click', async (e) => {
-                e.preventDefault();
-                const pastSearches = await this.app.fetchPastSearches(result.value);
+            // Functionality for "View Details" button
+            const viewDetailsBtn = item.querySelector('.view-details-btn');
+            if (viewDetailsBtn) {
+                viewDetailsBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!result.link || result.link === "none") return;
+                    const customEvent = new CustomEvent('req-open-details', { detail: result.link });
+                    document.dispatchEvent(customEvent);
+                });
+            }
 
-                if (!pastSearches || pastSearches.length === 0) {
-                    alert(`No past searches found for: ${result.value}`);
-                    return;
-                }
-
-                const historyReport = pastSearches
-                    .map(search => `• ${search.info}`)
-                    .join('\n');
-
-                alert(`Historical matches for ${result.value}:\n\n${historyReport}`);
-            });
-
-            const viewButton = document.createElement('a');
-            viewButton.href = '#';
-            viewButton.className = 'card-footer-item has-background-black has-text-info';
-            viewButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">visibility</i></span><span>View Details</span></span>`;
-
-            if (!result.link || result.link === "none") viewButton.classList.add('is-disabled');
-            viewButton.addEventListener('click', async (e) => {
-                e.preventDefault();
-                if (!result.link || result.link === "none") return;
-                const customEvent = new CustomEvent('req-open-details', { detail: result.link });
-                document.dispatchEvent(customEvent);
-            });
-
-            footer.appendChild(historyButton);
-            footer.appendChild(viewButton);
-            article.appendChild(header);
-            article.appendChild(body);
-            article.appendChild(footer);
-            this.container.appendChild(article);
+            terminalBody.appendChild(item);
         }
 
-        const footerContainer = document.createElement('footer');
-        footerContainer.className = 'card-footer mt-4';
+        terminalWindow.appendChild(terminalBody);
 
-        const clearButton = document.createElement('a');
-        clearButton.href = '#';
-        clearButton.className = 'card-footer-item has-background-danger has-text-white';
-        clearButton.innerHTML = `<span class="icon-text"><span class="icon"><i class="material-icons">delete_sweep</i></span><span>${isHistoryView ? 'Clear History' : 'Clear Results'}</span></span>`;
-        clearButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (isHistoryView) {
-                this.app.resultHistory = [];
-                this.app.setHistory();
+        // Statusbar
+        const statusbar = document.createElement('div');
+        statusbar.className = 'terminal-statusbar';
+        statusbar.innerHTML = `
+            <span id="terminalStatusCount">Showing ${resultsArray.length} of ${resultsArray.length} items (${matchedCount} threat matches)</span>
+            <span class="is-pulled-right">threatco ioc analysis • ${isHistoryView ? 'history' : 'live'}</span>
+        `;
+        terminalWindow.appendChild(statusbar);
+
+        this.container.appendChild(terminalWindow);
+
+        // Wire up Titlebar and Global Controls
+        const backBtn = terminalWindow.querySelector('#terminalBackBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                this.renderForm();
+            });
+        }
+
+        const clearBtn = terminalWindow.querySelector('#terminalClearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (isHistoryView) {
+                    this.app.resultHistory = [];
+                    this.app.setHistory();
+                }
+                this.app.results = [];
+                this.renderForm();
+            });
+        }
+
+        const filterInput = terminalWindow.querySelector('#iocFilterInput');
+        const filterAllBtn = terminalWindow.querySelector('#filterAllResultsBtn');
+        const filterMatchedBtn = terminalWindow.querySelector('#filterMatchedOnlyBtn');
+        const items = terminalBody.querySelectorAll('.terminal-result-item');
+        const statusCountEl = terminalWindow.querySelector('#terminalStatusCount');
+
+        const applyFilter = () => {
+            const q = (filterInput?.value || '').trim().toLowerCase();
+            const onlyMatches = filterMatchedBtn?.classList.contains('terminal-btn-active');
+            let visibleCount = 0;
+
+            items.forEach(el => {
+                const matchVal = el.getAttribute('data-matched') === 'true';
+                const text = el.textContent.toLowerCase();
+                const matchesQ = !q || text.includes(q);
+                const matchesFilter = !onlyMatches || matchVal;
+
+                if (matchesQ && matchesFilter) {
+                    el.style.display = '';
+                    visibleCount++;
+                } else {
+                    el.style.display = 'none';
+                }
+            });
+
+            if (statusCountEl) {
+                statusCountEl.textContent = `Showing ${visibleCount} of ${items.length} items (${matchedCount} threat matches)`;
             }
-            this.app.results = [];
-            this.renderForm();
-        });
+        };
 
-        footerContainer.appendChild(clearButton);
-        this.container.appendChild(footerContainer);
+        if (filterInput) filterInput.addEventListener('input', applyFilter);
+        if (filterAllBtn && filterMatchedBtn) {
+            filterAllBtn.addEventListener('click', () => {
+                filterAllBtn.classList.add('terminal-btn-active');
+                filterMatchedBtn.classList.remove('terminal-btn-active');
+                applyFilter();
+            });
+            filterMatchedBtn.addEventListener('click', () => {
+                filterMatchedBtn.classList.add('terminal-btn-active');
+                filterAllBtn.classList.remove('terminal-btn-active');
+                applyFilter();
+            });
+        }
     }
 }

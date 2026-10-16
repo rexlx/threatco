@@ -17,7 +17,7 @@ var BaseView string = `<!DOCTYPE html>
     <div class="site-wrapper">
         <nav class="navbar has-background-custom" role="navigation" aria-label="main navigation">
             <div class="navbar-brand">
-                <a class="navbar-item has-text-primary" href="#">
+                <a class="navbar-item has-text-info" href="#">
                     <strong>threatco</strong>
                 </a>
             </div>
@@ -26,20 +26,20 @@ var BaseView string = `<!DOCTYPE html>
                     <div class="carousel-container">
                         <button class="scroll-button left" id="scroll-left">‹</button>
                         <div class="navbar-carousel" id="navbar-carousel">
-                            <a class="navbar-item has-background-custom has-text-primary" href="/app">app</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/kb">documentation</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/services">services</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/create-user">add user</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/users">users</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/view-logs">logs</a>
-                            <a class="navbar-item has-background-custom has-text-primary" href="/charts">stats</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/app">app</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/kb">documentation</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/services">services</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/create-user">add user</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/users">users</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/view-logs">logs</a>
+                            <a class="navbar-item has-background-custom has-text-info-light" href="/charts">stats</a>
                         </div>
                         <button class="scroll-button right" id="scroll-right">›</button>
                     </div>
                 </div>
                 <div class="navbar-end">
                     <div class="navbar-item">
-                        <button class="button is-warning is-outlined logout-btn">
+                        <button class="button is-small is-dark logout-btn">
                             log out
                         </button>
                     </div>

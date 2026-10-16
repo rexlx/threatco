@@ -81,17 +81,80 @@ h1, h2, h3, h4, h5, h6 {
      background-color: var(--background-light) !important;
 }
 
-.menu-label, .label, .title {
+.menu-label {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.7rem !important;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #475569 !important;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.label, .title {
     color: var(--text-info);
 }
 
 .menu-list a {
-    color: var(--text-light);
+    color: #94a3b8 !important;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.menu-list a:hover {
+    background-color: rgba(56, 189, 248, 0.08) !important;
+    color: #e2e8f0 !important;
 }
 
 .menu-list a.is-active {
-    background-color: var(--background-light);
-    color: var(--text-info);
+    background-color: rgba(56, 189, 248, 0.14) !important;
+    color: #38bdf8 !important;
+    font-weight: 600;
+}
+
+/* System status indicator pill */
+.system-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    border-radius: 4px;
+    user-select: none;
+}
+
+.system-status-pill.status-nominal {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+}
+
+.system-status-pill.status-warning {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+}
+
+.status-indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-indicator-dot.dot-nominal {
+    background-color: #10b981;
+    box-shadow: 0 0 6px #10b981;
+}
+
+.status-indicator-dot.dot-warning {
+    background-color: #f59e0b;
+    box-shadow: 0 0 6px #f59e0b;
 }
 
 .modal-card-head {
@@ -344,6 +407,199 @@ pre {
 
 .log-row-error .log-col-data {
     color: #fca5a5;
+}
+
+/* --- Terminal Search Results Styling --- */
+.terminal-result-item {
+    background: #09121d !important;
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+    border-radius: 6px;
+    margin: 0.5rem 0.75rem;
+    padding: 0.65rem 0.85rem;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.terminal-result-item:hover {
+    background: #0c1827 !important;
+    border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+.terminal-result-item.is-match {
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+}
+
+.terminal-result-item.is-clean {
+    border: 1px solid rgba(56, 189, 248, 0.16) !important;
+}
+
+.terminal-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.45rem;
+}
+
+.terminal-result-meta-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.terminal-vendor-tag {
+    font-family: 'IBMPlexMono', monospace;
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    background-color: #1a2736 !important;
+    color: #38bdf8 !important;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.terminal-ioc-val {
+    font-family: 'IBMPlexMono', monospace;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #f1f5f9;
+    word-break: break-all;
+}
+
+.terminal-match-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.terminal-match-badge.match-flagged {
+    background: rgba(239, 68, 68, 0.22);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #f87171;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+}
+
+.terminal-match-badge.match-clean {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+
+.terminal-result-body {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.terminal-kv-row {
+    display: flex;
+    gap: 0.5rem;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.terminal-k {
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.terminal-v {
+    color: #cbd5e1;
+}
+
+.terminal-v-info {
+    color: #e2e8f0;
+    line-height: 1.4;
+}
+
+.terminal-v-score-high {
+    color: #f87171;
+    font-weight: 700;
+}
+
+.terminal-kv-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.75rem;
+    padding-top: 0.35rem;
+    border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.terminal-result-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Unified Terminal Header & Action Buttons */
+.terminal-btn {
+    background-color: #0d1622 !important;
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+    color: #94a3b8 !important;
+    font-family: 'IBMPlexMono', monospace;
+    transition: all 0.15s ease;
+}
+
+.terminal-btn:hover {
+    background-color: rgba(56, 189, 248, 0.12) !important;
+    border-color: rgba(56, 189, 248, 0.45) !important;
+    color: #e2e8f0 !important;
+}
+
+.terminal-btn.terminal-btn-active {
+    background-color: rgba(56, 189, 248, 0.22) !important;
+    border-color: rgba(56, 189, 248, 0.5) !important;
+    color: #38bdf8 !important;
+    font-weight: 600;
+}
+
+.terminal-btn.terminal-btn-danger {
+    color: #f87171 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.terminal-btn.terminal-btn-danger:hover {
+    background-color: rgba(239, 68, 68, 0.18) !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    color: #fca5a5 !important;
+}
+
+.terminal-action-btn {
+    background-color: #0a131f !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    color: #94a3b8 !important;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.72rem;
+    height: 2em;
+    transition: all 0.15s ease;
+}
+
+.terminal-action-btn:hover:not([disabled]) {
+    background-color: rgba(56, 189, 248, 0.15) !important;
+    border-color: rgba(56, 189, 248, 0.5) !important;
+    color: #38bdf8 !important;
+}
+
+.terminal-action-btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #475569 !important;
 }
 
 /* --- Shared Item Cards (Feed & Cases) --- */

@@ -152,9 +152,9 @@ let previousNotifications = [];
 function updateUI() {
     if (application.errors.length > 0) {
         const uniqueErrors = [...new Set(application.errors)];
-        errorBox.innerHTML = uniqueErrors.map(e => `<p class="has-text-warning">${e}</p>`).join('');
+        errorBox.innerHTML = uniqueErrors.map(e => `<span class="system-status-pill status-warning"><span class="status-indicator-dot dot-warning"></span>${escapeHtml(e)}</span>`).join(' ');
     } else {
-        errorBox.innerHTML = '<p class="has-text-success">system nominal</p>';
+        errorBox.innerHTML = '<span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>system nominal</span>';
     }
 
     if (JSON.stringify(application.results) !== JSON.stringify(previousResults)) {
