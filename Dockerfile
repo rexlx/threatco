@@ -1,5 +1,5 @@
 # --- STAGE 1: Build the application binary ---
-FROM golang:1.25.3-bookworm AS builder
+FROM golang:1.27.1-bookworm AS builder
 
 # Create and change to the app directory.
 WORKDIR /app
@@ -12,16 +12,16 @@ RUN go mod download
 COPY . ./
 
 # Build the binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server ./cmd/threatco
 
 # --- STAGE 2: Extract up-to-date OSV-Scanner ---
 FROM ghcr.io/google/osv-scanner:v1.9.2 AS osv-bin
 
 # --- STAGE 3: Final Runtime Image ---
-FROM debian:bookworm-20260224-slim
+FROM debian:bookworm-slim
 
-# Define which config file to use (defaults to config.json for non-prod)
-ARG CONFIG_FILE=config.json
+# Define which config file to use (defaults to example_config.json for fallback)
+ARG CONFIG_FILE=example_config.json
 
 # Install necessary packages and run an upgrade to eliminate base layer CVEs.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
@@ -43,18 +43,19 @@ COPY --from=builder /app/server /server
 # Copy the official OSV-Scanner binary into the system PATH
 COPY --from=osv-bin /osv-scanner /usr/local/bin/osv-scanner
 
-# Copy static assets and documentation.
+# Copy static assets, documentation, and web application.
 COPY static /static
 COPY kb /kb
+COPY webapp /webapp
 
-COPY data/${CONFIG_FILE} /${CONFIG_FILE}
+COPY data/${CONFIG_FILE} /config.json
 
 # Setup the entrypoint.
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose the application port.
-EXPOSE 8080
+# Expose the application and metrics ports.
+EXPOSE 8080 8089
 
 # Run the entrypoint script on container startup.
 ENTRYPOINT ["/entrypoint.sh"]

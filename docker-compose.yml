@@ -2,30 +2,89 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:13
+    image: postgres:17-alpine
     container_name: postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-threatco}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-threatcopass}
+      POSTGRES_DB: ${DB_NAME:-threatco}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "${DB_PORT:-5554}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-threatco} -d $${POSTGRES_DB:-threatco}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - threatco_net
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CONFIG_FILE: ${CONFIG_FILE:-example_config.json}
     container_name: go_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-       DB_HOST: db
-       THREATCO_DB_LOCATION: ${THREATCO_DB_LOCATION}
-       MISP_KEY: ${MISP_KEY}
-       VIRUSTOTAL_KEY: ${VIRUSTOTAL_KEY}
+      APP_ENV: ${APP_ENV:-development}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-threatco}
+      DB_PASSWORD: ${DB_PASSWORD:-threatcopass}
+      DB_NAME: ${DB_NAME:-threatco}
+      THREATCO_DB_LOCATION: ${THREATCO_DB_LOCATION:-postgres://${DB_USER:-threatco}:${DB_PASSWORD:-threatcopass}@db:5432/${DB_NAME:-threatco}?sslmode=disable}
+      THREATCO_ENCRYPTION_KEY: ${THREATCO_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      THREATCO_OLD_ENCRYPTION_KEY: ${THREATCO_OLD_ENCRYPTION_KEY:-}
+      THREATCO_LLM_API_KEY: ${THREATCO_LLM_API_KEY:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@aol.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      INIT_ADMIN: ${INIT_ADMIN:-true}
+      USE_SYSLOG: ${USE_SYSLOG:-false}
+      SYSLOG_HOST: ${SYSLOG_HOST:-}
+      # Threat Intel & Vendor API Keys
+      MISP_KEY: ${MISP_KEY:-}
+      MISP_SECRET: ${MISP_SECRET:-}
+      VIRUSTOTAL_KEY: ${VIRUSTOTAL_KEY:-}
+      VIRUSTOTAL_SECRET: ${VIRUSTOTAL_SECRET:-}
+      URLSCAN_KEY: ${URLSCAN_KEY:-}
+      URLSCAN_SECRET: ${URLSCAN_SECRET:-}
+      LIVERY_KEY: ${LIVERY_KEY:-}
+      LIVERY_SECRET: ${LIVERY_SECRET:-}
+      DEEPFRY_KEY: ${DEEPFRY_KEY:-}
+      DEEPFRY_SECRET: ${DEEPFRY_SECRET:-}
+      ABUSEIPDB_KEY: ${ABUSEIPDB_KEY:-}
+      ABUSEIPDB_SECRET: ${ABUSEIPDB_SECRET:-}
+      OTX_KEY: ${OTX_KEY:-}
+      OTX_SECRET: ${OTX_SECRET:-}
+      VMRAY_KEY: ${VMRAY_KEY:-}
+      VMRAY_SECRET: ${VMRAY_SECRET:-}
+      CROWDSTRIKE_KEY: ${CROWDSTRIKE_KEY:-}
+      CROWDSTRIKE_SECRET: ${CROWDSTRIKE_SECRET:-}
+      CLOUDFLARE_KEY: ${CLOUDFLARE_KEY:-}
+      CLOUDFLARE_SECRET: ${CLOUDFLARE_SECRET:-}
+      MANDIANT_KEY: ${MANDIANT_KEY:-}
+      MANDIANT_SECRET: ${MANDIANT_SECRET:-}
+      SPLUNK_KEY: ${SPLUNK_KEY:-}
+      SPLUNK_SECRET: ${SPLUNK_SECRET:-}
+    volumes:
+      - ${CONFIG_PATH:-./config.json}:/config.json:ro
     ports:
       - "${APP_PORT:-8080}:8080"
-    depends_on:
-      - db
+      - "${METRICS_PORT:-8089}:8089"
+    networks:
+      - threatco_net
 
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  threatco_net:
+    driver: bridge

@@ -56,7 +56,9 @@ func (c *Configuration) ApplyEnvOverrides() {
 			fmt.Printf("Warning: failed to set environment variable for previous encryption key: %v\n", err)
 		}
 	}
-	if c.DBLocation != "" {
+	if envDB := os.Getenv("THREATCO_DB_LOCATION"); envDB != "" {
+		c.DBLocation = envDB
+	} else if c.DBLocation != "" {
 		err := os.Setenv("THREATCO_DB_LOCATION", c.DBLocation)
 		if err != nil {
 			fmt.Printf("Warning: failed to set environment variable for DB location: %v\n", err)
