@@ -82,7 +82,10 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 			match = strings.TrimSuffix(match, "/")
 		}
 
-		cleanMatch := strings.ToLower(match)
+		cleanMatch := strings.ToLower(strings.TrimSpace(match))
+		if cleanMatch == "" {
+			continue
+		}
 
 		// High-fidelity boundary check for hashes
 		if isHashType(kind) {
@@ -91,25 +94,13 @@ func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Rege
 			}
 		}
 
-		switch kind {
-		case "filepath":
-			if strings.HasPrefix(cleanMatch, "http") || strings.HasPrefix(cleanMatch, "www") {
-				continue
-			}
-		case "ipv4":
-			if c.Checks.IgnorePrivateIPs && isPrivateIP(match) {
-				continue
-			}
-		case "email":
-			if _, exists := c.Checks.IgnoredEmails[cleanMatch]; exists {
-				continue
-			}
-		case "domain":
-			if c.isDomainIgnored(cleanMatch) {
-				continue
-			}
+		if !c.isValidMatch(kind, match) {
+			continue
+		}
+
+		if kind == "domain" {
 			baseDomain, err := extractSecondLevelDomain(cleanMatch)
-			if err == nil && baseDomain != "" && !c.isDomainIgnored(baseDomain) {
+			if err == nil && baseDomain != "" && !c.isDomainIgnored(baseDomain) && !isNoiseValue(baseDomain) && c.isValidTLD(baseDomain) {
 				results = append(results, Match{Value: baseDomain, Type: "base_domain"})
 			}
 		}
@@ -164,9 +155,9 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 
 		for _, idx := range rawMatches {
 			val := cleanText[idx[0]:idx[1]]
-			cleanVal := strings.ToLower(val)
+			cleanVal := strings.ToLower(strings.TrimSpace(val))
 
-			if seen[cleanVal] {
+			if cleanVal == "" || seen[cleanVal] {
 				continue
 			}
 
@@ -187,13 +178,8 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 				hashTracker[prefix] = kind
 			}
 
-			// Type-specific validation logic
-			switch kind {
-			case "filepath":
-				// Ignore if it looks like a URL or is literally inside a URL match
-				if strings.HasPrefix(cleanVal, "http") || strings.HasPrefix(cleanVal, "www") {
-					continue
-				}
+			// URL collision check for filepath
+			if kind == "filepath" {
 				isInsideUrl := false
 				for _, r := range urlRanges {
 					if idx[0] >= r.start && idx[1] <= r.end {
@@ -204,25 +190,10 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 				if isInsideUrl {
 					continue
 				}
+			}
 
-			case "ipv4":
-				if c.Checks.IgnorePrivateIPs && isPrivateIP(val) {
-					continue
-				}
-
-			case "email":
-				if _, exists := c.Checks.IgnoredEmails[cleanVal]; exists {
-					continue
-				}
-
-			case "domain":
-				// Prevent filenames (e.g. config.sys, script.sh) from being treated as domains
-				if isLikelyFilename(cleanVal) {
-					continue
-				}
-				if !c.isValidTLD(cleanVal) || c.isDomainIgnored(cleanVal) {
-					continue
-				}
+			if !c.isValidMatch(kind, val) {
+				continue
 			}
 
 			seen[cleanVal] = true
@@ -235,6 +206,63 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 	}
 
 	return results
+}
+
+func (c *Contextualizer) isValidMatch(kind, val string) bool {
+	cleanVal := strings.ToLower(strings.TrimSpace(val))
+	if cleanVal == "" || isNoiseValue(cleanVal) {
+		return false
+	}
+
+	switch kind {
+	case "filepath":
+		if strings.HasPrefix(cleanVal, "http") || strings.HasPrefix(cleanVal, "www") {
+			return false
+		}
+		trimmed := strings.TrimPrefix(cleanVal, "/")
+		if reProcPath.MatchString(cleanVal) || reProcPath.MatchString(trimmed) {
+			return false
+		}
+		for _, pfx := range []string{"proc/", "usr/", "run/", "sys/", "dev/", "suricata/", "rules/", "post/", "research/"} {
+			if strings.HasPrefix(cleanVal, pfx) || strings.HasPrefix(trimmed, pfx) {
+				return false
+			}
+		}
+		parts := strings.Split(trimmed, "/")
+		last := parts[len(parts)-1]
+		if isAllDigits(last) || len(parts[0]) <= 1 {
+			return false
+		}
+
+	case "ipv4":
+		if c.Checks.IgnorePrivateIPs && isPrivateIP(val) {
+			return false
+		}
+
+	case "email":
+		if _, exists := c.Checks.IgnoredEmails[cleanVal]; exists {
+			return false
+		}
+
+	case "domain":
+		if isLikelyFilename(cleanVal) || !c.isValidTLD(cleanVal) || c.isDomainIgnored(cleanVal) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Contextualizer) isDomainIgnored(domain string) bool {
@@ -307,7 +335,9 @@ func isLikelyFilename(val string) bool {
 		".cs": {}, ".rs": {}, ".swift": {}, ".json": {}, ".xml": {},
 		".yaml": {}, ".yml": {}, ".csv": {}, ".sql": {}, ".db": {},
 		".sqlite": {}, ".md": {}, ".doc": {}, ".docx": {}, ".xls": {},
-		".xlsx": {}, ".ppt": {}, ".pptx": {},
+		".xlsx": {}, ".ppt": {}, ".pptx": {}, ".html": {}, ".htm": {},
+		".so": {}, ".service": {}, ".scope": {}, ".socket": {},
+		".target": {}, ".rules": {},
 	}
 
 	ext := filepath.Ext(val)
@@ -329,7 +359,33 @@ var (
 	reAt     = regexp.MustCompile(`(?i)\[at\]|\(at\)| @ `)
 	reHxxp   = regexp.MustCompile(`(?i)h[x|t]{2}p(s?)://`)
 	reColons = regexp.MustCompile(`(?i)\[:\]`)
+
+	// Noise filter patterns
+	reMetricOrDuration = regexp.MustCompile(`(?i)^\d+(\.\d+)?(ns|us|µs|ms|s|m|h|d|kb|mb|gb|tb|b|%|fps|hz|khz|mhz|ghz)$`)
+	reSystemdUnit      = regexp.MustCompile(`(?i)\.(service|scope|slice|socket|target|timer|mount|automount|swap|device)$`)
+	reLogTokenSuffix   = regexp.MustCompile(`(?i)\.(detection|version|actions)$`)
+	reProcPath         = regexp.MustCompile(`(?i)^/?proc/\d+`)
 )
+
+func isNoiseValue(val string) bool {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return true
+	}
+	if reMetricOrDuration.MatchString(val) {
+		return true
+	}
+	if reSystemdUnit.MatchString(val) {
+		return true
+	}
+	if reLogTokenSuffix.MatchString(val) {
+		return true
+	}
+	if strings.HasPrefix(strings.ToLower(val), "org.freedesktop") {
+		return true
+	}
+	return false
+}
 
 func Refang(text string) string {
 	// 1. Standardize dots: [.] or (.) -> .

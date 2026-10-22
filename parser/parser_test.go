@@ -316,3 +316,78 @@ func TestExtractAll_DomainVsFile(t *testing.T) {
 		t.Error("Failed to find valid domain")
 	}
 }
+
+func TestNoiseFiltering(t *testing.T) {
+	c := setupContextualizer()
+
+	noisySamples := []string{
+		"session-2283.scope",
+		"session-2282.scope",
+		"83.827008ms",
+		"66.284344ms",
+		"18.428305ms",
+		"1.129422ms",
+		"1.031s",
+		"9.6m",
+		"11.062s",
+		"proc/1177976",
+		"proc/1158878",
+		"/proc/1141751",
+		"timedate1.service",
+		"dbus-org.freedesktop.timedate1.service",
+		"systemd-timedated.service",
+		"org.freedesktop",
+		"org.freedesktop.timedate1",
+		"app-layer.protocols.snmp.detection",
+		"snmp.version",
+		"snmp.detection",
+		"app-layer.protocols.sip.detection",
+		"sip.detection",
+		"fail2ban.actions",
+		"rules/suricata",
+		"usr/share",
+		"run/ips",
+		"suricata/lib",
+		"research/25",
+		"post/ve-cve-2026-0826-critical-unauthenticated-stack-buffer-overflow-hp-poly-vvx-trio-voip-phones-fixed",
+		"j/operation-zero-disco-cisco-snmp-vulnerability-exploit.html",
+	}
+
+	for _, sample := range noisySamples {
+		t.Run("Noise_"+sample, func(t *testing.T) {
+			res := c.ExtractAll("log entry containing " + sample + " in output")
+			for kind, matches := range res {
+				for _, m := range matches {
+					if m.Value == sample {
+						t.Errorf("Expected noisy value %q to be filtered out of %s, but got match", sample, kind)
+					}
+				}
+			}
+		})
+	}
+
+	t.Run("ValidIOCsPreserved", func(t *testing.T) {
+		legit := "Detected 1.214.214.114 connecting to trendmicro.com and www.rapid7.com via config/iface.yaml using ubnt-idsips-daemon.so"
+		res := c.ExtractAll(legit)
+
+		expectedMatches := map[string]string{
+			"ipv4":     "1.214.214.114",
+			"domain":   "trendmicro.com",
+			"filepath": "config/iface.yaml",
+			"filename": "ubnt-idsips-daemon.so",
+		}
+
+		for kind, expectedVal := range expectedMatches {
+			found := false
+			for _, m := range res[kind] {
+				if m.Value == expectedVal {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected legitimate IOC %q in %s, but not found. Got: %+v", expectedVal, kind, res[kind])
+			}
+		}
+	})
+}
