@@ -2,19 +2,39 @@ export class ResponseController {
     constructor(containerId, app) {
         this.container = document.getElementById(containerId);
         this.app = app;
-        this.currentOptions = { start: 0, limit: 100 }; // Store current state
+        this.currentOptions = { start: 0, limit: 100, timeRange: '24h' }; // Store current state
     }
 
     render() {
     this.container.classList.remove('is-hidden');
     this.container.innerHTML = `
         <h1 class="title has-text-info" id="responseViewTitle">Responses</h1>
-        <div class="field is-grouped">
+        <div class="field is-grouped is-grouped-multiline">
             <p class="control is-expanded">
                 <input class="input" type="text" id="filterVendor" placeholder="Vendor or ID">
             </p>
             <p class="control">
-                <input class="input" type="number" id="filterLimit" placeholder="Limit" value="100">
+                <input class="input" type="number" id="filterLimit" placeholder="Limit" value="100" style="width: 90px;">
+            </p>
+            <p class="control">
+                <span class="select">
+                    <select id="filterTimeRange" title="Time Range">
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="15m">Last 15 Minutes</option>
+                        <option value="1h">Last 1 Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="30d">Last 30 Days</option>
+                        <option value="all">All Time</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                </span>
+            </p>
+            <p class="control is-hidden" id="customTimeRangeSince">
+                <input class="input" type="datetime-local" id="filterSince" placeholder="Start Time" title="Start Time">
+            </p>
+            <p class="control is-hidden" id="customTimeRangeUntil">
+                <input class="input" type="datetime-local" id="filterUntil" placeholder="End Time" title="End Time">
             </p>
             <p class="control">
                 <label class="checkbox">
@@ -51,12 +71,54 @@ export class ResponseController {
             <ul class="pagination-list" id="paginationList"></ul>
         </nav>`;
 
+    const timeRangeSelect = document.getElementById('filterTimeRange');
+    const customSinceEl = document.getElementById('customTimeRangeSince');
+    const customUntilEl = document.getElementById('customTimeRangeUntil');
+
+    const updateCustomTimeVisibility = () => {
+        if (timeRangeSelect.value === 'custom') {
+            customSinceEl.classList.remove('is-hidden');
+            customUntilEl.classList.remove('is-hidden');
+        } else {
+            customSinceEl.classList.add('is-hidden');
+            customUntilEl.classList.add('is-hidden');
+        }
+    };
+    timeRangeSelect.addEventListener('change', updateCustomTimeVisibility);
+
+    // Restore previous filter state if present
+    if (this.currentOptions.timeRange) {
+        timeRangeSelect.value = this.currentOptions.timeRange;
+    }
+    if (this.currentOptions.since) {
+        document.getElementById('filterSince').value = this.currentOptions.since;
+    }
+    if (this.currentOptions.until) {
+        document.getElementById('filterUntil').value = this.currentOptions.until;
+    }
+    if (this.currentOptions.limit) {
+        document.getElementById('filterLimit').value = this.currentOptions.limit;
+    }
+    if (this.currentOptions.matched) {
+        document.getElementById('filterMatched').checked = true;
+    }
+    if (this.currentOptions.archived) {
+        document.getElementById('filterArchived').checked = true;
+    }
+    if (this.currentOptions.id || this.currentOptions.vendor) {
+        document.getElementById('filterVendor').value = this.currentOptions.id || this.currentOptions.vendor;
+    }
+    updateCustomTimeVisibility();
+
     // Attach Listener for Filter Button
     document.getElementById('applyResponseFilters').addEventListener('click', () => {
         const rawInput = document.getElementById('filterVendor').value.trim();
         const limitVal = document.getElementById('filterLimit').value;
         const matched = document.getElementById('filterMatched').checked;
         const archived = document.getElementById('filterArchived').checked;
+        const timeRange = document.getElementById('filterTimeRange').value;
+        const sinceVal = document.getElementById('filterSince').value;
+        const untilVal = document.getElementById('filterUntil').value;
 
         const options = {
             start: 0,
@@ -64,7 +126,10 @@ export class ResponseController {
             matched: matched,
             archived: archived,
             vendor: null,
-            id: null
+            id: null,
+            timeRange: timeRange,
+            since: timeRange === 'custom' && sinceVal ? sinceVal : null,
+            until: timeRange === 'custom' && untilVal ? untilVal : null
         };
 
         const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -84,6 +149,9 @@ export class ResponseController {
         const rawInput = document.getElementById('filterVendor').value.trim();
         const matched = document.getElementById('filterMatched').checked;
         const archived = document.getElementById('filterArchived').checked;
+        const timeRange = document.getElementById('filterTimeRange').value;
+        const sinceVal = document.getElementById('filterSince').value;
+        const untilVal = document.getElementById('filterUntil').value;
 
         const params = new URLSearchParams();
         const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,6 +165,11 @@ export class ResponseController {
 
         if (matched) params.append('matched', 'true');
         if (archived) params.append('archived', 'true');
+        if (timeRange) params.append('time_range', timeRange);
+        if (timeRange === 'custom') {
+            if (sinceVal) params.append('since', sinceVal);
+            if (untilVal) params.append('until', untilVal);
+        }
 
         window.location.href = `/exportresponses?${params.toString()}`;
     });

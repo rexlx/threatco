@@ -1837,11 +1837,87 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 
 // ResponseFilterOptions defines the available query parameters for filtering and pagination.
 type ResponseFilterOptions struct {
-	Vendor  string
-	Start   int
-	Limit   int
-	Matched bool
-	ID      string
+	Vendor    string
+	Start     int
+	Limit     int
+	Matched   bool
+	ID        string
+	TimeRange string
+	Since     time.Time
+	Until     time.Time
+}
+
+func parseFilterTime(s string, isEnd bool) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, layout := range formats {
+		if t, err := time.Parse(layout, s); err == nil {
+			if isEnd && layout == "2006-01-02" {
+				t = t.Add(24*time.Hour - time.Nanosecond)
+			}
+			return t, nil
+		}
+		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
+			if isEnd && layout == "2006-01-02" {
+				t = t.Add(24*time.Hour - time.Nanosecond)
+			}
+			return t, nil
+		}
+	}
+	if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
+		if sec > 1e11 {
+			return time.UnixMilli(sec), nil
+		}
+		return time.Unix(sec, 0), nil
+	}
+	return time.Time{}, fmt.Errorf("invalid time format: %s", s)
+}
+
+func parseTimeRangeDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return 0, nil
+	}
+	if strings.HasSuffix(s, "d") {
+		daysStr := strings.TrimSuffix(s, "d")
+		days, err := strconv.Atoi(daysStr)
+		if err != nil || days <= 0 {
+			return 0, fmt.Errorf("invalid days format: %s", s)
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	if strings.HasSuffix(s, "w") {
+		weeksStr := strings.TrimSuffix(s, "w")
+		weeks, err := strconv.Atoi(weeksStr)
+		if err != nil || weeks <= 0 {
+			return 0, fmt.Errorf("invalid weeks format: %s", s)
+		}
+		return time.Duration(weeks) * 7 * 24 * time.Hour, nil
+	}
+	if strings.HasSuffix(s, "y") {
+		yearsStr := strings.TrimSuffix(s, "y")
+		years, err := strconv.Atoi(yearsStr)
+		if err != nil || years <= 0 {
+			return 0, fmt.Errorf("invalid years format: %s", s)
+		}
+		return time.Duration(years) * 365 * 24 * time.Hour, nil
+	}
+	dur, err := time.ParseDuration(s)
+	if err != nil || dur <= 0 {
+		return 0, fmt.Errorf("invalid duration format: %s", s)
+	}
+	return dur, nil
 }
 
 // NewResponseFilterOptions creates a new options object from the request's query parameters.
@@ -1881,7 +1957,82 @@ func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 		opts.Limit = limit
 	}
 
+	// Parse time range parameters
+	timeRange := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("time_range")))
+	if timeRange == "" {
+		timeRange = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("timerange")))
+	}
+	if timeRange == "" {
+		timeRange = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
+	}
+	opts.TimeRange = timeRange
+
+	sinceStr := r.URL.Query().Get("since")
+	if sinceStr == "" {
+		sinceStr = r.URL.Query().Get("from")
+	}
+	if sinceStr == "" {
+		sinceStr = r.URL.Query().Get("start_time")
+	}
+
+	untilStr := r.URL.Query().Get("until")
+	if untilStr == "" {
+		untilStr = r.URL.Query().Get("to")
+	}
+	if untilStr == "" {
+		untilStr = r.URL.Query().Get("end_time")
+	}
+
+	if sinceStr != "" {
+		t, err := parseFilterTime(sinceStr, false)
+		if err != nil {
+			return nil, fmt.Errorf("invalid 'since' parameter: %w", err)
+		}
+		opts.Since = t
+	}
+
+	if untilStr != "" {
+		t, err := parseFilterTime(untilStr, true)
+		if err != nil {
+			return nil, fmt.Errorf("invalid 'until' parameter: %w", err)
+		}
+		opts.Until = t
+	}
+
+	if !opts.Since.IsZero() && !opts.Until.IsZero() && opts.Since.After(opts.Until) {
+		return nil, fmt.Errorf("'since' time cannot be after 'until' time")
+	}
+
+	if opts.Since.IsZero() && timeRange != "" && timeRange != "all" && timeRange != "custom" {
+		dur, err := parseTimeRangeDuration(timeRange)
+		if err != nil {
+			return nil, fmt.Errorf("invalid 'time_range' parameter: %w", err)
+		}
+		refTime := time.Now()
+		if !opts.Until.IsZero() {
+			refTime = opts.Until
+		}
+		opts.Since = refTime.Add(-dur)
+	}
+
 	return opts, nil
+}
+
+func determineLookbackTime(r *http.Request, opts *ResponseFilterOptions, defaultExpiry time.Duration) time.Time {
+	searchID := r.URL.Query().Get("id")
+	if defaultExpiry <= 0 {
+		defaultExpiry = 24 * time.Hour
+	}
+	if r.URL.Query().Get("archived") == "true" || searchID != "" || opts.TimeRange == "all" {
+		return time.Time{}
+	}
+	if !opts.Since.IsZero() {
+		return opts.Since
+	}
+	if !opts.Until.IsZero() {
+		return time.Time{}
+	}
+	return time.Now().Add(-defaultExpiry)
 }
 
 func (s *Server) GetRuntimeHandler(w http.ResponseWriter, r *http.Request) {
@@ -1917,14 +2068,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 
 	// Determine time range
 	searchID := r.URL.Query().Get("id")
-	lookbackWindow := s.Cache.ResponseExpiry
-	if lookbackWindow <= 0 {
-		lookbackWindow = 24 * time.Hour
-	}
-	lookbackTime := time.Now().Add(-lookbackWindow)
-	if r.URL.Query().Get("archived") == "true" || searchID != "" {
-		lookbackTime = time.Time{}
-	}
+	lookbackTime := determineLookbackTime(r, options, s.Cache.ResponseExpiry)
 
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
@@ -1951,8 +2095,10 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 			fmt.Fprintf(w, "No response found with ID: %s", searchID)
 		} else if options.Matched {
 			fmt.Fprint(w, "No matched responses found.")
-		} else {
+		} else if options.Vendor != "" {
 			fmt.Fprintf(w, "No responses found for vendor: %s", options.Vendor)
+		} else {
+			fmt.Fprint(w, "No responses found in the selected time range.")
 		}
 		return
 	}
@@ -2152,7 +2298,22 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 		filtered = matched
 	}
 
-	// 4. sort
+	// 4. Apply Time Range Filter
+	if !opts.Since.IsZero() || !opts.Until.IsZero() {
+		var timeFiltered []ResponseItem
+		for _, v := range filtered {
+			if !opts.Since.IsZero() && v.Time.Before(opts.Since) {
+				continue
+			}
+			if !opts.Until.IsZero() && v.Time.After(opts.Until) {
+				continue
+			}
+			timeFiltered = append(timeFiltered, v)
+		}
+		filtered = timeFiltered
+	}
+
+	// 5. sort
 	type sortableItem struct {
 		item        ResponseItem
 		threatLevel int
@@ -2745,15 +2906,7 @@ func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request
 
 	// 2. Determine time range
 	searchID := r.URL.Query().Get("id")
-	lookbackWindow := s.Cache.ResponseExpiry
-	if lookbackWindow <= 0 {
-		lookbackWindow = 24 * time.Hour
-	}
-	lookbackTime := time.Now().Add(-lookbackWindow)
-	// If searching by ID or looking at archives, ignore the time limit
-	if r.URL.Query().Get("archived") == "true" || searchID != "" {
-		lookbackTime = time.Time{}
-	}
+	lookbackTime := determineLookbackTime(r, options, s.Cache.ResponseExpiry)
 
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()

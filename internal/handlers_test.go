@@ -488,3 +488,196 @@ func TestCleanLLMHTMLReport(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFilterTime(t *testing.T) {
+	// RFC3339
+	parsed, err := parseFilterTime("2026-10-22T14:30:00Z", false)
+	if err != nil {
+		t.Fatalf("unexpected error parsing RFC3339: %v", err)
+	}
+	if parsed.UTC().Hour() != 14 || parsed.UTC().Minute() != 30 {
+		t.Errorf("expected 14:30, got %v", parsed)
+	}
+
+	// HTML datetime-local
+	parsedLocal, err := parseFilterTime("2026-10-22T14:30", false)
+	if err != nil {
+		t.Fatalf("unexpected error parsing datetime-local: %v", err)
+	}
+	if parsedLocal.Hour() != 14 || parsedLocal.Minute() != 30 {
+		t.Errorf("expected 14:30, got %v", parsedLocal)
+	}
+
+	// Date only - start of day vs end of day
+	startDate, err := parseFilterTime("2026-10-22", false)
+	if err != nil {
+		t.Fatalf("unexpected error parsing start date: %v", err)
+	}
+	if startDate.Hour() != 0 || startDate.Minute() != 0 {
+		t.Errorf("expected start of day 00:00, got %v", startDate)
+	}
+
+	endDate, err := parseFilterTime("2026-10-22", true)
+	if err != nil {
+		t.Fatalf("unexpected error parsing end date: %v", err)
+	}
+	if endDate.Hour() != 23 || endDate.Minute() != 59 {
+		t.Errorf("expected end of day 23:59, got %v", endDate)
+	}
+
+	// Empty string
+	empty, err := parseFilterTime("", false)
+	if err != nil || !empty.IsZero() {
+		t.Errorf("expected zero time for empty string, got %v, err=%v", empty, err)
+	}
+
+	// Invalid format
+	_, err = parseFilterTime("not-a-date", false)
+	if err == nil {
+		t.Error("expected error for invalid date format")
+	}
+}
+
+func TestParseTimeRangeDuration(t *testing.T) {
+	tests := []struct {
+		input string
+		want  time.Duration
+		err   bool
+	}{
+		{"15m", 15 * time.Minute, false},
+		{"1h", 1 * time.Hour, false},
+		{"6h", 6 * time.Hour, false},
+		{"24h", 24 * time.Hour, false},
+		{"7d", 7 * 24 * time.Hour, false},
+		{"30d", 30 * 24 * time.Hour, false},
+		{"2w", 14 * 24 * time.Hour, false},
+		{"1y", 365 * 24 * time.Hour, false},
+		{"invalid", 0, true},
+		{"-5h", 0, true},
+		{"0d", 0, true},
+	}
+
+	for _, tt := range tests {
+		got, err := parseTimeRangeDuration(tt.input)
+		if (err != nil) != tt.err {
+			t.Errorf("parseTimeRangeDuration(%q) error = %v, wantErr = %v", tt.input, err, tt.err)
+		}
+		if got != tt.want {
+			t.Errorf("parseTimeRangeDuration(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestNewResponseFilterOptions_TimeRange(t *testing.T) {
+	// Preset 24h
+	req1 := httptest.NewRequest("GET", "/getresponses?time_range=24h", nil)
+	opts1, err := NewResponseFilterOptions(req1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opts1.TimeRange != "24h" {
+		t.Errorf("expected TimeRange=24h, got %s", opts1.TimeRange)
+	}
+	if opts1.Since.IsZero() || time.Since(opts1.Since) < 23*time.Hour || time.Since(opts1.Since) > 25*time.Hour {
+		t.Errorf("expected Since around 24 hours ago, got %v", opts1.Since)
+	}
+
+	// Preset all
+	reqAll := httptest.NewRequest("GET", "/getresponses?time_range=all", nil)
+	optsAll, err := NewResponseFilterOptions(reqAll)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if optsAll.TimeRange != "all" {
+		t.Errorf("expected TimeRange=all, got %s", optsAll.TimeRange)
+	}
+	if !optsAll.Since.IsZero() {
+		t.Errorf("expected zero Since for 'all', got %v", optsAll.Since)
+	}
+
+	// Custom range
+	reqCustom := httptest.NewRequest("GET", "/getresponses?time_range=custom&since=2026-10-01T10:00:00Z&until=2026-10-05T18:00:00Z", nil)
+	optsCustom, err := NewResponseFilterOptions(reqCustom)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if optsCustom.Since.UTC().Day() != 1 || optsCustom.Until.UTC().Day() != 5 {
+		t.Errorf("custom range mismatch: Since=%v, Until=%v", optsCustom.Since, optsCustom.Until)
+	}
+
+	// Invalid range where since > until
+	reqBad := httptest.NewRequest("GET", "/getresponses?since=2026-10-05T00:00:00Z&until=2026-10-01T00:00:00Z", nil)
+	_, err = NewResponseFilterOptions(reqBad)
+	if err == nil {
+		t.Error("expected error when since > until")
+	}
+}
+
+func TestApplyResponseFilters_TimeRange(t *testing.T) {
+	now := time.Now()
+	r1 := ResponseItem{ID: "r1", Vendor: "v1", Data: []byte(`{"value":"test1"}`), Time: now.Add(-30 * time.Minute)}
+	r2 := ResponseItem{ID: "r2", Vendor: "v1", Data: []byte(`{"value":"test2"}`), Time: now.Add(-2 * time.Hour)}
+	r3 := ResponseItem{ID: "r3", Vendor: "v1", Data: []byte(`{"value":"test3"}`), Time: now.Add(-3 * 24 * time.Hour)}
+	r4 := ResponseItem{ID: "r4", Vendor: "v1", Data: []byte(`{"value":"test4"}`), Time: now.Add(-10 * 24 * time.Hour)}
+	responses := []ResponseItem{r1, r2, r3, r4}
+
+	// Filter: Last 1 hour -> should include r1 only
+	opts1 := &ResponseFilterOptions{
+		Since: now.Add(-1 * time.Hour),
+	}
+	res1 := applyResponseFilters(responses, opts1, "")
+	if len(res1) != 1 || res1[0].ID != "r1" {
+		t.Errorf("expected [r1], got %+v", res1)
+	}
+
+	// Filter: Between 5 days ago and 1 day ago -> should include r3 only
+	opts2 := &ResponseFilterOptions{
+		Since: now.Add(-5 * 24 * time.Hour),
+		Until: now.Add(-1 * 24 * time.Hour),
+	}
+	res2 := applyResponseFilters(responses, opts2, "")
+	if len(res2) != 1 || res2[0].ID != "r3" {
+		t.Errorf("expected [r3], got %+v", res2)
+	}
+
+	// Filter: All time (no since/until) -> should include all 4
+	optsAll := &ResponseFilterOptions{}
+	resAll := applyResponseFilters(responses, optsAll, "")
+	if len(resAll) != 4 {
+		t.Errorf("expected 4 responses, got %d", len(resAll))
+	}
+}
+
+func TestDetermineLookbackTime(t *testing.T) {
+	defaultWindow := 24 * time.Hour
+
+	// Default without options -> lookback is ~24h ago
+	req := httptest.NewRequest("GET", "/getresponses", nil)
+	opts := &ResponseFilterOptions{}
+	lb := determineLookbackTime(req, opts, defaultWindow)
+	if lb.IsZero() || time.Since(lb) < 23*time.Hour {
+		t.Errorf("expected ~24h lookback, got %v", lb)
+	}
+
+	// Archived checked -> zero time
+	reqArchived := httptest.NewRequest("GET", "/getresponses?archived=true", nil)
+	lbArchived := determineLookbackTime(reqArchived, opts, defaultWindow)
+	if !lbArchived.IsZero() {
+		t.Errorf("expected zero time for archived, got %v", lbArchived)
+	}
+
+	// time_range=all -> zero time
+	optsAll := &ResponseFilterOptions{TimeRange: "all"}
+	lbAll := determineLookbackTime(req, optsAll, defaultWindow)
+	if !lbAll.IsZero() {
+		t.Errorf("expected zero time for all, got %v", lbAll)
+	}
+
+	// Specific Since -> lookback equals Since
+	sinceTime := time.Now().Add(-7 * 24 * time.Hour)
+	optsSince := &ResponseFilterOptions{Since: sinceTime}
+	lbSince := determineLookbackTime(req, optsSince, defaultWindow)
+	if !lbSince.Equal(sinceTime) {
+		t.Errorf("expected lookback to equal Since %v, got %v", sinceTime, lbSince)
+	}
+}
