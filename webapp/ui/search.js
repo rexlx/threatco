@@ -659,7 +659,7 @@ export class SearchController {
         }
 
         const matchedCount = resultsArray.filter(r => 
-            r.matched === true || r.matched === 'true' || (typeof r.threat_level_id === 'number' && r.threat_level_id > 0)
+            r.matched === true || r.matched === 'true' || (typeof r.threat_level_id === 'number' && r.threat_level_id > 1)
         ).length;
 
         const terminalWindow = document.createElement('div');
@@ -700,14 +700,14 @@ export class SearchController {
         for (const result of resultsArray) {
             const isMatched = result.matched === true || 
                               result.matched === 'true' || 
-                              (typeof result.threat_level_id === 'number' && result.threat_level_id > 0);
+                              (typeof result.threat_level_id === 'number' && result.threat_level_id > 1);
 
             const item = document.createElement('div');
             item.className = `terminal-result-item ${isMatched ? 'is-match' : 'is-clean'}`;
             item.setAttribute('data-matched', isMatched ? 'true' : 'false');
 
             const threatScore = result.threat_level_id ?? 0;
-            const threatScoreClass = threatScore > 0 ? 'terminal-v-score-high' : '';
+            const threatScoreClass = threatScore > 1 ? 'terminal-v-score-high' : '';
 
             // Status badge color-coded highlight element
             const statusBadgeHtml = isMatched ? `

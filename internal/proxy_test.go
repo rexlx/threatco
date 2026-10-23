@@ -143,8 +143,8 @@ func TestVirusTotalProxyHelper_LegacyVT(t *testing.T) {
 		t.Errorf("Expected sum.Info to be %q, got %q", expectedInfo, sum.Info)
 	}
 
-	if sum.Background != "has-background-warning-dark" {
-		t.Errorf("Expected background 'has-background-warning-dark', got %q", sum.Background)
+	if sum.Background != "has-background-warning" {
+		t.Errorf("Expected background 'has-background-warning', got %q", sum.Background)
 	}
 
 	if sum.AttrCount != 2 {

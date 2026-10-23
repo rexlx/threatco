@@ -351,6 +351,11 @@ func TestNoiseFiltering(t *testing.T) {
 		"research/25",
 		"post/ve-cve-2026-0826-critical-unauthenticated-stack-buffer-overflow-hp-poly-vvx-trio-voip-phones-fixed",
 		"j/operation-zero-disco-cisco-snmp-vulnerability-exploit.html",
+		"20.466z",
+		"20.466Z",
+		"0.123z",
+		"20.466utc",
+		"20.466gmt",
 	}
 
 	for _, sample := range noisySamples {
@@ -366,8 +371,18 @@ func TestNoiseFiltering(t *testing.T) {
 		})
 	}
 
+	t.Run("TimestampNoiseInLog", func(t *testing.T) {
+		logLine := `2024-05-12T08:12:20.466Z [INFO] connecting to evil.com from 8.8.8.8`
+		res := c.ExtractAll(logLine)
+		for _, m := range res["filename"] {
+			if m.Value == "20.466z" || m.Value == "20.466Z" {
+				t.Errorf("Partial timestamp matched as filename: %s", m.Value)
+			}
+		}
+	})
+
 	t.Run("ValidIOCsPreserved", func(t *testing.T) {
-		legit := "Detected 1.214.214.114 connecting to trendmicro.com and www.rapid7.com via config/iface.yaml using ubnt-idsips-daemon.so"
+		legit := "Detected 1.214.214.114 connecting to trendmicro.com and www.rapid7.com via config/iface.yaml using ubnt-idsips-daemon.so and 123.7z"
 		res := c.ExtractAll(legit)
 
 		expectedMatches := map[string]string{
@@ -388,6 +403,17 @@ func TestNoiseFiltering(t *testing.T) {
 			if !found {
 				t.Errorf("Expected legitimate IOC %q in %s, but not found. Got: %+v", expectedVal, kind, res[kind])
 			}
+		}
+
+		found7z := false
+		for _, m := range res["filename"] {
+			if m.Value == "123.7z" {
+				found7z = true
+				break
+			}
+		}
+		if !found7z {
+			t.Errorf("Expected 123.7z in filename, got: %+v", res["filename"])
 		}
 	})
 }

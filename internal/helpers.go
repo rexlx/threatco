@@ -263,20 +263,25 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 			info := "received multiple hits: "
 			var maxScore int
 			for _, r := range response {
-				rawScore, _ := strconv.Atoi(r.ThreatLevelID)
-				if rawScore > maxScore {
-					maxScore = rawScore
+				score := ScoreMispThreat(r.ThreatLevelID)
+				if score > maxScore {
+					maxScore = score
 				}
 				info += fmt.Sprintf("ID %s: %s; ", r.ID, r.Info)
 			}
 			info = truncateString(info, 150)
-			// Map the 0-100 score to the 1-5 ThreatLevelID
-			tid := GetThreatLevelID("misp", maxScore, WeightMISP)
+			matched := maxScore > 0
+			tid := 0
+			bg := "has-background-primary-dark"
+			if matched {
+				bg = "has-background-warning"
+				tid = GetThreatLevelID("misp", maxScore, WeightMISP)
+			}
 			return json.Marshal(SummarizedEvent{
-				Matched:       true,
+				Matched:       matched,
 				Timestamp:     time.Now(),
 				Info:          info,
-				Background:    "has-background-warning",
+				Background:    bg,
 				From:          req.To,
 				ID:            "multiple hits",
 				AttrCount:     attrs,
@@ -293,13 +298,18 @@ func ParseOtherMispResponse(req ProxyRequest, response []vendors.MispEvent) ([]b
 				fmt.Println("got bad attr data from misp...")
 				attrs = 0
 			}
-			// Use ScoreMispThreat to convert MISP's 1-4 scale to 0-100, then map to 1-5
-			rawScore, _ := strconv.Atoi(response[0].ThreatLevelID)
-			tid := GetThreatLevelID("misp", rawScore, WeightMISP)
+			score := ScoreMispThreat(response[0].ThreatLevelID)
+			matched := score > 0
+			tid := 0
+			bg := "has-background-primary-dark"
+			if matched {
+				bg = "has-background-warning"
+				tid = GetThreatLevelID("misp", score, WeightMISP)
+			}
 			return json.Marshal(SummarizedEvent{
-				Matched:       true,
+				Matched:       matched,
 				Timestamp:     time.Now(),
-				Background:    "has-background-warning",
+				Background:    bg,
 				From:          req.To,
 				ID:            response[0].ID,
 				AttrCount:     attrs,
@@ -387,16 +397,12 @@ func NewParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRes
 	var mispID string
 
 	for _, r := range response.Response {
-		// 1. Calculate the raw 0-100 score
-		// normalizedScore := ScoreMispThreat(r.Event.ThreatLevelID)
-		rawScore, _ := strconv.Atoi(r.Event.ThreatLevelID)
-
-		// 2. Track the highest score found (Worst Case Strategy)
-		if rawScore > maxScore {
-			maxScore = rawScore
+		score := ScoreMispThreat(r.Event.ThreatLevelID)
+		if score > maxScore {
+			maxScore = score
 		}
-
-		info += fmt.Sprintf("ID %s (Score: %d); ", r.Event.ID, rawScore)
+		rawTid, _ := strconv.Atoi(r.Event.ThreatLevelID)
+		info += fmt.Sprintf("ID %s (Threat Level: %d); ", r.Event.ID, rawTid)
 		attrs += len(r.Event.Attribute)
 
 		// 3. Handle ID label cleanly
@@ -408,26 +414,28 @@ func NewParseCorrectMispResponse(req ProxyRequest, response vendors.MispEventRes
 		totalEvents++
 	}
 
-	if maxScore > 0 {
+	matched := maxScore > 0
+	tid := 0
+	if matched {
 		bg = "has-background-warning"
+		if maxScore >= 80 {
+			bg = "has-background-warning"
+		}
+		tid = GetThreatLevelID("misp", maxScore, WeightMISP)
 	}
-	tid := GetThreatLevelID("misp", maxScore, WeightMISP)
 	e := SummarizedEvent{
-		Matched:    maxScore > 0,
-		Timestamp:  time.Now(),
-		Info:       truncateString(info, 150),
-		Background: bg,
-		From:       req.To,
-		ID:         mispID,
-		AttrCount:  attrs,
-
-		// 4. FIX: Map the 0-100 score to your DB ID (1-5)
+		Matched:       matched,
+		Timestamp:     time.Now(),
+		Info:          truncateString(info, 150),
+		Background:    bg,
+		From:          req.To,
+		ID:            mispID,
+		AttrCount:     attrs,
 		ThreatLevelID: tid,
-
-		Value:   req.Value,
-		Link:    req.TransactionID,
-		Type:    req.Type,
-		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(e)
 }
@@ -701,11 +709,13 @@ func (s *Server) LiveryHelper(name string, file UploadHandler) ([]byte, error) {
 }
 
 type matchResponse struct {
-	Matched bool   `json:"matched"`
-	Kind    string `json:"kind"`
-	Value   string `json:"value"`
-	ID      int    `json:"id,omitempty"`
-	Created int64  `json:"created,omitempty"`
+	Matched       bool   `json:"matched"`
+	Kind          string `json:"kind"`
+	Value         string `json:"value"`
+	ID            int    `json:"id,omitempty"`
+	Created       int64  `json:"created,omitempty"`
+	ThreatLevelID int    `json:"threat_level_id,omitempty"`
+	Score         int    `json:"score,omitempty"`
 }
 
 func DeleteConfigFile(fh string) error {
@@ -869,18 +879,29 @@ func (s *Server) MandiantHelper(req ProxyRequest) ([]byte, error) {
 		info = fmt.Sprintf(info, ind.Mscore, "no attributed associations")
 	}
 
+	matched := ind.Mscore > 50
+	bg := "has-background-primary-dark"
+	var tid int
+	if matched {
+		bg = "has-background-warning"
+		if ind.Mscore >= 80 {
+			bg = "has-background-warning"
+		}
+		tid = GetThreatLevelID("mandiant", ind.Mscore, WeightMandiant)
+	}
+
 	sum := SummarizedEvent{
 		ID:            ind.ID,
 		AttrCount:     attrCount,
-		ThreatLevelID: ind.ThreatRating.ThreatScore,
+		ThreatLevelID: tid,
 		Timestamp:     time.Now(),
-		Background:    "has-background-warning",
+		Background:    bg,
 		Info:          info,
 		From:          req.To,
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		// Link:       fmt.Sprintf("%s%s/events/%s", s.Details.FQDN, s.Details.Address, req.TransactionID),
-		Matched: true,
+		Matched: matched,
 		Type:    req.Type,
 		RawLink: fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}

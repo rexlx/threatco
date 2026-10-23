@@ -87,20 +87,27 @@ func SweetShellProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	}
 
 	// Logic to map the reputation string to UI elements
-	matched := response.Reputation != "unknown" && response.Reputation != ""
+	rep := strings.ToLower(response.Reputation)
 	bg := "has-background-primary-dark"
 	var threatID int
+	var matched bool
 
-	switch strings.ToLower(response.Reputation) {
+	switch rep {
 	case "malicious":
-		bg = "has-background-warning-dark"
+		bg = "has-background-warning"
 		threatID = 4 // High/Critical
+		matched = true
 	case "suspicious":
 		bg = "has-background-warning"
 		threatID = 2 // Medium
+		matched = true
 	case "clean":
-		bg = "has-background-success-dark"
+		bg = "has-background-primary-dark"
 		threatID = 0
+		matched = false
+	default:
+		threatID = 0
+		matched = false
 	}
 
 	// Build a descriptive info string for the UI
@@ -274,17 +281,33 @@ func DeepFryProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 	if !response.Matched {
 		return CreateAndWriteSummarizedEvent(req, false, "no hits")
 	}
+
+	threatID := 0
+	matched := false
+	bg := "has-background-primary-dark"
+
+	if response.ThreatLevelID > ThreatLevelSafe || response.Score > 0 {
+		matched = true
+		bg = "has-background-warning"
+		if response.ThreatLevelID > 0 {
+			threatID = response.ThreatLevelID
+		} else if response.Score > 0 {
+			threatID = GetThreatLevelID("deepfry", response.Score, WeightDeepfry)
+		}
+	}
+
 	sum = SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: "has-background-warning",
-		Info:       fmt.Sprintf("found %s with id %d", response.Value, response.ID),
-		From:       req.To,
-		Value:      response.Value,
-		Link:       req.TransactionID,
-		Matched:    true,
-		Type:       req.Type,
-		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
-		SearchedBy: req.Username,
+		Timestamp:     time.Now(),
+		Background:    bg,
+		Info:          fmt.Sprintf("found %s with id %d", response.Value, response.ID),
+		From:          req.To,
+		Value:         response.Value,
+		Link:          req.TransactionID,
+		Matched:       matched,
+		ThreatLevelID: threatID,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		SearchedBy:    req.Username,
 	}
 
 	return json.Marshal(sum)
@@ -417,12 +440,17 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 	info = fmt.Sprintf(info, mscore, maxSeverity, len(associations))
 
 	// Dynamic background color based on threat score
-	bg := "has-background-warning"
-	if mscore >= 80 {
-		bg = "has-background-warning-dark"
+	matched := mscore > 50
+	bg := "has-background-primary-dark"
+	var tid int
+	if matched {
+		bg = "has-background-warning"
+		if mscore >= 80 {
+			bg = "has-background-warning"
+		}
+		tid = GetThreatLevelID("mandiant", mscore, WeightMandiant) // Uses weights in proxy.go
 	}
 
-	tid := GetThreatLevelID("mandiant", mscore, WeightMandiant) // Uses weights in proxy.go
 	sum := SummarizedEvent{
 		ID:            Iid,
 		AttrCount:     len(totalAttribution) + len(associations),
@@ -434,7 +462,7 @@ func MandiantProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		SearchedBy:    req.Username,
-		Matched:       mscore > 50,
+		Matched:       matched,
 		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		Type:          req.Type,
 	}
@@ -507,13 +535,18 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	if req.To == "gti" || req.To == "googlethreatintel" {
 		weight = WeightGTI
 	}
-	threatID := GetThreatLevelID(req.To, maliciousCount, weight)
-
+	var threatID int
 	background := "has-background-primary-dark"
-	if stats.Malicious > 0 {
-		background = "has-background-warning-dark"
-	} else if stats.Suspicious > 0 {
-		background = "has-background-warning"
+	if matched {
+		threatID = GetThreatLevelID(req.To, maliciousCount, weight)
+		if threatID < ThreatLevelLow {
+			threatID = ThreatLevelLow
+		}
+		if stats.Malicious > 0 {
+			background = "has-background-warning"
+		} else if stats.Suspicious > 0 {
+			background = "has-background-warning"
+		}
 	}
 
 	infoParts := []string{
@@ -537,7 +570,7 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 			if threatID < ThreatLevelHigh {
 				threatID = ThreatLevelHigh
 			}
-			background = "has-background-warning-dark"
+			background = "has-background-warning"
 		} else if strings.EqualFold(attrs.GTIAssessment.Verdict, "SUSPICIOUS") || strings.EqualFold(attrs.GTIAssessment.Severity, "MEDIUM") {
 			matched = true
 			if threatID < ThreatLevelMedium {
@@ -562,6 +595,12 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	if len(actorNames) > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Actors: %s", strings.Join(uniqueStrings(actorNames), ", ")))
 		matched = true
+		if threatID < ThreatLevelMedium {
+			threatID = ThreatLevelMedium
+		}
+		if background == "has-background-primary-dark" {
+			background = "has-background-warning"
+		}
 	}
 
 	var assocNames []string
@@ -573,6 +612,17 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	if len(assocNames) > 0 {
 		infoParts = append(infoParts, fmt.Sprintf("Mandiant: %s", strings.Join(uniqueStrings(assocNames), ", ")))
 		matched = true
+		if threatID < ThreatLevelMedium {
+			threatID = ThreatLevelMedium
+		}
+		if background == "has-background-primary-dark" {
+			background = "has-background-warning"
+		}
+	}
+
+	if !matched {
+		threatID = 0
+		background = "has-background-primary-dark"
 	}
 
 	info := strings.Join(infoParts, " | ")
@@ -686,19 +736,28 @@ func CrowdstrikeProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 	if len(reports) > 100 {
 		reports = reports[:100] + "..."
 	}
-	threatID := GetThreatLevelID("crowdstrike", rawScore, WeightCrowdstrike)
+	matched := rawScore > 0 || len(resc.ThreatTypes) > 0
+	bg := "has-background-primary-dark"
+	threatID := 0
+	if matched {
+		bg = "has-background-warning"
+		if rawScore >= 80 {
+			bg = "has-background-warning"
+		}
+		threatID = GetThreatLevelID("crowdstrike", rawScore, WeightCrowdstrike)
+	}
 	info = fmt.Sprintf(info, len(resc.Reports), reports, len(resc.Labels))
 	// s.Log.Printf("CrowdstrikeHelper: found %d reports (%v) for value with %v labels", len(resc.Reports), reports, len(resc.Labels))
 	event := SummarizedEvent{
 		AttrCount:     len(resc.Labels),
 		Timestamp:     time.Now(),
-		Background:    "has-background-warning",
+		Background:    bg,
 		Info:          info,
 		From:          req.To,
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		ThreatLevelID: threatID,
-		Matched:       len(resc.Reports) > 0,
+		Matched:       matched,
 		SearchedBy:    req.Username,
 	}
 	return json.Marshal(event)
@@ -795,15 +854,41 @@ func SplunkProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) 
 	resItem.Data = mergedData
 	resch <- resItem
 
+	var suspiciousHits int
+	for _, res := range results {
+		raw := strings.ToLower(res.Raw)
+		if strings.Contains(raw, "threat") || strings.Contains(raw, "malicious") ||
+			strings.Contains(raw, "blocked") || strings.Contains(raw, "deny") ||
+			strings.Contains(raw, "drop") || strings.Contains(raw, "suspicious") ||
+			strings.Contains(raw, "alert") || strings.Contains(raw, "attack") {
+			suspiciousHits++
+		}
+	}
+	matched := suspiciousHits > 0
+	bg := "has-background-primary-dark"
+	var tid int
+	if matched {
+		bg = "has-background-warning"
+		tid = ThreatLevelMedium
+		if suspiciousHits >= 5 {
+			bg = "has-background-warning"
+			tid = ThreatLevelHigh
+		}
+	}
+
 	sum := SummarizedEvent{
-		SearchedBy: req.Username,
-		Timestamp:  time.Now(),
-		Background: "has-background-warning",
-		Info:       fmt.Sprintf("found %d results for value", len(results)),
-		From:       req.To,
-		Value:      req.Value,
-		ID:         "",
-		Link:       req.TransactionID,
+		SearchedBy:    req.Username,
+		Timestamp:     time.Now(),
+		Background:    bg,
+		Info:          fmt.Sprintf("found %d results for value (%d suspicious)", len(results), suspiciousHits),
+		From:          req.To,
+		Value:         req.Value,
+		ID:            "",
+		Link:          req.TransactionID,
+		Matched:       matched,
+		ThreatLevelID: tid,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
 }
@@ -881,13 +966,13 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 		case float64:
 			return json.Marshal(SummarizedEvent{
 				Timestamp:  time.Now(),
-				Background: "has-background-warning",
+				Background: "has-background-primary-dark",
 				Info:       fmt.Sprintf("domaintools results count was %v", results),
 				From:       req.To,
 				Value:      req.Value,
 				Link:       req.TransactionID,
 				SearchedBy: req.Username,
-				Matched:    int(results.(float64)) > 0,
+				Matched:    false,
 				AttrCount:  int(results.(float64)),
 				Type:       req.Type,
 				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
@@ -910,14 +995,17 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 	}
 	info = fmt.Sprintf("domaintools returned profile data for %v (%v)", response.Response.Server.IPAddress, response.Response.Registrant.Name)
 	sum := SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: "has-background-warning",
-		Info:       info,
-		SearchedBy: req.Username,
-		From:       req.To,
-		Value:      req.Value,
-		Link:       req.TransactionID,
-		Matched:    true,
+		Timestamp:     time.Now(),
+		Background:    "has-background-primary-dark",
+		Info:          info,
+		SearchedBy:    req.Username,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		Matched:       false,
+		ThreatLevelID: 0,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 	return json.Marshal(sum)
 	// return resp, nil
@@ -1015,7 +1103,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 				Value:      req.Value,
 				Link:       req.TransactionID,
 				AttrCount:  int(results.(float64)),
-				Matched:    int(results.(float64)) > 0,
+				Matched:    false,
 				Type:       req.Type,
 				RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 				SearchedBy: req.Username,
@@ -1050,7 +1138,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 			Value:      req.Value,
 			Link:       req.TransactionID,
 			AttrCount:  response.Response.ResultsCount,
-			Matched:    response.Response.ResultsCount > 0,
+			Matched:    false,
 			Type:       req.Type,
 			RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 		})
@@ -1097,13 +1185,15 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		info = "Domain found but no risk detected"
 	}
 
-	tid := GetThreatLevelID("domaintoolsiris", maxRisk, WeightDomainToolsIris)
-	// Determine background color based on risk
-	bg := "has-background-info" // Default (blue)
-	if maxRisk >= 70 {
-		bg = "has-background-warning-dark" // High risk (red)
-	} else if maxRisk > 0 {
-		bg = "has-background-warning" // Moderate risk (yellow)
+	matched := maxRisk > 0
+	var tid int
+	bg := "has-background-primary-dark"
+	if matched {
+		tid = GetThreatLevelID("domaintoolsiris", maxRisk, WeightDomainToolsIris)
+		bg = "has-background-warning"
+		if maxRisk >= 70 {
+			bg = "has-background-warning"
+		}
 	}
 
 	sum := SummarizedEvent{
@@ -1115,8 +1205,8 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 		Value:         req.Value,
 		Link:          req.TransactionID,
 		AttrCount:     response.Response.ResultsCount,
-		ThreatLevelID: tid,         // Use the actual risk score here
-		Matched:       maxRisk > 0, // Only flag as 'Matched' (alerting) if there is actual risk
+		ThreatLevelID: tid,     // Use the actual risk score here
+		Matched:       matched, // Only flag as 'Matched' (alerting) if there is actual risk
 		Type:          req.Type,
 		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
@@ -1200,14 +1290,24 @@ func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 		// }
 	}
 
-	// 3. Normalize and map to ThreatLevelID
-	threatID := GetThreatLevelID("urlscan", rawScore, WeightURLScan)
+	matched := rawScore > 0
+	if res.Verdicts != nil && (res.Verdicts.Malicious || (res.Verdicts.URLScan != nil && res.Verdicts.URLScan.Malicious)) {
+		matched = true
+		if rawScore < 50 {
+			rawScore = 50
+		}
+	}
 
+	// 3. Normalize and map to ThreatLevelID
+	var threatID int
 	bg := "has-background-primary-dark"
-	if threatID >= ThreatLevelHigh {
-		bg = "has-background-warning-dark"
-	} else if threatID >= ThreatLevelLow {
-		bg = "has-background-warning"
+	if matched {
+		threatID = GetThreatLevelID("urlscan", rawScore, WeightURLScan)
+		if threatID >= ThreatLevelHigh {
+			bg = "has-background-warning"
+		} else {
+			bg = "has-background-warning"
+		}
 	}
 
 	info := fmt.Sprintf("found %d results. Top Result: %s (Rank: %d)",
@@ -1222,7 +1322,7 @@ func URLScanProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest)
 		Value:         req.Value,
 		ID:            res.ID,
 		Link:          req.TransactionID,
-		Matched:       rawScore > 0,
+		Matched:       matched,
 		ThreatLevelID: threatID,
 		Type:          req.Type,
 		RawLink:       fmt.Sprintf("https://urlscan.io/result/%s/", res.ID),
@@ -1295,6 +1395,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	resch <- resItem
 
 	fmt.Println("CloudflareProxyHelper: processing response for", req.Value, "of type", req.Type)
+	var riskScore int
 	switch req.Type {
 	case "domain", "url":
 		var response vendors.CloudFlareDomainResponse
@@ -1310,7 +1411,8 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		}
 
 		result := response.Result
-		matched = result.RiskScore > 0
+		riskScore = result.RiskScore
+		matched = result.RiskScore > 0 || len(result.RiskTypes) > 0
 		riskTypes := []string{}
 		for _, rt := range result.RiskTypes {
 			riskTypes = append(riskTypes, rt.Name)
@@ -1332,7 +1434,8 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		}
 
 		result := response.Result[0]
-		matched = result.RiskScore > 0
+		riskScore = result.RiskScore
+		matched = result.RiskScore > 0 || len(result.RiskTypes) > 0
 		riskTypes := []string{}
 		for _, rt := range result.RiskTypes {
 			riskTypes = append(riskTypes, rt.Name)
@@ -1342,24 +1445,34 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 
 	}
 
-	if !matched {
+	var threatID int
+	if matched {
+		threatID = GetThreatLevelID("cloudflare", riskScore, WeightCloudflare)
+		if threatID >= ThreatLevelHigh {
+			background = "has-background-warning"
+		} else {
+			background = "has-background-warning"
+		}
+	} else {
 		background = "has-background-primary-dark"
 		info = "no hits found"
+		threatID = 0
 	}
 
 	// Create the summarized event for the UI
 	sum := SummarizedEvent{
-		Timestamp:  time.Now(),
-		Background: background,
-		Info:       info,
-		From:       req.To,
-		Value:      req.Value,
-		Link:       req.TransactionID,
-		SearchedBy: req.Username,
-		Matched:    matched,
-		AttrCount:  attrCount,
-		Type:       req.Type,
-		RawLink:    fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
+		Timestamp:     time.Now(),
+		Background:    background,
+		Info:          info,
+		From:          req.To,
+		Value:         req.Value,
+		Link:          req.TransactionID,
+		SearchedBy:    req.Username,
+		Matched:       matched,
+		ThreatLevelID: threatID,
+		AttrCount:     attrCount,
+		Type:          req.Type,
+		RawLink:       fmt.Sprintf("%s/events/%s", req.FQDN, req.TransactionID),
 	}
 
 	return json.Marshal(sum)
@@ -1418,17 +1531,20 @@ func AbuseIPDBProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReques
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 
-	matched := response.Data.AbuseConfidenceScore > 0
+	matched := response.Data.AbuseConfidenceScore > 0 && response.Data.TotalReports > 0
 	bg := "has-background-primary-dark"
-	if response.Data.AbuseConfidenceScore >= 75 {
-		bg = "has-background-warning-dark"
-	} else if matched {
-		bg = "has-background-warning"
+	var threatID int
+	if matched {
+		threatID = GetThreatLevelID("abuseipdb", response.Data.AbuseConfidenceScore, WeightAbuseIPDB)
+		if response.Data.AbuseConfidenceScore >= 75 {
+			bg = "has-background-warning"
+		} else {
+			bg = "has-background-warning"
+		}
 	}
 
 	info := fmt.Sprintf("Score: %d%% | Reports: %d | ISP: %s",
 		response.Data.AbuseConfidenceScore, response.Data.TotalReports, response.Data.ISP)
-	threatID := GetThreatLevelID("abuseipdb", response.Data.AbuseConfidenceScore, WeightAbuseIPDB)
 	sum := SummarizedEvent{
 		Timestamp:     time.Now(),
 		Background:    bg,
@@ -1512,12 +1628,13 @@ func OTXProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequest) ([]
 
 	matched := response.PulseInfo.Count > 0
 	bg := "has-background-primary-dark"
+	var threatID int
 	if matched {
 		bg = "has-background-warning"
+		threatID = GetThreatLevelID("otx", response.PulseInfo.Count, WeightOTX)
 	}
 
 	info := fmt.Sprintf("Found in %d OTX Pulses", response.PulseInfo.Count)
-	threatID := GetThreatLevelID("otx", response.PulseInfo.Count, WeightOTX)
 	sum := SummarizedEvent{
 		Timestamp:     time.Now(),
 		Background:    bg,
@@ -1548,7 +1665,7 @@ func ThreatcoInternalCaseSearchBuilder(db Database) ProxyOperator {
 
 		if matched {
 			tid = 4
-			background = "has-background-warning-dark"
+			background = "has-background-warning"
 			names := make([]string, 0, len(cases))
 			for _, c := range cases {
 				names = append(names, c.Name)

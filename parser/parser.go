@@ -361,10 +361,11 @@ var (
 	reColons = regexp.MustCompile(`(?i)\[:\]`)
 
 	// Noise filter patterns
-	reMetricOrDuration = regexp.MustCompile(`(?i)^\d+(\.\d+)?(ns|us|µs|ms|s|m|h|d|kb|mb|gb|tb|b|%|fps|hz|khz|mhz|ghz)$`)
-	reSystemdUnit      = regexp.MustCompile(`(?i)\.(service|scope|slice|socket|target|timer|mount|automount|swap|device)$`)
-	reLogTokenSuffix   = regexp.MustCompile(`(?i)\.(detection|version|actions)$`)
-	reProcPath         = regexp.MustCompile(`(?i)^/?proc/\d+`)
+	reMetricOrDuration  = regexp.MustCompile(`(?i)^\d+(\.\d+)?(ns|us|µs|ms|s|m|h|d|kb|mb|gb|tb|b|%|fps|hz|khz|mhz|ghz)$`)
+	reSystemdUnit       = regexp.MustCompile(`(?i)\.(service|scope|slice|socket|target|timer|mount|automount|swap|device)$`)
+	reLogTokenSuffix    = regexp.MustCompile(`(?i)\.(detection|version|actions)$`)
+	reProcPath          = regexp.MustCompile(`(?i)^/?proc/\d+`)
+	reTimestampFragment = regexp.MustCompile(`(?i)^(\d+[-_T:]?)*\d+\.\d+(z|utc|gmt)$`)
 )
 
 func isNoiseValue(val string) bool {
@@ -379,6 +380,9 @@ func isNoiseValue(val string) bool {
 		return true
 	}
 	if reLogTokenSuffix.MatchString(val) {
+		return true
+	}
+	if reTimestampFragment.MatchString(val) && !strings.HasSuffix(strings.ToLower(val), ".7z") {
 		return true
 	}
 	if strings.HasPrefix(strings.ToLower(val), "org.freedesktop") {
