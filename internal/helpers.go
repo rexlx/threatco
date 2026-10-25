@@ -741,6 +741,18 @@ func GetDBHost() string {
 	return host
 }
 
+func sanitizeChartID(name string) string {
+	var sb strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune('_')
+		}
+	}
+	return sb.String()
+}
+
 func createLineChart(seriesName string, data []Coord) *charts.Line {
 	line := charts.NewLine()
 	line.SetGlobalOptions(

@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"bytes"
 	"fmt"
 	"html"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -253,16 +255,39 @@ func (s *Server) AddServicesHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) ChartViewHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
+	hasData := len(s.Cache.Coordinates) > 0 && len(s.Cache.Charts) > 0 && !bytes.Equal(s.Cache.Charts, []byte(views.NoDataView))
+	s.Memory.RUnlock()
+
+	if !hasData {
+		s.UpdateCharts()
+	}
+
+	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
-	out := fmt.Sprintf(`
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 2rem; width: 100%%; padding: 2rem 0;">
-            %s
-        </div>`,
-		s.Cache.Charts)
+	if len(s.Cache.Coordinates) == 0 || len(s.Cache.Charts) == 0 || bytes.Equal(s.Cache.Charts, []byte(views.NoDataView)) {
+		fmt.Fprintf(w, views.BaseView, views.ChartsEmptySection)
+		return
+	}
+
+	keys := make([]string, 0, len(s.Cache.Coordinates))
+	for k := range s.Cache.Coordinates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var options strings.Builder
+	for _, k := range keys {
+		chartID := sanitizeChartID(k)
+		options.WriteString(fmt.Sprintf(`<option value="chart-%s">%s</option>`, chartID, html.EscapeString(k)))
+	}
+
+	chartsContent := string(s.Cache.Charts)
+	out := fmt.Sprintf(views.ChartsViewSection, len(keys), options.String(), chartsContent)
 
 	fmt.Fprintf(w, views.BaseView, out)
 }
+
 func (s *Server) ViewResponsesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, views.ResponsesListView)
 }

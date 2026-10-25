@@ -897,3 +897,171 @@ pre {
     max-width: 100%;
     overflow-x: auto; /* Adds horizontal scrollbar only if content exceeds width */
 }
+
+/* --- Charts View & Navigation --- */
+.charts-nav-bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(11, 20, 28, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    border-radius: 8px;
+    padding: 0.65rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.charts-nav-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.charts-title-icon {
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+.charts-nav-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.charts-nav-title {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #38bdf8;
+    letter-spacing: 0.04em;
+}
+
+.charts-count-badge {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.charts-nav-center {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.charts-jump-label {
+    background-color: #070d14 !important;
+    border-color: rgba(56, 189, 248, 0.25) !important;
+    color: #94a3b8 !important;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.75rem !important;
+}
+
+#chartNavSelect {
+    background-color: #0b141c;
+    border-color: rgba(56, 189, 248, 0.3);
+    color: #f1f5f9;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.8rem;
+    min-width: 220px;
+}
+
+#chartNavSelect:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.charts-mode-buttons .button {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.75rem;
+}
+
+.charts-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.charts-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    width: 100%;
+}
+
+.chart-card-wrapper {
+    background-color: #070d14 !important;
+    border: 1px solid rgba(56, 189, 248, 0.2) !important;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    width: 950px;
+    max-width: 100%;
+    margin-bottom: 0 !important;
+    position: relative;
+    scroll-margin-top: 85px; /* Offset to clear the sticky navbar when scrolled to */
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.chart-card-wrapper:hover {
+    border-color: rgba(56, 189, 248, 0.45) !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.12);
+}
+
+.chart-card-wrapper.chart-highlight {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 28px rgba(56, 189, 248, 0.5) !important;
+}
+
+.chart-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.12);
+}
+
+.chart-title-tag {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #38bdf8;
+    box-shadow: 0 0 8px #38bdf8;
+    display: inline-block;
+}
+
+.chart-title-text {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: 0.02em;
+}
+
+.chart-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-card-actions .button {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.72rem;
+    height: 2em;
+}
+

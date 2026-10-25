@@ -45,6 +45,8 @@ func main() {
 
 	feedTicker := time.NewTicker(4 * time.Hour)
 
+	s.UpdateCharts()
+
 	go func() {
 		go s.SimpleServiceCheck()
 		go s.PollVulnerabilityFeeds()

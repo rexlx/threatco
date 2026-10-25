@@ -1031,7 +1031,12 @@ func (s *Server) UpdateCharts() {
 	s.Details.Stats["pause_total_ns"] = float64(m.PauseTotalNs) / 1000000
 	s.Details.Stats["go_memstats_alloc_bytes_total"] = float64(m.TotalAlloc)
 	s.Details.Stats["go_memstats_frees_total"] = float64(m.Frees)
-	s.Gauges.WithLabelValues("vendor_responses").Set(s.Details.Stats["vendor_responses"])
+	if s.Gauges != nil {
+		s.Gauges.WithLabelValues("vendor_responses").Set(s.Details.Stats["vendor_responses"])
+	}
+	if s.Cache.Coordinates == nil {
+		s.Cache.Coordinates = make(map[string][]Coord)
+	}
 	for i, stat := range s.Details.Stats {
 		_, ok := s.Cache.Coordinates[i]
 		if !ok {
@@ -1043,12 +1048,33 @@ func (s *Server) UpdateCharts() {
 		s.Cache.Coordinates[i] = append(s.Cache.Coordinates[i], Coord{Value: stat, Time: time.Now().Unix()})
 	}
 
+	keys := make([]string, 0, len(s.Cache.Coordinates))
+	for k := range s.Cache.Coordinates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var buf bytes.Buffer
-	for k, v := range s.Cache.Coordinates {
+	for _, k := range keys {
+		v := s.Cache.Coordinates[k]
 		chart := createLineChart(k, v)
 		snippet := chart.RenderSnippet()
+		chartID := sanitizeChartID(k)
+		buf.WriteString(fmt.Sprintf(`<div class="chart-wrapper chart-card-wrapper box has-background-custom" id="chart-%s" data-chart-name="%s">`, chartID, html.EscapeString(k)))
+		buf.WriteString(fmt.Sprintf(`
+			<div class="chart-header-bar">
+				<div class="chart-title-tag">
+					<span class="chart-status-indicator"></span>
+					<span class="chart-title-text">%s</span>
+				</div>
+				<div class="chart-card-actions">
+					<button type="button" class="button is-small is-dark is-outlined focus-this-chart-btn" data-target="chart-%s" title="Focus only on this chart">Focus</button>
+					<a href="#charts-top" class="button is-small is-dark is-outlined" title="Scroll to top navigation">↑ Top</a>
+				</div>
+			</div>`, html.EscapeString(k), chartID))
 		buf.Write([]byte(snippet.Element))
 		buf.Write([]byte(snippet.Script))
+		buf.WriteString(`</div>`)
 	}
 	s.Cache.Charts = buf.Bytes()
 }
