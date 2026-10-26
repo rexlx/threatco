@@ -296,47 +296,106 @@ func (s *Server) ViewServicesHandler(w http.ResponseWriter, r *http.Request) {
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
-	serviceDiv := `<div class="box has-background-black">
-<div class="columns is-multiline">`
+	services := make([]ServiceType, len(s.Details.SupportedServices))
+	copy(services, s.Details.SupportedServices)
 
-	for _, service := range s.Details.SupportedServices {
-		// Create a unique modal ID for each service
-		modalID := fmt.Sprintf("modal-%s", service.Kind)
+	sort.Slice(services, func(i, j int) bool {
+		nameI := services[i].Name
+		if nameI == "" {
+			nameI = services[i].Kind
+		}
+		nameJ := services[j].Name
+		if nameJ == "" {
+			nameJ = services[j].Kind
+		}
+		return strings.ToLower(nameI) < strings.ToLower(nameJ)
+	})
 
-		serviceDiv += fmt.Sprintf(`
-<div class="column is-3"> 
-	<div class="card has-background-custom service-card">
-		<div class="card-content">
-			<p class="title has-text-primary is-4 open-modal" data-modal-id="%s" style="cursor: pointer">%s</p>
-			<div class="content">
-				<p class="has-text-white">%v</p>
+	uniqueTypes := make(map[string]bool)
+	var rows strings.Builder
+
+	if len(services) == 0 {
+		rows.WriteString(`<div class="terminal-placeholder">No threat intelligence services currently registered.</div>`)
+	} else {
+		for _, svc := range services {
+			for _, t := range svc.Type {
+				uniqueTypes[strings.ToLower(t)] = true
+			}
+
+			displayName := svc.Name
+			if displayName == "" {
+				displayName = svc.Kind
+			}
+
+			desc := svc.Description
+			if strings.TrimSpace(desc) == "" {
+				desc = fmt.Sprintf("Active %s intelligence integration for artifact lookups and indicator queries.", svc.Kind)
+			}
+
+			sortedTypes := make([]string, len(svc.Type))
+			copy(sortedTypes, svc.Type)
+			sort.Strings(sortedTypes)
+
+			var typeBadges strings.Builder
+			for _, t := range sortedTypes {
+				typeBadges.WriteString(fmt.Sprintf(`<span class="service-type-pill" data-type="%s" title="Filter by %s">%s</span>`, html.EscapeString(t), html.EscapeString(t), html.EscapeString(t)))
+			}
+
+			var metaBadges strings.Builder
+			if svc.RateLimited {
+				if svc.MaxRequests > 0 && svc.RefillRate > 0 {
+					metaBadges.WriteString(fmt.Sprintf(`<span class="service-meta-pill is-rate-limited">Rate-Limited (%d req / %ds)</span>`, svc.MaxRequests, svc.RefillRate))
+				} else {
+					metaBadges.WriteString(`<span class="service-meta-pill is-rate-limited">Rate-Limited</span>`)
+				}
+			}
+			if svc.UploadService {
+				metaBadges.WriteString(`<span class="service-meta-pill is-upload">Upload Service</span>`)
+			}
+			if svc.Insecure {
+				metaBadges.WriteString(`<span class="service-meta-pill is-insecure">Insecure TLS</span>`)
+			}
+			if svc.AuthType != "" {
+				metaBadges.WriteString(fmt.Sprintf(`<span class="service-meta-pill">Auth: %s</span>`, html.EscapeString(svc.AuthType)))
+			}
+
+			searchKeywords := strings.ToLower(fmt.Sprintf("%s %s %s %s", displayName, svc.Kind, desc, strings.Join(sortedTypes, " ")))
+
+			rows.WriteString(fmt.Sprintf(`
+<div class="service-row-item" data-search="%s">
+	<div class="service-row-header">
+		<div class="service-identity">
+			<span class="service-name">%s</span>
+			<span class="service-vendor-badge">%s</span>
+			<span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>ONLINE</span>
+			<div class="service-meta-badges">
+				%s
 			</div>
 		</div>
+		<div class="service-types-count">%d supported types</div>
 	</div>
-
-	<div class="modal" id="%s">
-		<div class="modal-background"></div>
-		<div class="modal-card">
-			<header class="modal-card-head has-background-custom">
-				<p class="modal-card-title has-text-primary">%s types</p>
-				<button class="delete close-modal" aria-label="close"></button>
-			</header>
-			<section class="modal-card-body has-background-custom">
-				<ul>
-`, modalID, service.Kind, service.Description, modalID, service.Kind)
-
-		// Loop through service types
-		for _, t := range service.Type {
-			serviceDiv += fmt.Sprintf(`<li class="has-text-primary">%s</li>`, t)
-		}
-
-		serviceDiv += `</ul></section>
+	<div class="service-description">%s</div>
+	<div class="service-capabilities">
+		<span class="service-types-label">IOC TYPES:</span>
+		<div class="service-type-tags">
+			%s
 		</div>
 	</div>
-</div>`
+</div>`,
+				html.EscapeString(searchKeywords),
+				html.EscapeString(displayName),
+				html.EscapeString(strings.ToUpper(svc.Kind)),
+				metaBadges.String(),
+				len(sortedTypes),
+				html.EscapeString(desc),
+				typeBadges.String(),
+			))
+		}
 	}
 
-	serviceDiv += `</div></div>`
-	tempDiv := fmt.Sprintf(views.ViewSection, serviceDiv)
-	fmt.Fprintf(w, views.BaseView, tempDiv)
+	totalServices := len(services)
+	totalTypes := len(uniqueTypes)
+
+	out := fmt.Sprintf(views.ServicesViewSection, totalServices, totalTypes, rows.String(), totalServices, totalServices)
+	fmt.Fprintf(w, views.BaseView, out)
 }

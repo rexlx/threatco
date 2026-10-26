@@ -177,3 +177,91 @@ func TestSanitizeChartID(t *testing.T) {
 		}
 	}
 }
+
+func TestServer_ViewServicesHandler(t *testing.T) {
+	s := setupTestServer()
+	s.Details.SupportedServices = []ServiceType{
+		{
+			Name:        "virustotal-prod",
+			Kind:        "virustotal",
+			Description: "VirusTotal API integration for file and IP reputation",
+			Type:        []string{"md5", "sha256", "ipv4"},
+			RateLimited: true,
+			MaxRequests: 4,
+			RefillRate:  60,
+		},
+		{
+			Name:          "livery-upload",
+			Kind:          "livery",
+			Description:   "Livery sample analysis",
+			Type:          []string{"upload"},
+			UploadService: true,
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/services", nil)
+	rr := httptest.NewRecorder()
+
+	s.ViewServicesHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+
+	// Check header navigation & search
+	if !strings.Contains(body, "Threat Intelligence Services") {
+		t.Error("expected 'Threat Intelligence Services' title in response")
+	}
+	if !strings.Contains(body, `id="serviceSearchInput"`) {
+		t.Error("expected serviceSearchInput in response")
+	}
+	if !strings.Contains(body, `id="serviceViewer"`) {
+		t.Error("expected serviceViewer in response")
+	}
+
+	// Check services listed
+	if !strings.Contains(body, "virustotal-prod") {
+		t.Error("expected 'virustotal-prod' in response")
+	}
+	if !strings.Contains(body, "VIRUSTOTAL") {
+		t.Error("expected 'VIRUSTOTAL' badge in response")
+	}
+	if !strings.Contains(body, "Rate-Limited") {
+		t.Error("expected 'Rate-Limited' badge in response")
+	}
+	if !strings.Contains(body, "Upload Service") {
+		t.Error("expected 'Upload Service' badge in response")
+	}
+	if !strings.Contains(body, "md5") || !strings.Contains(body, "sha256") {
+		t.Error("expected IOC type pills in response")
+	}
+
+	// Check news section below services
+	if !strings.Contains(body, `id="news"`) {
+		t.Error("expected news section with id='news' in response")
+	}
+	if !strings.Contains(body, "threatco-bulletins.broadcast") {
+		t.Error("expected bulletins broadcast header in response")
+	}
+}
+
+func TestServer_ViewServicesHandler_Empty(t *testing.T) {
+	s := setupTestServer()
+	s.Details.SupportedServices = []ServiceType{}
+
+	req := httptest.NewRequest("GET", "/services", nil)
+	rr := httptest.NewRecorder()
+
+	s.ViewServicesHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "No threat intelligence services currently registered") {
+		t.Error("expected placeholder when no services are configured")
+	}
+}

@@ -5,7 +5,6 @@ var ChartsViewSection = `<section class="section has-background-black charts-sec
 		<!-- Sticky Chart Navigation Bar -->
 		<div class="charts-nav-bar" id="charts-top">
 			<div class="charts-nav-left">
-				<span class="charts-title-icon">📈</span>
 				<div class="charts-nav-title-group">
 					<span class="charts-nav-title">System Metrics</span>
 					<span class="tag is-info is-dark is-rounded charts-count-badge" id="chartCountBadge">%d charts</span>
