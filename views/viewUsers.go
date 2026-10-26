@@ -109,4 +109,3 @@ var UserTableBody string = `
 	</td>
 </tr>
 `
-
