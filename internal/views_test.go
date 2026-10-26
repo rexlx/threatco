@@ -45,6 +45,10 @@ func TestServer_AllUsersViewHandler(t *testing.T) {
 	adminUser := User{
 		Email: "admin@threat.co",
 		Admin: true,
+		Services: []ServiceType{
+			{Kind: "misp"},
+			{Kind: "virustotal"},
+		},
 	}
 	normalUser := User{
 		Email: "user@threat.co",
@@ -62,8 +66,56 @@ func TestServer_AllUsersViewHandler(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "admin@threat.co") {
+	body := rr.Body.String()
+	if !strings.Contains(body, "admin@threat.co") {
 		t.Errorf("expected response to contain 'admin@threat.co'")
+	}
+	if !strings.Contains(body, "User Accounts") {
+		t.Errorf("expected response to contain 'User Accounts'")
+	}
+	if !strings.Contains(body, `id="usersViewer"`) {
+		t.Errorf("expected response to contain usersViewer container")
+	}
+	if !strings.Contains(body, `id="userResults"`) {
+		t.Errorf("expected response to contain userResults container")
+	}
+	if !strings.Contains(body, `id="userSearchInput"`) {
+		t.Errorf("expected response to contain userSearchInput")
+	}
+	if !strings.Contains(body, "USER / EMAIL") || !strings.Contains(body, "ROLE") || !strings.Contains(body, "ACTIONS") {
+		t.Errorf("expected response to contain table column headers")
+	}
+	if !strings.Contains(body, "role-admin") {
+		t.Errorf("expected response to contain admin role badge")
+	}
+	if !strings.Contains(body, "user-you-tag") {
+		t.Errorf("expected response to contain 'you' tag for current user")
+	}
+	if !strings.Contains(body, "delete-user-btn") || !strings.Contains(body, "generate-key-btn") {
+		t.Errorf("expected response to contain action buttons")
+	}
+}
+
+func TestServer_AllUsersViewHandler_EmptySearch(t *testing.T) {
+	s := setupTestServer()
+	db := s.DB.(*MockDB)
+	db.users = []User{
+		{Email: "admin@threat.co", Admin: true},
+	}
+
+	req := httptest.NewRequest("GET", "/users?q=nonexistent_user", nil)
+	ctx := context.WithValue(req.Context(), "email", "admin@threat.co")
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	s.AllUsersViewHandler(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "No user accounts found") {
+		t.Errorf("expected response to show empty user message")
 	}
 }
 

@@ -28,13 +28,16 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	_users, err := s.DB.GetAllUsers()
+	rawUsers, err := s.DB.GetAllUsers()
 	if err != nil {
 		s.Log.Println("AllUsersViewHandler", err)
 	}
 
+	totalRawUsers := len(rawUsers)
+	_users := rawUsers
+
 	// 1. Filter users based on search query 'q'
-	searchQuery := r.URL.Query().Get("q")
+	searchQuery := strings.TrimSpace(r.URL.Query().Get("q"))
 	if searchQuery != "" {
 		filtered := []User{}
 		lowerQuery := strings.ToLower(searchQuery)
@@ -76,29 +79,77 @@ func (s *Server) AllUsersViewHandler(w http.ResponseWriter, r *http.Request) {
 	// Get paginated users
 	paginatedUsers := _users[startIdx:endIdx]
 
-	var deleteButton, newKeyButton string
-	users := ""
-	for _, u := range paginatedUsers {
-		if user.Admin || u.Email == email {
-			deleteButton = fmt.Sprintf(`<button class="button is-danger is-dark is-outlined delete-user-btn" data-email="%s">Delete</button>`, u.Email)
-			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined generate-key-btn" data-email="%s">New API Key</button>`, u.Email)
-		} else {
-			deleteButton = fmt.Sprintf(`<button class="button is-danger is-dark is-outlined delete-user-btn" data-email="%s" disabled>Delete</button>`, u.Email)
-			newKeyButton = fmt.Sprintf(`<button class="button is-warning is-outlined generate-key-btn" data-email="%s" disabled>New API Key</button>`, u.Email)
-		}
+	var users string
+	if len(paginatedUsers) == 0 {
+		users = `<tr><td colspan="6" class="terminal-placeholder">No user accounts found.</td></tr>`
+	} else {
+		for _, u := range paginatedUsers {
+			var deleteButton, newKeyButton string
+			if user.Admin || u.Email == email {
+				deleteButton = fmt.Sprintf(`<button class="button is-small terminal-action-btn terminal-btn-danger delete-user-btn" data-email="%s" title="Delete user account">Delete</button>`, html.EscapeString(u.Email))
+				newKeyButton = fmt.Sprintf(`<button class="button is-small terminal-action-btn generate-key-btn" data-email="%s" title="Generate new API key">New Key</button>`, html.EscapeString(u.Email))
+			} else {
+				deleteButton = fmt.Sprintf(`<button class="button is-small terminal-action-btn terminal-btn-danger delete-user-btn" data-email="%s" disabled title="Delete user account">Delete</button>`, html.EscapeString(u.Email))
+				newKeyButton = fmt.Sprintf(`<button class="button is-small terminal-action-btn generate-key-btn" data-email="%s" disabled title="Generate new API key">New Key</button>`, html.EscapeString(u.Email))
+			}
 
-		svcs := []string{}
-		for _, svc := range u.Services {
-			svcs = append(svcs, svc.Kind)
+			emailHTML := fmt.Sprintf(`<span class="user-email-text">%s</span>`, html.EscapeString(u.Email))
+			if u.Email == email {
+				emailHTML += ` <span class="user-you-tag">you</span>`
+			}
+
+			roleBadge := `<span class="role-badge role-user">USER</span>`
+			if u.Admin {
+				roleBadge = `<span class="role-badge role-admin">ADMIN</span>`
+			}
+
+			var servicesHTML string
+			if len(u.Services) == 0 {
+				servicesHTML = `<span class="user-no-services">—</span>`
+			} else {
+				var sb strings.Builder
+				sb.WriteString(`<div class="user-services-list">`)
+				for _, svc := range u.Services {
+					sb.WriteString(fmt.Sprintf(`<span class="service-meta-pill">%s</span>`, html.EscapeString(svc.Kind)))
+				}
+				sb.WriteString(`</div>`)
+				servicesHTML = sb.String()
+			}
+
+			createdStr := u.Created.Format("2006-01-02 15:04")
+			if u.Created.IsZero() {
+				createdStr = "—"
+			}
+
+			updatedStr := u.Updated.Format("2006-01-02 15:04")
+			if u.Updated.IsZero() {
+				updatedStr = "—"
+			}
+
+			users += fmt.Sprintf(views.UserTableBody, emailHTML, roleBadge, servicesHTML, createdStr, updatedStr, deleteButton, newKeyButton)
 		}
-		users += fmt.Sprintf(views.UserTableBody, u.Email, u.Admin, svcs, u.Created, u.Updated, deleteButton, newKeyButton)
 	}
 
 	// 3. Build pagination controls with search query preservation
 	paginationHTML := s.buildPaginationControls(page, totalPages, searchQuery)
 
-	// Inject the escaped search query, table body, and pagination
-	tempDiv := fmt.Sprintf(views.ViewUsersSection, html.EscapeString(searchQuery), users, paginationHTML)
+	countBadge := fmt.Sprintf("%d users", totalUsers)
+	clearBtn := ""
+	statusText := ""
+	if totalUsers == 0 {
+		statusText = "No registered accounts found"
+	} else {
+		statusText = fmt.Sprintf("Showing %d–%d of %d accounts", startIdx+1, endIdx, totalUsers)
+	}
+
+	if searchQuery != "" {
+		countBadge = fmt.Sprintf("%d / %d users", totalUsers, totalRawUsers)
+		clearBtn = `<div class="control"><a href="/users" class="button is-small is-dark" title="Clear filter">Clear</a></div>`
+		statusText += fmt.Sprintf(" (filtered by %q)", searchQuery)
+	}
+
+	// Inject into template: countBadge, searchQuery, clearBtn, users, statusText, paginationHTML
+	tempDiv := fmt.Sprintf(views.ViewUsersSection, countBadge, html.EscapeString(searchQuery), clearBtn, users, statusText, paginationHTML)
 	fmt.Fprintf(w, views.BaseView, tempDiv)
 }
 
