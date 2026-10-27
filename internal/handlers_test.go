@@ -489,195 +489,262 @@ func TestCleanLLMHTMLReport(t *testing.T) {
 	}
 }
 
-func TestParseFilterTime(t *testing.T) {
-	// RFC3339
-	parsed, err := parseFilterTime("2026-10-22T14:30:00Z", false)
-	if err != nil {
-		t.Fatalf("unexpected error parsing RFC3339: %v", err)
-	}
-	if parsed.UTC().Hour() != 14 || parsed.UTC().Minute() != 30 {
-		t.Errorf("expected 14:30, got %v", parsed)
-	}
-
-	// HTML datetime-local
-	parsedLocal, err := parseFilterTime("2026-10-22T14:30", false)
-	if err != nil {
-		t.Fatalf("unexpected error parsing datetime-local: %v", err)
-	}
-	if parsedLocal.Hour() != 14 || parsedLocal.Minute() != 30 {
-		t.Errorf("expected 14:30, got %v", parsedLocal)
-	}
-
-	// Date only - start of day vs end of day
-	startDate, err := parseFilterTime("2026-10-22", false)
-	if err != nil {
-		t.Fatalf("unexpected error parsing start date: %v", err)
-	}
-	if startDate.Hour() != 0 || startDate.Minute() != 0 {
-		t.Errorf("expected start of day 00:00, got %v", startDate)
-	}
-
-	endDate, err := parseFilterTime("2026-10-22", true)
-	if err != nil {
-		t.Fatalf("unexpected error parsing end date: %v", err)
-	}
-	if endDate.Hour() != 23 || endDate.Minute() != 59 {
-		t.Errorf("expected end of day 23:59, got %v", endDate)
-	}
-
-	// Empty string
-	empty, err := parseFilterTime("", false)
-	if err != nil || !empty.IsZero() {
-		t.Errorf("expected zero time for empty string, got %v, err=%v", empty, err)
-	}
-
-	// Invalid format
-	_, err = parseFilterTime("not-a-date", false)
-	if err == nil {
-		t.Error("expected error for invalid date format")
-	}
-}
-
-func TestParseTimeRangeDuration(t *testing.T) {
-	tests := []struct {
-		input string
-		want  time.Duration
-		err   bool
-	}{
-		{"15m", 15 * time.Minute, false},
-		{"1h", 1 * time.Hour, false},
-		{"6h", 6 * time.Hour, false},
-		{"24h", 24 * time.Hour, false},
-		{"7d", 7 * 24 * time.Hour, false},
-		{"30d", 30 * 24 * time.Hour, false},
-		{"2w", 14 * 24 * time.Hour, false},
-		{"1y", 365 * 24 * time.Hour, false},
-		{"invalid", 0, true},
-		{"-5h", 0, true},
-		{"0d", 0, true},
-	}
-
-	for _, tt := range tests {
-		got, err := parseTimeRangeDuration(tt.input)
-		if (err != nil) != tt.err {
-			t.Errorf("parseTimeRangeDuration(%q) error = %v, wantErr = %v", tt.input, err, tt.err)
-		}
-		if got != tt.want {
-			t.Errorf("parseTimeRangeDuration(%q) = %v, want %v", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestNewResponseFilterOptions_TimeRange(t *testing.T) {
-	// Preset 24h
-	req1 := httptest.NewRequest("GET", "/getresponses?time_range=24h", nil)
-	opts1, err := NewResponseFilterOptions(req1)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if opts1.TimeRange != "24h" {
-		t.Errorf("expected TimeRange=24h, got %s", opts1.TimeRange)
-	}
-	if opts1.Since.IsZero() || time.Since(opts1.Since) < 23*time.Hour || time.Since(opts1.Since) > 25*time.Hour {
-		t.Errorf("expected Since around 24 hours ago, got %v", opts1.Since)
-	}
-
-	// Preset all
-	reqAll := httptest.NewRequest("GET", "/getresponses?time_range=all", nil)
-	optsAll, err := NewResponseFilterOptions(reqAll)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if optsAll.TimeRange != "all" {
-		t.Errorf("expected TimeRange=all, got %s", optsAll.TimeRange)
-	}
-	if !optsAll.Since.IsZero() {
-		t.Errorf("expected zero Since for 'all', got %v", optsAll.Since)
-	}
-
-	// Custom range
-	reqCustom := httptest.NewRequest("GET", "/getresponses?time_range=custom&since=2026-10-01T10:00:00Z&until=2026-10-05T18:00:00Z", nil)
-	optsCustom, err := NewResponseFilterOptions(reqCustom)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if optsCustom.Since.UTC().Day() != 1 || optsCustom.Until.UTC().Day() != 5 {
-		t.Errorf("custom range mismatch: Since=%v, Until=%v", optsCustom.Since, optsCustom.Until)
-	}
-
-	// Invalid range where since > until
-	reqBad := httptest.NewRequest("GET", "/getresponses?since=2026-10-05T00:00:00Z&until=2026-10-01T00:00:00Z", nil)
-	_, err = NewResponseFilterOptions(reqBad)
-	if err == nil {
-		t.Error("expected error when since > until")
-	}
-}
-
-func TestApplyResponseFilters_TimeRange(t *testing.T) {
+func TestApplyResponseFilters(t *testing.T) {
 	now := time.Now()
-	r1 := ResponseItem{ID: "r1", Vendor: "v1", Data: []byte(`{"value":"test1"}`), Time: now.Add(-30 * time.Minute)}
-	r2 := ResponseItem{ID: "r2", Vendor: "v1", Data: []byte(`{"value":"test2"}`), Time: now.Add(-2 * time.Hour)}
-	r3 := ResponseItem{ID: "r3", Vendor: "v1", Data: []byte(`{"value":"test3"}`), Time: now.Add(-3 * 24 * time.Hour)}
-	r4 := ResponseItem{ID: "r4", Vendor: "v1", Data: []byte(`{"value":"test4"}`), Time: now.Add(-10 * 24 * time.Hour)}
+	r1 := ResponseItem{ID: "r1", Vendor: "virustotal", Data: []byte(`{"value":"1.1.1.1","matched":true}`), Time: now}
+	r2 := ResponseItem{ID: "r2", Vendor: "virustotal", Data: []byte(`{"value":"2.2.2.2","matched":false}`), Time: now}
+	r3 := ResponseItem{ID: "r3", Vendor: "splunk", Data: []byte(`{"value":"test3","matched":true}`), Time: now}
+	r4 := ResponseItem{ID: "r4", Vendor: "misp", Data: []byte(`{"value":"test4","matched":false}`), Time: now}
 	responses := []ResponseItem{r1, r2, r3, r4}
 
-	// Filter: Last 1 hour -> should include r1 only
-	opts1 := &ResponseFilterOptions{
-		Since: now.Add(-1 * time.Hour),
-	}
-	res1 := applyResponseFilters(responses, opts1, "")
-	if len(res1) != 1 || res1[0].ID != "r1" {
-		t.Errorf("expected [r1], got %+v", res1)
+	// 1. Filter by ID (Highest priority)
+	resID := applyResponseFilters(responses, &ResponseFilterOptions{}, "r2")
+	if len(resID) != 1 || resID[0].ID != "r2" {
+		t.Errorf("expected [r2], got %+v", resID)
 	}
 
-	// Filter: Between 5 days ago and 1 day ago -> should include r3 only
-	opts2 := &ResponseFilterOptions{
-		Since: now.Add(-5 * 24 * time.Hour),
-		Until: now.Add(-1 * 24 * time.Hour),
-	}
-	res2 := applyResponseFilters(responses, opts2, "")
-	if len(res2) != 1 || res2[0].ID != "r3" {
-		t.Errorf("expected [r3], got %+v", res2)
+	// 2. Filter by Vendor
+	resVendor := applyResponseFilters(responses, &ResponseFilterOptions{Vendor: "virustotal"}, "")
+	if len(resVendor) != 2 {
+		t.Errorf("expected 2 virustotal responses, got %d", len(resVendor))
 	}
 
-	// Filter: All time (no since/until) -> should include all 4
-	optsAll := &ResponseFilterOptions{}
-	resAll := applyResponseFilters(responses, optsAll, "")
+	// 3. Filter by Matched
+	resMatched := applyResponseFilters(responses, &ResponseFilterOptions{Matched: true}, "")
+	if len(resMatched) != 2 {
+		t.Errorf("expected 2 matched responses, got %d", len(resMatched))
+	}
+
+	// 4. Filter by Vendor + Matched
+	resCombined := applyResponseFilters(responses, &ResponseFilterOptions{Vendor: "virustotal", Matched: true}, "")
+	if len(resCombined) != 1 || resCombined[0].ID != "r1" {
+		t.Errorf("expected [r1], got %+v", resCombined)
+	}
+
+	// 5. No filters -> returns all
+	resAll := applyResponseFilters(responses, &ResponseFilterOptions{}, "")
 	if len(resAll) != 4 {
 		t.Errorf("expected 4 responses, got %d", len(resAll))
 	}
 }
 
-func TestDetermineLookbackTime(t *testing.T) {
-	defaultWindow := 24 * time.Hour
+func TestServer_GetResponseCacheHandler2_WithData(t *testing.T) {
+	s := setupTestServer()
+	db := s.DB.(*MockDB)
 
-	// Default without options -> lookback is ~24h ago
+	now := time.Now()
+	db.responses = []ResponseItem{
+		{
+			ID:     "resp-12345",
+			Vendor: "virustotal",
+			Data:   []byte(`{"value":"192.168.1.1","matched":true}`),
+			Time:   now.Add(-10 * time.Minute),
+		},
+		{
+			ID:     "resp-67890",
+			Vendor: "llm_tools",
+			Data:   []byte(`{"value":"evil.domain.com","matched":false}`),
+			Time:   now.Add(-20 * time.Minute),
+		},
+	}
+
 	req := httptest.NewRequest("GET", "/getresponses", nil)
-	opts := &ResponseFilterOptions{}
-	lb := determineLookbackTime(req, opts, defaultWindow)
-	if lb.IsZero() || time.Since(lb) < 23*time.Hour {
-		t.Errorf("expected ~24h lookback, got %v", lb)
+	rr := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
 
-	// Archived checked -> zero time
-	reqArchived := httptest.NewRequest("GET", "/getresponses?archived=true", nil)
-	lbArchived := determineLookbackTime(reqArchived, opts, defaultWindow)
-	if !lbArchived.IsZero() {
-		t.Errorf("expected zero time for archived, got %v", lbArchived)
+	total := rr.Header().Get("X-Total-Count")
+	if total != "2" {
+		t.Errorf("expected X-Total-Count=2, got %s", total)
 	}
 
-	// time_range=all -> zero time
-	optsAll := &ResponseFilterOptions{TimeRange: "all"}
-	lbAll := determineLookbackTime(req, optsAll, defaultWindow)
-	if !lbAll.IsZero() {
-		t.Errorf("expected zero time for all, got %v", lbAll)
+	body := rr.Body.String()
+
+	// Verify terminal table wrapper and classes
+	if !strings.Contains(body, "terminal-table-container") {
+		t.Errorf("expected body to contain 'terminal-table-container'")
+	}
+	if !strings.Contains(body, "terminal-table users-table responses-table") {
+		t.Errorf("expected body to contain 'terminal-table users-table responses-table'")
+	}
+	if !strings.Contains(body, "terminal-table-row") {
+		t.Errorf("expected body to contain 'terminal-table-row'")
 	}
 
-	// Specific Since -> lookback equals Since
-	sinceTime := time.Now().Add(-7 * 24 * time.Hour)
-	optsSince := &ResponseFilterOptions{Since: sinceTime}
-	lbSince := determineLookbackTime(req, optsSince, defaultWindow)
-	if !lbSince.Equal(sinceTime) {
-		t.Errorf("expected lookback to equal Since %v, got %v", sinceTime, lbSince)
+	// Verify header columns
+	for _, col := range []string{"TIME", "VENDOR", "VALUE", "ACTIONS"} {
+		if !strings.Contains(body, col) {
+			t.Errorf("expected header column %s in body", col)
+		}
+	}
+
+	// Verify styling elements
+	if !strings.Contains(body, "service-meta-pill") {
+		t.Errorf("expected vendor pill class")
+	}
+	if !strings.Contains(body, "terminal-action-btn") {
+		t.Errorf("expected terminal action button class")
+	}
+	if !strings.Contains(body, "user-action-group") {
+		t.Errorf("expected user action group wrapper")
+	}
+	if !strings.Contains(body, "delete-btn") {
+		t.Errorf("expected delete button class")
+	}
+	if !strings.Contains(body, "dns-lookup-btn") {
+		t.Errorf("expected dns-lookup-btn for IP address")
+	}
+	if !strings.Contains(body, "has-text-warning has-text-weight-bold") {
+		t.Errorf("expected matched value highlight")
+	}
+	if !strings.Contains(body, "/events/resp-12345") {
+		t.Errorf("expected event view link")
+	}
+	if !strings.Contains(body, "/aireport?id=resp-67890") {
+		t.Errorf("expected AI report link for llm_tools")
+	}
+
+	// Test Vendor filter
+	reqVendor := httptest.NewRequest("GET", "/getresponses?vendor=virustotal", nil)
+	rrVendor := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrVendor, reqVendor)
+	if rrVendor.Header().Get("X-Total-Count") != "1" {
+		t.Errorf("expected X-Total-Count=1 for vendor filter, got %s", rrVendor.Header().Get("X-Total-Count"))
+	}
+
+	// Test Matched filter
+	reqMatched := httptest.NewRequest("GET", "/getresponses?matched=true", nil)
+	rrMatched := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrMatched, reqMatched)
+	if rrMatched.Header().Get("X-Total-Count") != "1" {
+		t.Errorf("expected X-Total-Count=1 for matched filter, got %s", rrMatched.Header().Get("X-Total-Count"))
+	}
+
+	// Test ID filter
+	reqID := httptest.NewRequest("GET", "/getresponses?id=resp-67890", nil)
+	rrID := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrID, reqID)
+	if rrID.Header().Get("X-Total-Count") != "1" {
+		t.Errorf("expected X-Total-Count=1 for ID filter, got %s", rrID.Header().Get("X-Total-Count"))
+	}
+}
+
+func TestServer_GetResponseCacheHandler2_Empty(t *testing.T) {
+	s := setupTestServer()
+	db := s.DB.(*MockDB)
+	db.responses = []ResponseItem{}
+
+	req := httptest.NewRequest("GET", "/getresponses", nil)
+	rr := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	total := rr.Header().Get("X-Total-Count")
+	if total != "0" {
+		t.Errorf("expected X-Total-Count=0, got %s", total)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "terminal-placeholder") {
+		t.Errorf("expected terminal placeholder in empty table")
+	}
+	if !strings.Contains(body, "No responses found.") {
+		t.Errorf("expected empty message")
+	}
+}
+
+func TestServer_GetResponseCacheHandler2_Archived(t *testing.T) {
+	s := setupTestServer()
+	db := s.DB.(*MockDB)
+
+	now := time.Now()
+	db.responses = []ResponseItem{
+		{
+			ID:     "active-1",
+			Vendor: "virustotal",
+			Data:   []byte(`{"value":"active.domain.com","matched":false}`),
+			Time:   now.Add(-10 * time.Minute),
+		},
+	}
+	db.archivedResponses = []ResponseItem{
+		{
+			ID:     "archived-1",
+			Vendor: "virustotal",
+			Data:   []byte(`{"value":"archived.domain.com","matched":true}`),
+			Time:   now.Add(-30 * 24 * time.Hour),
+		},
+		{
+			ID:     "archived-2",
+			Vendor: "cloudflare",
+			Data:   []byte(`{"value":"1.1.1.1","matched":false}`),
+			Time:   now.Add(-60 * 24 * time.Hour),
+		},
+	}
+
+	// 1. Unarchived request - should only return active responses
+	reqActive := httptest.NewRequest("GET", "/getresponses", nil)
+	rrActive := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrActive, reqActive)
+
+	if rrActive.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rrActive.Code)
+	}
+	if total := rrActive.Header().Get("X-Total-Count"); total != "1" {
+		t.Errorf("expected X-Total-Count=1 for active responses, got %s", total)
+	}
+	bodyActive := rrActive.Body.String()
+	if !strings.Contains(bodyActive, "active-1") {
+		t.Errorf("expected active response 'active-1' in active response list")
+	}
+	if strings.Contains(bodyActive, "archived-1") || strings.Contains(bodyActive, "archived-2") {
+		t.Errorf("expected no archived responses in active response list")
+	}
+
+	// 2. Archived request - should only return archived responses
+	reqArchived := httptest.NewRequest("GET", "/getresponses?start=0&limit=100&archived=true", nil)
+	rrArchived := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrArchived, reqArchived)
+
+	if rrArchived.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rrArchived.Code)
+	}
+	if total := rrArchived.Header().Get("X-Total-Count"); total != "2" {
+		t.Errorf("expected X-Total-Count=2 for archived responses, got %s", total)
+	}
+	bodyArchived := rrArchived.Body.String()
+	if strings.Contains(bodyArchived, "active-1") {
+		t.Errorf("expected no active responses in archived response list")
+	}
+	if !strings.Contains(bodyArchived, "archived-1") || !strings.Contains(bodyArchived, "archived-2") {
+		t.Errorf("expected archived responses in archived response list")
+	}
+
+	// 3. Archived with vendor filter
+	reqArchivedVendor := httptest.NewRequest("GET", "/getresponses?start=0&limit=100&archived=true&vendor=virustotal", nil)
+	rrArchivedVendor := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrArchivedVendor, reqArchivedVendor)
+	if total := rrArchivedVendor.Header().Get("X-Total-Count"); total != "1" {
+		t.Errorf("expected X-Total-Count=1 for archived vendor filter, got %s", total)
+	}
+	if !strings.Contains(rrArchivedVendor.Body.String(), "archived-1") {
+		t.Errorf("expected 'archived-1' for virustotal vendor filter")
+	}
+
+	// 4. Empty archived responses
+	db.archivedResponses = []ResponseItem{}
+	reqEmptyArchived := httptest.NewRequest("GET", "/getresponses?start=0&limit=100&archived=true", nil)
+	rrEmptyArchived := httptest.NewRecorder()
+	s.GetResponseCacheHandler2(rrEmptyArchived, reqEmptyArchived)
+	if total := rrEmptyArchived.Header().Get("X-Total-Count"); total != "0" {
+		t.Errorf("expected X-Total-Count=0 for empty archived, got %s", total)
+	}
+	if !strings.Contains(rrEmptyArchived.Body.String(), "No archived responses found.") {
+		t.Errorf("expected 'No archived responses found.' message")
 	}
 }

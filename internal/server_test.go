@@ -15,10 +15,11 @@ import (
 )
 
 type MockDB struct {
-	responses     []ResponseItem
-	cases         map[string]Case
-	users         []User
-	notifications map[string][]Notification
+	responses         []ResponseItem
+	archivedResponses []ResponseItem
+	cases             map[string]Case
+	users             []User
+	notifications     map[string][]Notification
 }
 
 func (m *MockDB) CleanResponses(t time.Duration) error { return nil }
@@ -40,7 +41,12 @@ func (m *MockDB) AddService(st ServiceType) error                   { return nil
 func (m *MockDB) GetTokenByValue(tk string) (Token, error)          { return Token{}, nil }
 func (m *MockDB) SaveToken(t Token) error                           { return nil }
 func (m *MockDB) StoreResponse(archive bool, id string, data []byte, vendor string) error {
-	m.responses = append(m.responses, ResponseItem{ID: id, Data: data, Vendor: vendor, Time: time.Now()})
+	item := ResponseItem{ID: id, Data: data, Vendor: vendor, Time: time.Now()}
+	if archive {
+		m.archivedResponses = append(m.archivedResponses, item)
+	} else {
+		m.responses = append(m.responses, item)
+	}
 	return nil
 }
 func (m *MockDB) GetResponse(id string) ([]byte, error) {
@@ -49,10 +55,18 @@ func (m *MockDB) GetResponse(id string) ([]byte, error) {
 			return r.Data, nil
 		}
 	}
+	for _, r := range m.archivedResponses {
+		if r.ID == id {
+			return r.Data, nil
+		}
+	}
 	return nil, nil
 }
 func (m *MockDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
 	return m.responses, nil
+}
+func (m *MockDB) GetArchivedResponses() ([]ResponseItem, error) {
+	return m.archivedResponses, nil
 }
 func (m *MockDB) DeleteResponse(id string) error { return nil }
 func (m *MockDB) TestAndRecconect() error        { return nil }

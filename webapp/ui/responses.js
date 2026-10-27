@@ -2,123 +2,199 @@ export class ResponseController {
     constructor(containerId, app) {
         this.container = document.getElementById(containerId);
         this.app = app;
-        this.currentOptions = { start: 0, limit: 100, timeRange: '24h' }; // Store current state
+        this.currentOptions = { start: 0, limit: 100 }; // Store current state
     }
 
     render() {
-    this.container.classList.remove('is-hidden');
-    this.container.innerHTML = `
-        <h1 class="title has-text-info" id="responseViewTitle">Responses</h1>
-        <div class="field is-grouped is-grouped-multiline">
-            <p class="control is-expanded">
-                <input class="input" type="text" id="filterVendor" placeholder="Vendor or ID">
-            </p>
-            <p class="control">
-                <input class="input" type="number" id="filterLimit" placeholder="Limit" value="100" style="width: 90px;">
-            </p>
-            <p class="control">
-                <span class="select">
-                    <select id="filterTimeRange" title="Time Range">
-                        <option value="24h" selected>Last 24 Hours</option>
-                        <option value="15m">Last 15 Minutes</option>
-                        <option value="1h">Last 1 Hour</option>
-                        <option value="6h">Last 6 Hours</option>
-                        <option value="7d">Last 7 Days</option>
-                        <option value="30d">Last 30 Days</option>
-                        <option value="all">All Time</option>
-                        <option value="custom">Custom Range</option>
-                    </select>
-                </span>
-            </p>
-            <p class="control is-hidden" id="customTimeRangeSince">
-                <input class="input" type="datetime-local" id="filterSince" placeholder="Start Time" title="Start Time">
-            </p>
-            <p class="control is-hidden" id="customTimeRangeUntil">
-                <input class="input" type="datetime-local" id="filterUntil" placeholder="End Time" title="End Time">
-            </p>
-            <p class="control">
-                <label class="checkbox">
-                    <input type="checkbox" id="filterMatched"> only matches
-                </label>
-            </p>
-            <p class="control">
-                <label class="checkbox">
-                    <input type="checkbox" id="filterArchived"> archived
-                </label>
-            </p>
-            <p class="control">
-                <button class="button is-info" id="applyResponseFilters" type="button">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">filter_list</i></span>
-                        <span>apply</span>
-                    </span>
+        this.container.classList.remove('is-hidden');
+        this.container.innerHTML = `
+        <!-- Sticky Responses Header / Navigation Bar -->
+        <div class="users-nav-bar responses-nav-bar mb-3" id="responses-top">
+            <div class="users-nav-left">
+                <div class="users-nav-title-group">
+                    <span class="users-nav-title" id="responseViewTitle">Responses</span>
+                    <span class="tag is-info is-dark is-rounded charts-count-badge" id="responseCountBadge">0 records</span>
+                </div>
+            </div>
+
+            <div class="users-nav-right">
+                <div class="field has-addons mb-0">
+                    <div class="control">
+                        <input class="input is-small terminal-search" type="text" id="filterVendor" placeholder="Vendor or ID..." autocomplete="off">
+                    </div>
+                    <div class="control">
+                        <button class="button is-small is-dark" id="applyResponseFilters" type="button" title="Apply filter">
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">filter_list</i></span>
+                            <span>Filter</span>
+                        </button>
+                    </div>
+                </div>
+                <button class="button is-small is-dark is-outlined" id="exportResponsesBtn" type="button" title="Export responses as CSV">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">file_download</i></span>
+                    <span>Export</span>
                 </button>
-            </p>
-            <p class="control">
-                <button class="button is-info" id="exportResponsesBtn" type="button">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">file_download</i></span>
-                        <span>export</span>
-                    </span>
-                </button>
-            </p>
+                <button type="button" class="button is-small is-dark is-outlined" id="refreshResponsesBtn" title="Refresh responses">↻ Refresh</button>
+            </div>
         </div>
-        <hr class="has-background-grey-dark">
-        <div id="responseTableContainer"><p class="has-text-info">Fetching initial responses...</p></div>
-        <nav class="pagination is-centered is-rounded mt-4" role="navigation" aria-label="pagination">
-            <a class="pagination-previous" id="prevPageBtn" disabled>Previous</a>
-            <a class="pagination-next" id="nextPageBtn" disabled>Next</a>
+
+        <!-- Filter Sub-bar for Options -->
+        <div class="box p-3 mb-3" style="background: rgba(11, 20, 28, 0.96); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px;">
+            <div class="field is-grouped is-grouped-multiline is-align-items-center mb-0">
+                <p class="control">
+                    <input class="input is-small" type="number" id="filterLimit" placeholder="Limit" value="100" style="width: 80px; background: #060b11; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-family: 'IBMPlexMono', monospace;">
+                </p>
+                <p class="control">
+                    <label class="checkbox" style="font-family: 'IBMPlexMono', monospace; font-size: 0.78rem; color: #94a3b8; cursor: pointer;">
+                        <input type="checkbox" id="filterMatched"> only matches
+                    </label>
+                </p>
+                <p class="control">
+                    <label class="checkbox" style="font-family: 'IBMPlexMono', monospace; font-size: 0.78rem; color: #94a3b8; cursor: pointer;">
+                        <input type="checkbox" id="filterArchived"> archived
+                    </label>
+                </p>
+                <p class="control">
+                    <button class="button is-small terminal-action-btn" id="applySubBarFilters" type="button" title="Apply filter settings">
+                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">check</i></span>
+                        <span>Apply</span>
+                    </button>
+                </p>
+            </div>
+        </div>
+
+        <!-- Responses Terminal Window -->
+        <div class="users-window responses-window" id="responsesViewer">
+            <div class="terminal-titlebar">
+                <div class="terminal-dots">
+                    <span class="terminal-dot dot-close"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div>
+                <div class="terminal-title">
+                    <span class="terminal-status-dot"></span>
+                    <span>responses.telemetry.threatco</span>
+                </div>
+                <div class="terminal-actions">
+                    <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>CACHE ONLINE</span>
+                </div>
+            </div>
+
+            <div id="responseTableContainer">
+                <div class="terminal-table-container">
+                    <table class="terminal-table users-table responses-table">
+                        <thead>
+                            <tr>
+                                <th class="resp-th-time">TIME</th>
+                                <th class="resp-th-vendor">VENDOR</th>
+                                <th class="resp-th-value">VALUE</th>
+                                <th class="resp-th-actions">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="terminal-table-row">
+                                <td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                                    <p class="has-text-info mb-2">Fetching initial responses...</p>
+                                    <progress class="progress is-small is-info" max="100"></progress>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="terminal-statusbar">
+                <span id="responseStatusText">Showing cached telemetry records</span>
+                <span class="is-pulled-right">threatco telemetry • cache</span>
+            </div>
+        </div>
+
+        <!-- Terminal Modern Pagination -->
+        <nav class="pagination is-centered terminal-pagination mt-4" role="navigation" aria-label="pagination">
+            <a class="pagination-previous" id="prevPageBtn" disabled>« Previous</a>
+            <a class="pagination-next" id="nextPageBtn" disabled>Next »</a>
             <ul class="pagination-list" id="paginationList"></ul>
         </nav>`;
 
-    const timeRangeSelect = document.getElementById('filterTimeRange');
-    const customSinceEl = document.getElementById('customTimeRangeSince');
-    const customUntilEl = document.getElementById('customTimeRangeUntil');
-
-    const updateCustomTimeVisibility = () => {
-        if (timeRangeSelect.value === 'custom') {
-            customSinceEl.classList.remove('is-hidden');
-            customUntilEl.classList.remove('is-hidden');
-        } else {
-            customSinceEl.classList.add('is-hidden');
-            customUntilEl.classList.add('is-hidden');
-        }
-    };
-    timeRangeSelect.addEventListener('change', updateCustomTimeVisibility);
+    const filterMatchedEl = document.getElementById('filterMatched');
+    const filterArchivedEl = document.getElementById('filterArchived');
+    const filterLimitEl = document.getElementById('filterLimit');
+    const filterVendorEl = document.getElementById('filterVendor');
 
     // Restore previous filter state if present
-    if (this.currentOptions.timeRange) {
-        timeRangeSelect.value = this.currentOptions.timeRange;
+    if (this.currentOptions.limit && filterLimitEl) {
+        filterLimitEl.value = this.currentOptions.limit;
     }
-    if (this.currentOptions.since) {
-        document.getElementById('filterSince').value = this.currentOptions.since;
+    if (this.currentOptions.matched && filterMatchedEl) {
+        filterMatchedEl.checked = true;
     }
-    if (this.currentOptions.until) {
-        document.getElementById('filterUntil').value = this.currentOptions.until;
+    if (this.currentOptions.archived && filterArchivedEl) {
+        filterArchivedEl.checked = true;
     }
-    if (this.currentOptions.limit) {
-        document.getElementById('filterLimit').value = this.currentOptions.limit;
+    if ((this.currentOptions.id || this.currentOptions.vendor) && filterVendorEl) {
+        filterVendorEl.value = this.currentOptions.id || this.currentOptions.vendor;
     }
-    if (this.currentOptions.matched) {
-        document.getElementById('filterMatched').checked = true;
-    }
-    if (this.currentOptions.archived) {
-        document.getElementById('filterArchived').checked = true;
-    }
-    if (this.currentOptions.id || this.currentOptions.vendor) {
-        document.getElementById('filterVendor').value = this.currentOptions.id || this.currentOptions.vendor;
-    }
-    updateCustomTimeVisibility();
 
-    // Attach Listener for Filter Button
-    document.getElementById('applyResponseFilters').addEventListener('click', () => {
-        const rawInput = document.getElementById('filterVendor').value.trim();
-        const limitVal = document.getElementById('filterLimit').value;
-        const matched = document.getElementById('filterMatched').checked;
-        const archived = document.getElementById('filterArchived').checked;
-        const timeRange = document.getElementById('filterTimeRange').value;
-        const sinceVal = document.getElementById('filterSince').value;
-        const untilVal = document.getElementById('filterUntil').value;
+    // 1. Checkboxes listeners - immediately fires on toggle
+    filterArchivedEl?.addEventListener('change', () => {
+        this.applyFilters();
+    });
+
+    filterMatchedEl?.addEventListener('change', () => {
+        this.applyFilters();
+    });
+
+    // 2. Limit change listener
+    filterLimitEl?.addEventListener('change', () => {
+        this.applyFilters();
+    });
+
+    // 3. Apply button listeners
+    document.getElementById('applyResponseFilters')?.addEventListener('click', () => {
+        this.applyFilters();
+    });
+
+    document.getElementById('applySubBarFilters')?.addEventListener('click', () => {
+        this.applyFilters();
+    });
+
+    // Enter key triggers filter
+    filterVendorEl?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            this.applyFilters();
+        }
+    });
+
+    // Attach Listener for Export CSV Button
+    document.getElementById('exportResponsesBtn')?.addEventListener('click', () => {
+        const options = this.getFilterOptions();
+        const params = new URLSearchParams();
+
+        if (options.id) params.append('id', options.id);
+        if (options.vendor) params.append('vendor', options.vendor);
+        if (options.matched) params.append('matched', 'true');
+        if (options.archived) params.append('archived', 'true');
+
+        window.location.href = `/exportresponses?${params.toString()}`;
+    });
+
+    // Refresh Button Listener
+    const refreshBtn = document.getElementById('refreshResponsesBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            this.fetch(this.currentOptions);
+        });
+    }
+
+    // Initial Fetch
+    this.fetch(this.currentOptions);
+}
+
+    getFilterOptions() {
+        const rawInput = document.getElementById('filterVendor')?.value.trim() || '';
+        const limitVal = document.getElementById('filterLimit')?.value || '100';
+        const matched = document.getElementById('filterMatched')?.checked || false;
+        const archived = document.getElementById('filterArchived')?.checked || false;
 
         const options = {
             start: 0,
@@ -126,10 +202,7 @@ export class ResponseController {
             matched: matched,
             archived: archived,
             vendor: null,
-            id: null,
-            timeRange: timeRange,
-            since: timeRange === 'custom' && sinceVal ? sinceVal : null,
-            until: timeRange === 'custom' && untilVal ? untilVal : null
+            id: null
         };
 
         const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -141,42 +214,13 @@ export class ResponseController {
             }
         }
 
+        return options;
+    }
+
+    applyFilters() {
+        const options = this.getFilterOptions();
         this.fetch(options);
-    });
-
-    // Attach Listener for Export CSV Button
-    document.getElementById('exportResponsesBtn').addEventListener('click', () => {
-        const rawInput = document.getElementById('filterVendor').value.trim();
-        const matched = document.getElementById('filterMatched').checked;
-        const archived = document.getElementById('filterArchived').checked;
-        const timeRange = document.getElementById('filterTimeRange').value;
-        const sinceVal = document.getElementById('filterSince').value;
-        const untilVal = document.getElementById('filterUntil').value;
-
-        const params = new URLSearchParams();
-        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (rawInput) {
-            if (uuidPattern.test(rawInput)) {
-                params.append('id', rawInput);
-            } else {
-                params.append('vendor', rawInput);
-            }
-        }
-
-        if (matched) params.append('matched', 'true');
-        if (archived) params.append('archived', 'true');
-        if (timeRange) params.append('time_range', timeRange);
-        if (timeRange === 'custom') {
-            if (sinceVal) params.append('since', sinceVal);
-            if (untilVal) params.append('until', untilVal);
-        }
-
-        window.location.href = `/exportresponses?${params.toString()}`;
-    });
-
-    // Initial Fetch
-    this.fetch(this.currentOptions);
-}
+    }
 
     async fetch(options = {}) {
         // Update local state
@@ -185,7 +229,7 @@ export class ResponseController {
         const tableContainer = document.getElementById('responseTableContainer');
         if (!tableContainer) return;
 
-        tableContainer.innerHTML = '<p class="has-text-info">Fetching...</p><progress class="progress is-small is-info" max="100"></progress>';
+        tableContainer.innerHTML = '<div class="terminal-table-container"><table class="terminal-table users-table responses-table"><thead><tr><th class="resp-th-time">TIME</th><th class="resp-th-vendor">VENDOR</th><th class="resp-th-value">VALUE</th><th class="resp-th-actions">ACTIONS</th></tr></thead><tbody><tr class="terminal-table-row"><td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;"><p class="has-text-info mb-2">Fetching responses...</p><progress class="progress is-small is-info" max="100"></progress></td></tr></tbody></table></div>';
 
         // Fetch data
         const { html, total } = await this.app.fetchResponseCache(this.currentOptions);
@@ -193,9 +237,25 @@ export class ResponseController {
         // Render Table
         tableContainer.innerHTML = html;
 
-        // UPDATE TITLE WITH COUNT
+        // UPDATE TITLE AND BADGE WITH COUNT
         const titleEl = document.getElementById('responseViewTitle');
         if (titleEl) titleEl.textContent = `Responses (${total})`;
+
+        const countBadge = document.getElementById('responseCountBadge');
+        if (countBadge) countBadge.textContent = `${total} records`;
+
+        const statusEl = document.getElementById('responseStatusText');
+        if (statusEl) {
+            const { start, limit, archived } = this.currentOptions;
+            const recordsLabel = archived ? 'archived telemetry records' : 'telemetry records';
+            if (total === 0) {
+                statusEl.textContent = archived ? 'No archived telemetry records found' : 'No telemetry records found';
+            } else {
+                const startItem = start + 1;
+                const endItem = Math.min(start + limit, total);
+                statusEl.textContent = `Showing ${startItem}–${endItem} of ${total} ${recordsLabel}`;
+            }
+        }
 
         // Render Pagination
         this.renderPagination(total);
@@ -218,17 +278,21 @@ export class ResponseController {
         // Handle Prev/Next Buttons
         if (currentPage > 1) {
             prevBtn.removeAttribute('disabled');
+            prevBtn.classList.remove('is-disabled');
             prevBtn.onclick = () => this.goToPage(currentPage - 1);
         } else {
             prevBtn.setAttribute('disabled', true);
+            prevBtn.classList.add('is-disabled');
             prevBtn.onclick = null;
         }
 
         if (currentPage < totalPages) {
             nextBtn.removeAttribute('disabled');
+            nextBtn.classList.remove('is-disabled');
             nextBtn.onclick = () => this.goToPage(currentPage + 1);
         } else {
             nextBtn.setAttribute('disabled', true);
+            nextBtn.classList.add('is-disabled');
             nextBtn.onclick = null;
         }
 

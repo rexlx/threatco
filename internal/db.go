@@ -31,6 +31,7 @@ type Database interface {
 	StoreResponse(archive bool, id string, data []byte, vendor string) error
 	GetResponse(id string) ([]byte, error)
 	GetResponses(expiration time.Time) ([]ResponseItem, error)
+	GetArchivedResponses() ([]ResponseItem, error)
 	DeleteResponse(id string) error
 	TestAndRecconect() error
 	CreateCase(c Case) error
@@ -113,6 +114,26 @@ func (db *BboltDB) GetResponses(expiration time.Time) ([]ResponseItem, error) {
 	return responses, err
 }
 
+func (db *BboltDB) GetArchivedResponses() ([]ResponseItem, error) {
+	var responses []ResponseItem
+	err := db.DB.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("archived_responses"))
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k, v []byte) error {
+			var resp ResponseItem
+			if err := json.Unmarshal(v, &resp); err != nil {
+				return fmt.Errorf("unmarshal archived response: %w", err)
+			}
+			resp.ID = string(k)
+			responses = append(responses, resp)
+			return nil
+		})
+	})
+	return responses, err
+}
+
 func (db *BboltDB) GetCases(limit int, offset int, filter string) ([]Case, error) {
 	fmt.Println("not implemented: BboltDB GetCases")
 	return nil, nil
@@ -186,8 +207,12 @@ func (db *BboltDB) GetUserByEmail(email string) (User, error) {
 }
 
 func (db *BboltDB) StoreResponse(archive bool, id string, data []byte, vendor string) error {
+	bucketName := "responses"
+	if archive {
+		bucketName = "archived_responses"
+	}
 	return db.DB.Update(func(tx *bbolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("responses"))
+		b, err := tx.CreateBucketIfNotExists([]byte(bucketName))
 		if err != nil {
 			return err
 		}
@@ -594,7 +619,7 @@ func (db *PostgresDB) StoreResponse(archive bool, id string, data []byte, vendor
 	_, err := db.Pool.Exec(context.Background(),
 		fmt.Sprintf("INSERT INTO %s (id, data, created, vendor) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, created = EXCLUDED.created, vendor = EXCLUDED.vendor",
 			tableName),
-		id, data, time.Now(), vendor)
+		id, data, time.Now().UTC(), vendor)
 	return err
 }
 
@@ -654,21 +679,17 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
 	var args []interface{}
 
 	if expiration.IsZero() {
-		// CASE 1: Show Archived (Checkbox Checked)
-		// Combine both tables using UNION ALL.
+		// Select all from the active table without time filter.
 		query = `
-            SELECT id, data, created, vendor FROM responses
-            UNION ALL
-            SELECT id, data, created, vendor FROM archived_responses
+            SELECT id, data, created, vendor FROM responses 
             ORDER BY created DESC`
 	} else {
-		// CASE 2: Standard View (Checkbox Unchecked)
 		// Select only from the active table with the time filter.
 		query = `
             SELECT id, data, created, vendor FROM responses 
             WHERE created > $1 
             ORDER BY created DESC`
-		args = append(args, expiration)
+		args = append(args, expiration.UTC())
 	}
 	// Pass the variable arguments (args...) to the query
 	rows, err := db.Pool.Query(context.Background(), query, args...)
@@ -685,6 +706,37 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
 		if err := rows.Scan(&resp.ID, &data, &resp.Time, &resp.Vendor); err != nil {
 			return nil, err
 		}
+		resp.Time = resp.Time.UTC()
+		resp.Data = data
+		responses = append(responses, resp)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return responses, nil
+}
+
+func (db *PostgresDB) GetArchivedResponses() ([]ResponseItem, error) {
+	query := `
+        SELECT id, data, created, vendor FROM archived_responses 
+        ORDER BY created DESC`
+	rows, err := db.Pool.Query(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var responses []ResponseItem
+	for rows.Next() {
+		var resp ResponseItem
+		var data []byte
+
+		if err := rows.Scan(&resp.ID, &data, &resp.Time, &resp.Vendor); err != nil {
+			return nil, err
+		}
+		resp.Time = resp.Time.UTC()
 		resp.Data = data
 		responses = append(responses, resp)
 	}

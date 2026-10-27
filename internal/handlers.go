@@ -1837,98 +1837,24 @@ func (s *Server) GetResponseCacheHandler(w http.ResponseWriter, r *http.Request)
 
 // ResponseFilterOptions defines the available query parameters for filtering and pagination.
 type ResponseFilterOptions struct {
-	Vendor    string
-	Start     int
-	Limit     int
-	Matched   bool
-	ID        string
-	TimeRange string
-	Since     time.Time
-	Until     time.Time
-}
-
-func parseFilterTime(s string, isEnd bool) (time.Time, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return time.Time{}, nil
-	}
-	formats := []string{
-		time.RFC3339Nano,
-		time.RFC3339,
-		"2006-01-02T15:04:05",
-		"2006-01-02T15:04",
-		"2006-01-02 15:04:05",
-		"2006-01-02 15:04",
-		"2006-01-02",
-	}
-	for _, layout := range formats {
-		if t, err := time.Parse(layout, s); err == nil {
-			if isEnd && layout == "2006-01-02" {
-				t = t.Add(24*time.Hour - time.Nanosecond)
-			}
-			return t, nil
-		}
-		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
-			if isEnd && layout == "2006-01-02" {
-				t = t.Add(24*time.Hour - time.Nanosecond)
-			}
-			return t, nil
-		}
-	}
-	if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
-		if sec > 1e11 {
-			return time.UnixMilli(sec), nil
-		}
-		return time.Unix(sec, 0), nil
-	}
-	return time.Time{}, fmt.Errorf("invalid time format: %s", s)
-}
-
-func parseTimeRangeDuration(s string) (time.Duration, error) {
-	s = strings.TrimSpace(strings.ToLower(s))
-	if s == "" {
-		return 0, nil
-	}
-	if strings.HasSuffix(s, "d") {
-		daysStr := strings.TrimSuffix(s, "d")
-		days, err := strconv.Atoi(daysStr)
-		if err != nil || days <= 0 {
-			return 0, fmt.Errorf("invalid days format: %s", s)
-		}
-		return time.Duration(days) * 24 * time.Hour, nil
-	}
-	if strings.HasSuffix(s, "w") {
-		weeksStr := strings.TrimSuffix(s, "w")
-		weeks, err := strconv.Atoi(weeksStr)
-		if err != nil || weeks <= 0 {
-			return 0, fmt.Errorf("invalid weeks format: %s", s)
-		}
-		return time.Duration(weeks) * 7 * 24 * time.Hour, nil
-	}
-	if strings.HasSuffix(s, "y") {
-		yearsStr := strings.TrimSuffix(s, "y")
-		years, err := strconv.Atoi(yearsStr)
-		if err != nil || years <= 0 {
-			return 0, fmt.Errorf("invalid years format: %s", s)
-		}
-		return time.Duration(years) * 365 * 24 * time.Hour, nil
-	}
-	dur, err := time.ParseDuration(s)
-	if err != nil || dur <= 0 {
-		return 0, fmt.Errorf("invalid duration format: %s", s)
-	}
-	return dur, nil
+	Vendor   string
+	Start    int
+	Limit    int
+	Matched  bool
+	Archived bool
+	ID       string
 }
 
 // NewResponseFilterOptions creates a new options object from the request's query parameters.
 // It sets sensible defaults for pagination.
 func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 	opts := &ResponseFilterOptions{
-		Vendor:  r.URL.Query().Get("vendor"),
-		Start:   0,
-		Limit:   100, // Default limit
-		Matched: r.URL.Query().Get("matched") == "true",
-		ID:      r.URL.Query().Get("id"),
+		Vendor:   r.URL.Query().Get("vendor"),
+		Start:    0,
+		Limit:    100, // Default limit
+		Matched:  r.URL.Query().Get("matched") == "true",
+		Archived: r.URL.Query().Get("archived") == "true",
+		ID:       r.URL.Query().Get("id"),
 	}
 
 	// Parse 'start' query parameter
@@ -1957,82 +1883,7 @@ func NewResponseFilterOptions(r *http.Request) (*ResponseFilterOptions, error) {
 		opts.Limit = limit
 	}
 
-	// Parse time range parameters
-	timeRange := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("time_range")))
-	if timeRange == "" {
-		timeRange = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("timerange")))
-	}
-	if timeRange == "" {
-		timeRange = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
-	}
-	opts.TimeRange = timeRange
-
-	sinceStr := r.URL.Query().Get("since")
-	if sinceStr == "" {
-		sinceStr = r.URL.Query().Get("from")
-	}
-	if sinceStr == "" {
-		sinceStr = r.URL.Query().Get("start_time")
-	}
-
-	untilStr := r.URL.Query().Get("until")
-	if untilStr == "" {
-		untilStr = r.URL.Query().Get("to")
-	}
-	if untilStr == "" {
-		untilStr = r.URL.Query().Get("end_time")
-	}
-
-	if sinceStr != "" {
-		t, err := parseFilterTime(sinceStr, false)
-		if err != nil {
-			return nil, fmt.Errorf("invalid 'since' parameter: %w", err)
-		}
-		opts.Since = t
-	}
-
-	if untilStr != "" {
-		t, err := parseFilterTime(untilStr, true)
-		if err != nil {
-			return nil, fmt.Errorf("invalid 'until' parameter: %w", err)
-		}
-		opts.Until = t
-	}
-
-	if !opts.Since.IsZero() && !opts.Until.IsZero() && opts.Since.After(opts.Until) {
-		return nil, fmt.Errorf("'since' time cannot be after 'until' time")
-	}
-
-	if opts.Since.IsZero() && timeRange != "" && timeRange != "all" && timeRange != "custom" {
-		dur, err := parseTimeRangeDuration(timeRange)
-		if err != nil {
-			return nil, fmt.Errorf("invalid 'time_range' parameter: %w", err)
-		}
-		refTime := time.Now()
-		if !opts.Until.IsZero() {
-			refTime = opts.Until
-		}
-		opts.Since = refTime.Add(-dur)
-	}
-
 	return opts, nil
-}
-
-func determineLookbackTime(r *http.Request, opts *ResponseFilterOptions, defaultExpiry time.Duration) time.Time {
-	searchID := r.URL.Query().Get("id")
-	if defaultExpiry <= 0 {
-		defaultExpiry = 24 * time.Hour
-	}
-	if r.URL.Query().Get("archived") == "true" || searchID != "" || opts.TimeRange == "all" {
-		return time.Time{}
-	}
-	if !opts.Since.IsZero() {
-		return opts.Since
-	}
-	if !opts.Until.IsZero() {
-		return time.Time{}
-	}
-	return time.Now().Add(-defaultExpiry)
 }
 
 func (s *Server) GetRuntimeHandler(w http.ResponseWriter, r *http.Request) {
@@ -2066,22 +1917,34 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Determine time range
-	searchID := r.URL.Query().Get("id")
-	lookbackTime := determineLookbackTime(r, options, s.Cache.ResponseExpiry)
+	searchID := options.ID
 
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
 	// 1. Fetch
-	responses, err := s.DB.GetResponses(lookbackTime)
+	var responses []ResponseItem
+	if options.Archived {
+		responses, err = s.DB.GetArchivedResponses()
+	} else {
+		var lookbackTime time.Time
+		if searchID == "" {
+			lookbackTime = time.Now().UTC().Add(-24 * 365 * time.Hour) // all active responses
+		}
+		responses, err = s.DB.GetResponses(lookbackTime)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if len(responses) == 0 {
-		fmt.Fprint(w, "No responses found in the selected time range.")
+		w.Header().Set("X-Total-Count", "0")
+		if options.Archived {
+			renderEmptyResponseTable(w, "No archived responses found.")
+		} else {
+			renderEmptyResponseTable(w, "No responses found.")
+		}
 		return
 	}
 
@@ -2091,15 +1954,19 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	w.Header().Set("X-Total-Count", strconv.Itoa(totalCount))
 
 	if len(filteredResponses) == 0 {
+		var emptyMsg string
 		if searchID != "" {
-			fmt.Fprintf(w, "No response found with ID: %s", searchID)
+			emptyMsg = fmt.Sprintf("No response found with ID: %s", searchID)
 		} else if options.Matched {
-			fmt.Fprint(w, "No matched responses found.")
+			emptyMsg = "No matched responses found."
 		} else if options.Vendor != "" {
-			fmt.Fprintf(w, "No responses found for vendor: %s", options.Vendor)
+			emptyMsg = fmt.Sprintf("No responses found for vendor: %s", options.Vendor)
+		} else if options.Archived {
+			emptyMsg = "No archived responses found."
 		} else {
-			fmt.Fprint(w, "No responses found in the selected time range.")
+			emptyMsg = "No responses found."
 		}
+		renderEmptyResponseTable(w, emptyMsg)
 		return
 	}
 
@@ -2298,22 +2165,7 @@ func applyResponseFilters(responses []ResponseItem, opts *ResponseFilterOptions,
 		filtered = matched
 	}
 
-	// 4. Apply Time Range Filter
-	if !opts.Since.IsZero() || !opts.Until.IsZero() {
-		var timeFiltered []ResponseItem
-		for _, v := range filtered {
-			if !opts.Since.IsZero() && v.Time.Before(opts.Since) {
-				continue
-			}
-			if !opts.Until.IsZero() && v.Time.After(opts.Until) {
-				continue
-			}
-			timeFiltered = append(timeFiltered, v)
-		}
-		filtered = timeFiltered
-	}
-
-	// 5. sort
+	// 4. sort
 	type sortableItem struct {
 		item        ResponseItem
 		threatLevel int
@@ -2786,38 +2638,61 @@ func isLikelyDomain(s string) bool {
 	return strings.Contains(s, ".") && !strings.Contains(s, " ") && !strings.Contains(s, "@") && len(s) < 255
 }
 
-// renderResponseTable writes the HTML table to the writer.
-// renderResponseTable writes the HTML table to the writer.
-func renderResponseTable(w io.Writer, responses []ResponseItem) error {
-	tableHeader := `<table class="table is-fullwidth is-striped" style="table-layout: fixed">
+func renderEmptyResponseTable(w io.Writer, message string) error {
+	table := fmt.Sprintf(`<div class="terminal-table-container">
+		<table class="terminal-table users-table responses-table">
             <thead>
                 <tr>
-                    <th>Time</th>
-                    <th>Vendor</th>
-                    <th>Value</th>
-                    <th>Actions</th> 
+                    <th class="resp-th-time">TIME</th>
+                    <th class="resp-th-vendor">VENDOR</th>
+                    <th class="resp-th-value">VALUE</th>
+                    <th class="resp-th-actions">ACTIONS</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="terminal-table-row">
+                    <td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">%s</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>`, html.EscapeString(message))
+	_, err := io.WriteString(w, table)
+	return err
+}
+
+// renderResponseTable writes the HTML table to the writer.
+func renderResponseTable(w io.Writer, responses []ResponseItem) error {
+	if len(responses) == 0 {
+		return renderEmptyResponseTable(w, "No responses found.")
+	}
+
+	tableHeader := `<div class="terminal-table-container">
+		<table class="terminal-table users-table responses-table">
+            <thead>
+                <tr>
+                    <th class="resp-th-time">TIME</th>
+                    <th class="resp-th-vendor">VENDOR</th>
+                    <th class="resp-th-value">VALUE</th>
+                    <th class="resp-th-actions">ACTIONS</th> 
                 </tr>
             </thead>
             <tbody>`
-	tableFooter := `</tbody></table>`
+	tableFooter := `</tbody></table></div>`
 
-	rowTmpl := `<tr>
-        <td>%v</td>
-        <td>%v</td>
-        <td style="word-break: break-all;">%v</td>
-        <td>
-            <div class="field is-grouped">
-                <p class="control">
-                    <a href="%s" class="button is-small is-info is-light" title="View Event">
-                        <span class="icon is-small"><i class="material-icons">visibility</i></span>
-                    </a>
-                </p>
-                <p class="control">
-                    <button class="button is-small is-danger is-light delete-btn" data-id="%v">
-                        <span class="icon is-small"><i class="material-icons">delete</i></span>
-                    </button>
-                </p>
-                %s </div>
+	rowTmpl := `<tr class="terminal-table-row">
+        <td class="resp-cell-time" title="%s">%s</td>
+        <td class="resp-cell-vendor">%s</td>
+        <td class="resp-cell-value">%s</td>
+        <td class="resp-cell-actions">
+            <div class="user-action-group">
+                <a href="%s" class="button is-small terminal-action-btn" title="View Event">
+                    <span class="icon is-small"><i class="material-icons">visibility</i></span>
+                </a>
+                <button class="button is-small terminal-action-btn terminal-btn-danger delete-btn" data-id="%s" title="Delete Response">
+                    <span class="icon is-small"><i class="material-icons">delete</i></span>
+                </button>
+                %s
+            </div>
         </td>
     </tr>`
 
@@ -2834,29 +2709,34 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
 
 		// 1. DNS Lookup Button: Added if the value is a valid IP or likely domain
 		if net.ParseIP(displayValue) != nil || isLikelyDomain(displayValue) {
-			actions += fmt.Sprintf(`<p class="control">
-                    <button class="button is-small is-warning is-light dns-lookup-btn" data-value="%s" title="DNS Lookup">
-                        <span class="icon is-small"><i class="material-icons">dns</i></span>
-                    </button>
-                </p>`, html.EscapeString(displayValue))
+			actions += fmt.Sprintf(`<button class="button is-small terminal-action-btn terminal-btn-warning dns-lookup-btn" data-value="%s" title="DNS Lookup">
+                    <span class="icon is-small"><i class="material-icons">dns</i></span>
+                </button>`, html.EscapeString(displayValue))
 		}
 
 		// 2. AI Report Button: Added specifically for the llm_tools vendor
 		if v.Vendor == "llm_tools" {
-			actions += fmt.Sprintf(`<p class="control">
-                    <a href="/aireport?id=%s" target="_blank" class="button is-small is-primary is-light" title="Generate AI Report">
-                        <span class="icon is-small"><i class="material-icons">auto_awesome</i></span>
-                    </a>
-                </p>`, v.ID)
+			actions += fmt.Sprintf(`<a href="/aireport?id=%s" target="_blank" class="button is-small terminal-action-btn terminal-btn-primary" title="Generate AI Report">
+                    <span class="icon is-small"><i class="material-icons">auto_awesome</i></span>
+                </a>`, v.ID)
 		}
 
-		displayHtml := displayValue
+		escapedVal := html.EscapeString(displayValue)
+		displayHtml := fmt.Sprintf(`<span class="resp-value-text">%s</span>`, escapedVal)
 		if matched {
-			displayHtml = fmt.Sprintf(`<span class="has-text-warning has-text-weight-bold">%s</span>`, displayValue)
+			displayHtml = fmt.Sprintf(`<span class="has-text-warning has-text-weight-bold resp-value-matched">%s</span>`, escapedVal)
 		}
+
+		vendorHtml := fmt.Sprintf(`<span class="service-meta-pill">%s</span>`, html.EscapeString(v.Vendor))
+		if v.Vendor == "llm_tools" {
+			vendorHtml = fmt.Sprintf(`<span class="service-meta-pill vendor-llm">%s</span>`, html.EscapeString(v.Vendor))
+		}
+
+		timeRFC := v.Time.Format(time.RFC3339)
+		timeFormatted := v.Time.Format("2006-01-02 15:04:05")
 
 		// Inject the time, vendor, value, and consolidated actions into the row template
-		row := fmt.Sprintf(rowTmpl, v.Time.Format(time.RFC3339), v.Vendor, displayHtml, viewLink, v.ID, actions)
+		row := fmt.Sprintf(rowTmpl, timeRFC, timeFormatted, vendorHtml, displayHtml, viewLink, v.ID, actions)
 		buffer.WriteString(row)
 	}
 
@@ -2904,15 +2784,22 @@ func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 2. Determine time range
 	searchID := r.URL.Query().Get("id")
-	lookbackTime := determineLookbackTime(r, options, s.Cache.ResponseExpiry)
 
 	s.Memory.RLock()
 	defer s.Memory.RUnlock()
 
 	// 3. Fetch from DB
-	responses, err := s.DB.GetResponses(lookbackTime)
+	var responses []ResponseItem
+	if options.Archived {
+		responses, err = s.DB.GetArchivedResponses()
+	} else {
+		var lookbackTime time.Time
+		if searchID == "" {
+			lookbackTime = time.Now().UTC().Add(-24 * 365 * time.Hour)
+		}
+		responses, err = s.DB.GetResponses(lookbackTime)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
