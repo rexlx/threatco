@@ -140,6 +140,18 @@ h1, h2, h3, h4, h5, h6 {
     color: #fbbf24;
 }
 
+.system-status-pill.status-danger {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+}
+
+.system-status-pill.status-unknown {
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    color: #94a3b8;
+}
+
 .status-indicator-dot {
     width: 6px;
     height: 6px;
@@ -155,6 +167,16 @@ h1, h2, h3, h4, h5, h6 {
 .status-indicator-dot.dot-warning {
     background-color: #f59e0b;
     box-shadow: 0 0 6px #f59e0b;
+}
+
+.status-indicator-dot.dot-danger {
+    background-color: #ef4444;
+    box-shadow: 0 0 6px #ef4444;
+}
+
+.status-indicator-dot.dot-unknown {
+    background-color: #94a3b8;
+    box-shadow: 0 0 6px #94a3b8;
 }
 
 .modal {
@@ -1444,12 +1466,14 @@ pre {
 
 /* --- Users Directory & Modern Data Table --- */
 .users-section,
-.responses-section {
+.responses-section,
+.health-section {
     min-height: calc(100vh - 180px);
 }
 
 .users-nav-bar,
-.responses-nav-bar {
+.responses-nav-bar,
+.health-nav-bar {
     position: sticky;
     top: 0;
     z-index: 20;
@@ -1501,7 +1525,8 @@ pre {
 }
 
 .users-window,
-.responses-window {
+.responses-window,
+.health-window {
     width: 100%;
     margin: 0 auto;
     background: #070d14;
@@ -1570,7 +1595,8 @@ pre {
 
 .terminal-table,
 .users-table,
-.responses-table {
+.responses-table,
+.health-table {
     width: 100%;
     border-collapse: collapse;
     font-family: 'IBMPlexMono', monospace;
@@ -1581,7 +1607,8 @@ pre {
 
 .terminal-table thead th,
 .users-table thead th,
-.responses-table thead th {
+.responses-table thead th,
+.health-table thead th {
     background: #0a131f;
     color: #64748b;
     font-family: 'IBMPlexMono', monospace;
@@ -1597,26 +1624,30 @@ pre {
 
 .terminal-table tbody tr,
 .users-table tbody tr,
-.responses-table tbody tr {
+.responses-table tbody tr,
+.health-table tbody tr {
     border-bottom: 1px solid rgba(56, 189, 248, 0.08);
     transition: background-color 0.15s ease;
 }
 
 .terminal-table tbody tr:hover,
 .users-table tbody tr:hover,
-.responses-table tbody tr:hover {
+.responses-table tbody tr:hover,
+.health-table tbody tr:hover {
     background-color: rgba(56, 189, 248, 0.04);
 }
 
 .terminal-table tbody tr:last-child,
 .users-table tbody tr:last-child,
-.responses-table tbody tr:last-child {
+.responses-table tbody tr:last-child,
+.health-table tbody tr:last-child {
     border-bottom: none;
 }
 
 .terminal-table td,
 .users-table td,
-.responses-table td {
+.responses-table td,
+.health-table td {
     padding: 0.85rem 1.25rem;
     vertical-align: middle;
 }
@@ -1675,6 +1706,24 @@ pre {
     background: rgba(148, 163, 184, 0.1);
     border: 1px solid rgba(148, 163, 184, 0.22);
     color: #94a3b8;
+}
+
+.role-badge.role-up {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+
+.role-badge.role-degraded {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+}
+
+.role-badge.role-down {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
 }
 
 .user-th-services,
