@@ -658,6 +658,13 @@ pre {
     color: #38bdf8 !important;
 }
 
+.terminal-action-btn.view-event-btn:hover:not([disabled]) {
+    background-color: rgba(var(--modal-accent-rgb, 168, 85, 247), 0.18) !important;
+    border-color: rgba(var(--modal-accent-rgb, 168, 85, 247), 0.55) !important;
+    color: var(--modal-accent-light, #c084fc) !important;
+    box-shadow: 0 0 10px rgba(var(--modal-accent-rgb, 168, 85, 247), 0.22);
+}
+
 .terminal-action-btn[disabled] {
     opacity: 0.4;
     cursor: not-allowed;
@@ -1870,6 +1877,605 @@ pre {
     display: inline-flex;
     align-items: center;
 }
+
+/* ==========================================================================
+   Details Modal - Terminal Window Styling
+   ========================================================================== */
+
+:root,
+#detailsModal {
+    /* ==========================================================================
+       MODAL THEME ACCENT COLOR — CHANGE IN THIS SINGLE PLACE!
+       
+       Change --modal-accent-rgb to customize borders, glows, and transparent tints.
+       Change --modal-accent, --modal-accent-light, and --modal-accent-soft for text/solid tones.
+       
+       Quick Presets:
+         Purple (Current):
+           --modal-accent-rgb: 168, 85, 247;
+           --modal-accent: #a855f7;
+           --modal-accent-light: #c084fc;
+           --modal-accent-soft: #d8b4fe;
+
+         Indigo:
+           --modal-accent-rgb: 99, 102, 241;
+           --modal-accent: #6366f1;
+           --modal-accent-light: #818cf8;
+           --modal-accent-soft: #a5b4fc;
+
+         Cyan / Sky Blue:
+           --modal-accent-rgb: 56, 189, 248;
+           --modal-accent: #38bdf8;
+           --modal-accent-light: #7dd3fc;
+           --modal-accent-soft: #bae6fd;
+
+         Emerald Green:
+           --modal-accent-rgb: 16, 185, 129;
+           --modal-accent: #10b981;
+           --modal-accent-light: #34d399;
+           --modal-accent-soft: #6ee7b7;
+
+         Amber / Gold:
+           --modal-accent-rgb: 245, 158, 11;
+           --modal-accent: #f59e0b;
+           --modal-accent-light: #fbbf24;
+           --modal-accent-soft: #fde68a;
+
+         Rose / Crimson:
+           --modal-accent-rgb: 244, 63, 94;
+           --modal-accent: #f43f5e;
+           --modal-accent-light: #fb7185;
+           --modal-accent-soft: #fecdd3;
+       ========================================================================== */
+    --modal-accent-rgb: 245, 158, 11;
+    --modal-accent: #f59e0b;
+    --modal-accent-light: #fbbf24;
+    --modal-accent-soft: #fde68a;
+}
+
+#detailsModal.modal .modal-background {
+    background-color: rgba(4, 7, 16, 0.82) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+#detailsModal.modal .modal-card,
+#detailsModal .details-modal-card {
+    width: 860px !important;
+    max-width: 94vw !important;
+    max-height: 85vh !important;
+    height: auto !important;
+    margin: 0 auto;
+    background: #080c16 !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.3) !important;
+    border-radius: 10px !important;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(var(--modal-accent-rgb), 0.12) !important;
+    display: flex;
+    flex-direction: column;
+    animation: modalSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Modal Titlebar */
+#detailsModal .modal-card-head,
+#detailsModal .details-modal-titlebar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.65rem 1.15rem !important;
+    background: #0e1220 !important;
+    border-bottom: 1px solid rgba(var(--modal-accent-rgb), 0.22) !important;
+    border-top-left-radius: 9px !important;
+    border-top-right-radius: 9px !important;
+    gap: 0.75rem !important;
+    flex-wrap: nowrap !important;
+}
+
+.details-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 1;
+    min-width: 0;
+}
+
+#detailsModal .modal-card-title,
+#detailsModal .details-modal-title {
+    font-family: 'IBMPlexMono', monospace !important;
+    font-size: 0.84rem !important;
+    font-weight: 600 !important;
+    color: #e2e8f0 !important;
+    letter-spacing: 0.03em;
+    margin: 0 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.details-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--modal-accent);
+    box-shadow: 0 0 8px var(--modal-accent), 0 0 14px rgba(var(--modal-accent-rgb), 0.6);
+    flex-shrink: 0;
+}
+
+.details-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-shrink: 0;
+}
+
+.details-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.35);
+    background: rgba(var(--modal-accent-rgb), 0.12);
+    color: var(--modal-accent-light);
+    box-shadow: 0 0 8px rgba(var(--modal-accent-rgb), 0.15);
+    user-select: none;
+}
+
+.dot-details {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--modal-accent-light);
+    box-shadow: 0 0 6px var(--modal-accent-light);
+}
+
+.modal-close-dot {
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.modal-close-dot:hover {
+    transform: scale(1.2);
+    opacity: 0.85;
+}
+
+#detailsModal .modal-close-btn {
+    background: rgba(var(--modal-accent-rgb), 0.1) !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.25) !important;
+    color: #94a3b8 !important;
+    border-radius: 4px;
+    height: 1.85em;
+    width: 1.85em;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+#detailsModal .modal-close-btn:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    color: #fca5a5 !important;
+}
+
+#detailsModal .modal-close-btn::before,
+#detailsModal .modal-close-btn::after {
+    display: none !important;
+}
+
+/* Modal Body & JSON Viewer */
+#detailsModal .modal-card-body,
+#detailsModal .details-modal-body {
+    background: #05070f !important;
+    color: #e2e8f0 !important;
+    padding: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative;
+    max-height: calc(85vh - 110px) !important;
+}
+
+#detailsModal .modal-card-body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+#detailsModal .modal-card-body::-webkit-scrollbar-track {
+    background: #080c16;
+}
+
+#detailsModal .modal-card-body::-webkit-scrollbar-thumb {
+    background: rgba(var(--modal-accent-rgb), 0.25);
+    border-radius: 4px;
+}
+
+#detailsModal .modal-card-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--modal-accent-rgb), 0.5);
+}
+
+#detailsModal pre,
+#detailsModal .details-modal-pre {
+    margin: 0 !important;
+    padding: 1.25rem 1.4rem !important;
+    background: #05070f !important;
+    color: #cbd5e1 !important;
+    font-family: 'IBMPlexMono', monospace !important;
+    font-size: 0.82rem !important;
+    line-height: 1.6 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+    overflow-x: auto;
+}
+
+/* Modal Footer */
+#detailsModal .modal-card-foot,
+#detailsModal .details-modal-foot {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.7rem 1.15rem !important;
+    background: #0b0f1d !important;
+    border-top: 1px solid rgba(var(--modal-accent-rgb), 0.18) !important;
+    border-bottom-left-radius: 9px !important;
+    border-bottom-right-radius: 9px !important;
+    gap: 0.5rem !important;
+    flex-wrap: wrap !important;
+}
+
+#detailsModal .modal-card-foot.is-hidden,
+#detailsModal .details-modal-foot.is-hidden {
+    display: none !important;
+}
+
+.details-foot-left,
+.details-foot-right {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+/* Action Buttons inside Details Modal */
+#detailsModal .terminal-action-btn {
+    font-family: 'IBMPlexSans', -apple-system, sans-serif !important;
+    font-size: 0.78rem !important;
+    height: 2.15em !important;
+    padding: 0 0.85rem !important;
+    border-radius: 4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    background-color: #0d1222 !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.28) !important;
+    color: #cbd5e1 !important;
+    transition: all 0.15s ease !important;
+}
+
+#detailsModal .terminal-action-btn .material-icons {
+    font-size: 15px !important;
+}
+
+#detailsModal .terminal-action-btn:hover:not([disabled]) {
+    background-color: rgba(var(--modal-accent-rgb), 0.18) !important;
+    border-color: var(--modal-accent) !important;
+    color: #f3e8ff !important;
+    box-shadow: 0 0 10px rgba(var(--modal-accent-rgb), 0.22);
+}
+
+#detailsModal .modal-btn-copy:hover:not([disabled]) {
+    border-color: rgba(16, 185, 129, 0.5) !important;
+    color: #34d399 !important;
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+#detailsModal .modal-btn-copy.is-copied {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    border-color: #10b981 !important;
+    color: #34d399 !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3) !important;
+}
+
+#detailsModal .modal-btn-archive:hover:not([disabled]) {
+    border-color: rgba(245, 158, 11, 0.5) !important;
+    color: #fbbf24 !important;
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+}
+
+#detailsModal .modal-btn-misp:hover:not([disabled]) {
+    border-color: rgba(244, 63, 94, 0.5) !important;
+    color: #fb7185 !important;
+    background-color: rgba(244, 63, 94, 0.12) !important;
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.2);
+}
+
+#detailsModal .modal-btn-case {
+    background-color: rgba(var(--modal-accent-rgb), 0.18) !important;
+    border-color: rgba(var(--modal-accent-rgb), 0.45) !important;
+    color: var(--modal-accent-soft) !important;
+}
+
+#detailsModal .modal-btn-case:hover:not([disabled]) {
+    background-color: rgba(var(--modal-accent-rgb), 0.3) !important;
+    border-color: var(--modal-accent-light) !important;
+    color: #faf5ff !important;
+    box-shadow: 0 0 12px rgba(var(--modal-accent-rgb), 0.35);
+}
+
+/* Subform styling (Add to Case / MISP form in modal) */
+.details-modal-form,
+.modal-subform-container {
+    padding: 1.15rem 1.35rem;
+    background: #05070f;
+    font-family: 'IBMPlexSans', -apple-system, sans-serif;
+    color: #cbd5e1;
+    white-space: normal !important;
+    word-break: normal;
+    line-height: 1.4;
+}
+
+.details-modal-form *,
+.modal-subform-container * {
+    white-space: normal;
+}
+
+.details-modal-form pre,
+.modal-subform-container pre,
+.details-modal-form code,
+.modal-subform-container code,
+.details-modal-form textarea.font-mono,
+.modal-subform-container textarea.font-mono,
+.details-modal-form input.font-mono,
+.modal-subform-container input.font-mono {
+    white-space: pre-wrap !important;
+    font-family: 'IBMPlexMono', monospace !important;
+}
+
+.modal-subform-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid rgba(var(--modal-accent-rgb), 0.18);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.modal-subform-title {
+    font-family: 'IBMPlexSans', -apple-system, sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.modal-subform-title .icon {
+    color: var(--modal-accent-light);
+}
+
+.modal-tag-icon {
+    color: var(--modal-accent-light) !important;
+}
+
+.modal-ioc-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: #0c101e;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.28);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.78rem;
+    max-width: 100%;
+    flex-wrap: wrap;
+}
+
+.modal-ioc-label {
+    color: #94a3b8;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.modal-ioc-val {
+    color: var(--modal-accent-light);
+    font-family: 'IBMPlexMono', monospace;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.details-modal-form .field,
+.modal-subform-container .field {
+    margin-bottom: 0.75rem !important;
+}
+
+.details-modal-form .columns,
+.modal-subform-container .columns {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.details-modal-form .column,
+.modal-subform-container .column {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.details-modal-form .terminal-form-label,
+.modal-subform-container .terminal-form-label {
+    display: block !important;
+    font-family: 'IBMPlexMono', monospace !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: #94a3b8 !important;
+    margin-bottom: 0.25rem !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
+}
+
+.details-modal-form .control,
+.modal-subform-container .control {
+    margin: 0 !important;
+    padding: 0 !important;
+    flex-grow: 0 !important;
+}
+
+.terminal-input,
+.details-modal-form input.input,
+.modal-subform-container input.input {
+    background-color: #080c18 !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.28) !important;
+    color: #f1f5f9 !important;
+    border-radius: 4px !important;
+    font-family: 'IBMPlexSans', -apple-system, sans-serif !important;
+    font-size: 0.85rem !important;
+    box-shadow: none !important;
+    height: 2.25em !important;
+    padding: 0 0.65rem !important;
+    transition: all 0.15s ease !important;
+}
+
+.terminal-textarea,
+.details-modal-form textarea.textarea,
+.modal-subform-container textarea.textarea {
+    background-color: #080c18 !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.28) !important;
+    color: #f1f5f9 !important;
+    border-radius: 4px !important;
+    font-family: 'IBMPlexSans', -apple-system, sans-serif !important;
+    font-size: 0.85rem !important;
+    box-shadow: none !important;
+    min-height: 3.75rem !important;
+    padding: 0.45rem 0.65rem !important;
+    transition: all 0.15s ease !important;
+    resize: vertical;
+}
+
+.terminal-input.font-mono,
+.terminal-textarea.font-mono,
+.details-modal-form textarea.font-mono,
+.modal-subform-container textarea.textarea.font-mono {
+    font-family: 'IBMPlexMono', monospace !important;
+}
+
+.terminal-input:focus,
+.terminal-textarea:focus,
+.details-modal-form input.input:focus,
+.details-modal-form textarea.textarea:focus,
+.modal-subform-container input.input:focus,
+.modal-subform-container textarea.textarea:focus {
+    border-color: var(--modal-accent) !important;
+    box-shadow: 0 0 10px rgba(var(--modal-accent-rgb), 0.25) !important;
+}
+
+.terminal-input::placeholder,
+.terminal-textarea::placeholder,
+.details-modal-form input.input::placeholder,
+.details-modal-form textarea.textarea::placeholder,
+.modal-subform-container input.input::placeholder,
+.modal-subform-container textarea.textarea::placeholder {
+    color: #475569 !important;
+}
+
+.terminal-form-help {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 0.15rem;
+}
+
+.terminal-select,
+.details-modal-form .select,
+.modal-subform-container .select {
+    height: 2.25em !important;
+}
+
+.terminal-select select,
+.details-modal-form .select select,
+.modal-subform-container .select select {
+    background-color: #080c18 !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.28) !important;
+    color: #f1f5f9 !important;
+    border-radius: 4px !important;
+    font-family: 'IBMPlexSans', -apple-system, sans-serif !important;
+    font-size: 0.85rem !important;
+    height: 2.25em !important;
+    padding-left: 0.65rem !important;
+    padding-right: 2.2em !important;
+}
+
+.terminal-select select:focus,
+.details-modal-form .select select:focus,
+.modal-subform-container .select select:focus {
+    border-color: var(--modal-accent) !important;
+    box-shadow: 0 0 10px rgba(var(--modal-accent-rgb), 0.25) !important;
+}
+
+.terminal-select:not(.is-multiple):not(.is-loading)::after,
+.details-modal-form .select:not(.is-multiple):not(.is-loading)::after,
+.modal-subform-container .select:not(.is-multiple):not(.is-loading)::after {
+    border-color: var(--modal-accent) !important;
+    right: 1.125em !important;
+    top: 50% !important;
+    transform: translateY(-50%) rotate(-45deg) !important;
+    margin-top: 0 !important;
+}
+
+.terminal-form-notification {
+    background: #0c101e !important;
+    border: 1px solid rgba(var(--modal-accent-rgb), 0.25) !important;
+    border-radius: 6px !important;
+    color: #e2e8f0 !important;
+    padding: 0.75rem 0.95rem !important;
+    font-size: 0.84rem !important;
+    font-family: 'IBMPlexSans', -apple-system, sans-serif !important;
+}
+
+.terminal-form-notification.is-success {
+    border-color: rgba(16, 185, 129, 0.45) !important;
+    border-left: 4px solid #10b981 !important;
+    color: #a7f3d0 !important;
+}
+
+.terminal-form-notification.is-danger {
+    border-color: rgba(239, 68, 68, 0.45) !important;
+    border-left: 4px solid #ef4444 !important;
+    color: #fecaca !important;
+}
+
+.terminal-form-notification.is-warning {
+    border-color: rgba(245, 158, 11, 0.45) !important;
+    border-left: 4px solid #f59e0b !important;
+    color: #fde68a !important;
+}
+
 
 
 

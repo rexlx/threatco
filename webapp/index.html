@@ -87,41 +87,53 @@
         </div>
     </section>
 
-    <div class="modal" id="detailsModal">
+    <div class="modal terminal-modal" id="detailsModal">
         <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head">
-                <p class="modal-card-title" id="detailsModalTitle">Details</p>
-                <button class="delete" aria-label="close"></button>
+        <div class="modal-card details-modal-card">
+            <header class="modal-card-head terminal-titlebar details-modal-titlebar">
+                <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div>
+                <div class="terminal-title details-modal-title-wrap">
+                    <span class="terminal-status-dot details-status-dot"></span>
+                    <span class="modal-card-title details-modal-title" id="detailsModalTitle">Details</span>
+                </div>
+                <div class="terminal-actions details-modal-actions">
+                    <span class="system-status-pill details-status-pill">
+                        <span class="status-indicator-dot dot-details"></span>TELEMETRY DETAIL
+                    </span>
+                    <button class="button is-small terminal-action-btn modal-close-btn delete" aria-label="close" title="Close modal">
+                        <span class="icon is-small"><i class="material-icons">close</i></span>
+                    </button>
+                </div>
             </header>
-            <section class="modal-card-body">
-                <pre id="detailsModalContent"></pre>
+            <section class="modal-card-body details-modal-body" id="detailsModalBody">
+                <pre id="detailsModalContent" class="details-modal-pre"></pre>
+                <div id="detailsModalForm" class="details-modal-form is-hidden"></div>
             </section>
-            <footer class="modal-card-foot">
-                <button class="button is-success" id="copyButton">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">content_copy</i></span>
+            <footer class="modal-card-foot details-modal-foot" id="detailsModalFoot">
+                <div class="details-foot-left">
+                    <button class="button terminal-action-btn modal-btn-copy" id="copyButton" type="button" title="Copy raw event payload">
+                        <span class="icon is-small"><i class="material-icons">content_copy</i></span>
                         <span>Copy</span>
-                    </span>
-                </button>
-                <button class="button is-warning" id="archiveButton">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">archive</i></span>
+                    </button>
+                    <button class="button terminal-action-btn modal-btn-archive" id="archiveButton" type="button" title="Archive event response">
+                        <span class="icon is-small"><i class="material-icons">archive</i></span>
                         <span>Archive</span>
-                    </span>
-                </button>
-                <button class="button is-white is-outlined" id="mispButton">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">bug_report</i></span>
+                    </button>
+                </div>
+                <div class="details-foot-right">
+                    <button class="button terminal-action-btn modal-btn-misp" id="mispButton" type="button" title="Create MISP Event from IOC">
+                        <span class="icon is-small"><i class="material-icons">bug_report</i></span>
                         <span>Add to MISP</span>
-                    </span>
-                </button>
-                <button class="button is-white is-outlined" id="addToCaseButton">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">work_outline</i></span>
+                    </button>
+                    <button class="button terminal-action-btn modal-btn-case" id="addToCaseButton" type="button" title="Add IOC to investigation case">
+                        <span class="icon is-small"><i class="material-icons">work_outline</i></span>
                         <span>Add to Case</span>
-                    </span>
-                </button>
+                    </button>
+                </div>
             </footer>
         </div>
     </div>

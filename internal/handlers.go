@@ -285,6 +285,14 @@ func (s *Server) CreateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	if c.Comments == nil {
 		c.Comments = []Comment{}
 	}
+	for i := range c.Comments {
+		if c.Comments[i].CreatedAt.IsZero() {
+			c.Comments[i].CreatedAt = time.Now()
+		}
+		if c.Comments[i].User == "" {
+			c.Comments[i].User = email
+		}
+	}
 
 	if c.AIReport != "" {
 		c.AIReport = CleanLLMHTMLReport(c.AIReport)
@@ -487,6 +495,15 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Case not found", http.StatusNotFound)
 		return
+	}
+
+	for i := range incoming.Comments {
+		if incoming.Comments[i].CreatedAt.IsZero() {
+			incoming.Comments[i].CreatedAt = time.Now()
+		}
+		if incoming.Comments[i].User == "" {
+			incoming.Comments[i].User = email
+		}
 	}
 
 	hasNewComments := len(incoming.Comments) > len(existing.Comments)
@@ -2685,7 +2702,7 @@ func renderResponseTable(w io.Writer, responses []ResponseItem) error {
         <td class="resp-cell-value">%s</td>
         <td class="resp-cell-actions">
             <div class="user-action-group">
-                <a href="%s" class="button is-small terminal-action-btn" title="View Event">
+                <a href="%s" class="button is-small terminal-action-btn view-event-btn" title="View Event">
                     <span class="icon is-small"><i class="material-icons">visibility</i></span>
                 </a>
                 <button class="button is-small terminal-action-btn terminal-btn-danger delete-btn" data-id="%s" title="Delete Response">
