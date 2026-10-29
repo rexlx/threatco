@@ -1,9 +1,11 @@
 import { escapeHtml } from './utils.js';
+import { Contextualizer } from '../parser.js';
 
 export class ModalManager {
     constructor(modalId, app) {
         this.modal = document.getElementById(modalId);
         this.app = app;
+        this.contextualizer = new Contextualizer();
         
         // Cache elements
         this.title = document.getElementById('detailsModalTitle');
@@ -132,52 +134,118 @@ export class ModalManager {
         this.showRawView();
     }
 
+    /**
+     * Extracts and validates IOCs from event focus data using webapp/parser.js Contextualizer.
+     * Prevents deep-scanning into raw vendor enrichment trees (e.g., hundreds of MISP attributes).
+     */
+    extractEventContext(currentData) {
+        let eventSource = null;
+        const candidateStrings = [];
+        const seenStrings = new Set();
+
+        const addCandidate = (val) => {
+            if (!val || typeof val !== 'string') return;
+            const cleaned = val.trim();
+            if (cleaned && cleaned !== 'N/A' && !seenStrings.has(cleaned)) {
+                seenStrings.add(cleaned);
+                candidateStrings.push(cleaned);
+            }
+        };
+
+        // Unpack top-level array wrappers without traversing deep vendor trees
+        const topLevelItems = [];
+        const unwrap = (data) => {
+            if (!data) return;
+            if (Array.isArray(data)) {
+                for (const item of data) {
+                    if (Array.isArray(item)) unwrap(item);
+                    else if (item && typeof item === 'object') topLevelItems.push(item);
+                }
+            } else if (typeof data === 'object') {
+                topLevelItems.push(data);
+            }
+        };
+        unwrap(currentData);
+
+        for (const item of topLevelItems) {
+            // Find the primary event descriptor (ProxyRequest, SummarizedEvent, or Case)
+            if (!eventSource && (item.value || item.info || item.from)) {
+                eventSource = item;
+            }
+
+            // Extract the searched/matched indicator at top-level
+            if (item.value && typeof item.value === 'string') {
+                addCandidate(item.value);
+            }
+
+            // Extract explicit top-level IOC list if present on the event
+            if (Array.isArray(item.iocs)) {
+                for (const i of item.iocs) addCandidate(i);
+            }
+        }
+
+        // Validate and classify indicators using parser.js Contextualizer
+        const validatedIocs = [];
+        const seenValidated = new Set();
+        let detectedType = '';
+
+        for (const raw of candidateStrings) {
+            const parsed = this.contextualizer.extractAll(raw);
+            let hasMatch = false;
+
+            for (const [kind, matches] of Object.entries(parsed)) {
+                if (kind === 'base_domain') continue; // Avoid redundant second-level domains
+                for (const m of matches) {
+                    const cleanVal = (m.value || '').trim();
+                    if (cleanVal && !seenValidated.has(cleanVal)) {
+                        seenValidated.add(cleanVal);
+                        validatedIocs.push(cleanVal);
+                        if (!detectedType) detectedType = m.type || kind;
+                        hasMatch = true;
+                    }
+                }
+            }
+
+            // Fallback for custom values where the parser regex didn't explicitly capture it
+            if (!hasMatch && !seenValidated.has(raw)) {
+                seenValidated.add(raw);
+                validatedIocs.push(raw);
+            }
+        }
+
+        // Fallback: If no top-level indicator was found, scan event description/info text
+        if (validatedIocs.length === 0 && eventSource) {
+            const textToScan = [eventSource.info, eventSource.description].filter(Boolean).join(' ');
+            if (textToScan) {
+                const parsed = this.contextualizer.extractAll(textToScan);
+                for (const [kind, matches] of Object.entries(parsed)) {
+                    if (kind === 'base_domain') continue;
+                    for (const m of matches) {
+                        const cleanVal = (m.value || '').trim();
+                        if (cleanVal && !seenValidated.has(cleanVal)) {
+                            seenValidated.add(cleanVal);
+                            validatedIocs.push(cleanVal);
+                            if (!detectedType) detectedType = m.type || kind;
+                        }
+                    }
+                }
+            }
+        }
+
+        return {
+            eventSource,
+            iocs: validatedIocs,
+            primaryIoc: validatedIocs.length > 0 ? validatedIocs[0] : (eventSource?.value || ''),
+            type: detectedType || eventSource?.type || ''
+        };
+    }
+
     async renderCaseForm() {
         const currentData = this.app.focus;
         const currentResponseId = this.archiveButton?.dataset?.id || '';
 
-        // Extract all candidate IOCs and primary event info using recursive scanning
-        const detectedIocs = [];
-        const seenIocs = new Set();
-        let eventSource = null;
-
-        const scan = (obj) => {
-            if (!obj) return;
-            if (typeof obj === 'string') return;
-            if (Array.isArray(obj)) {
-                for (const item of obj) scan(item);
-                return;
-            }
-            if (typeof obj === 'object') {
-                if (!eventSource && (obj.value || obj.info || obj.from)) {
-                    eventSource = obj;
-                }
-                if (typeof obj.value === 'string') {
-                    const v = obj.value.trim();
-                    if (v && v !== 'N/A' && !seenIocs.has(v)) {
-                        seenIocs.add(v);
-                        detectedIocs.push(v);
-                    }
-                }
-                if (Array.isArray(obj.iocs)) {
-                    for (const i of obj.iocs) {
-                        if (typeof i === 'string') {
-                            const v = i.trim();
-                            if (v && !seenIocs.has(v)) {
-                                seenIocs.add(v);
-                                detectedIocs.push(v);
-                            }
-                        }
-                    }
-                }
-                for (const key of Object.keys(obj)) {
-                    if (typeof obj[key] === 'object' && obj[key] !== null) {
-                        scan(obj[key]);
-                    }
-                }
-            }
-        };
-        scan(currentData);
+        // Extract and validate indicators using parser.js Contextualizer
+        const { eventSource, iocs: detectedIocs, primaryIoc } = this.extractEventContext(currentData);
 
         // Fetch existing open cases to populate dropdown
         let cases = [];
@@ -201,7 +269,6 @@ export class ModalManager {
             console.error("Failed to load users", e);
         }
 
-        const primaryIoc = detectedIocs.length > 0 ? detectedIocs[0] : '';
         let defaultName = primaryIoc ? `Investigation: ${primaryIoc}` : (currentResponseId ? `Investigation: ${currentResponseId.substring(0, 8)}` : '');
         let defaultDesc = '';
         if (eventSource?.info) {
@@ -551,46 +618,16 @@ export class ModalManager {
 
     renderMispForm() {
         const currentData = this.app.focus;
-        let eventSource = null;
-
-        // Traverse objects/arrays recursively to find indicator and event context
-        const scanEvent = (obj) => {
-            if (!obj || typeof obj === 'string') return;
-            if (Array.isArray(obj)) {
-                for (const item of obj) {
-                    scanEvent(item);
-                    if (eventSource && eventSource.value) return;
-                }
-                return;
-            }
-            if (typeof obj === 'object') {
-                if (!eventSource && (obj.value || obj.info || obj.from)) {
-                    eventSource = obj;
-                }
-                if (obj.value && typeof obj.value === 'string' && obj.value.trim() !== '' && obj.value !== 'N/A') {
-                    eventSource = obj;
-                    return;
-                }
-                for (const key of Object.keys(obj)) {
-                    if (typeof obj[key] === 'object' && obj[key] !== null) {
-                        scanEvent(obj[key]);
-                        if (eventSource && eventSource.value) return;
-                    }
-                }
-            }
-        };
-        scanEvent(currentData);
+        const { eventSource, primaryIoc, type: detectedType } = this.extractEventContext(currentData);
 
         // Extract Data
-        let initialValue = eventSource?.value || "";
-        let initialType = eventSource?.type || "";
+        let initialValue = primaryIoc || eventSource?.value || "";
+        let initialType = detectedType || eventSource?.type || "";
         
         // Mapping
-        if (initialType === 'ip') initialType = 'ip-src';
-        if (initialType === 'ipv4') initialType = 'ip-src';
-        if (initialType === 'ipv6') initialType = 'ip-src';
-        if (initialType === 'email') initialType = 'email-src';
-        if (initialType === 'cve') initialType = 'vulnerability';
+        if (initialType === 'ip' || initialType === 'ipv4' || initialType === 'ipv6') initialType = 'ip-src';
+        else if (initialType === 'email') initialType = 'email-src';
+        else if (initialType === 'cve') initialType = 'vulnerability';
         
         let initialInfo = initialValue ? `Investigation of ${initialValue}` : 'ThreatCo Security Investigation';
         if (eventSource?.info) {
