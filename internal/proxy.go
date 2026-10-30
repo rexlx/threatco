@@ -903,7 +903,7 @@ func DomainToolsClassicProxyHelper(resch chan ResponseItem, ep *Endpoint, req Pr
 	default:
 		uname, key = "", ""
 	}
-	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
 
 	sig := Sign(uname, key, timestamp, uri)
 	switch req.Route {
@@ -1021,7 +1021,7 @@ func DomainToolsProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyRequ
 	default:
 		uname, key = "", ""
 	}
-	timestamp := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
 	if req.Route != "" {
 		uri = fmt.Sprintf("/v1/%s/%s", req.Route, req.Value)
 	} else {

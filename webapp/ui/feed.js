@@ -4,6 +4,7 @@
  * Updates the layout to sit the colored CWE indicator tiles directly next to the source tags.
  */
 import { escapeHtml } from './utils.js';
+import { Contextualizer } from '../parser.js';
 
 export class FeedController {
     /**
@@ -13,6 +14,7 @@ export class FeedController {
     constructor(containerId, app) {
         this.containerId = containerId;
         this.app = app;
+        this.contextualizer = new Contextualizer();
         this.feedItems = []; // Store raw items for dynamic filtering
         this.currentFilter = 'All'; // Track current filter state
 
@@ -106,83 +108,126 @@ export class FeedController {
             </div>
             <div class="feed-list-wrapper" id="feedListItems"></div>
 
-            <div class="modal" id="feedCaseModal">
+            <!-- Feed Case Modal (Restyled Terminal Modal) -->
+            <div class="modal terminal-modal" id="feedCaseModal">
                 <div class="modal-background"></div>
-                <div class="modal-card">
-                    <header class="modal-card-head">
-                        <p class="modal-card-title">Open Case for Vulnerability</p>
-                        <button class="delete" aria-label="close"></button>
+                <div class="modal-card details-modal-card">
+                    <header class="modal-card-head terminal-titlebar details-modal-titlebar">
+                        <div class="terminal-dots">
+                            <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                            <span class="terminal-dot dot-min"></span>
+                            <span class="terminal-dot dot-expand"></span>
+                        </div>
+                        <div class="terminal-title details-modal-title-wrap">
+                            <span class="terminal-status-dot details-status-dot"></span>
+                            <span class="modal-card-title details-modal-title" id="feedCaseModalTitle">Open Case for Vulnerability</span>
+                        </div>
+                        <div class="terminal-actions details-modal-actions">
+                            <span class="system-status-pill details-status-pill">
+                                <span class="status-indicator-dot dot-details"></span>FEED INTEL
+                            </span>
+                            <button class="button is-small terminal-action-btn modal-close-btn delete" aria-label="close" title="Close modal">
+                                <span class="icon is-small"><i class="material-icons">close</i></span>
+                            </button>
+                        </div>
                     </header>
-                    <section class="modal-card-body">
-                        <form id="feedCaseForm">
-                            <div class="field">
-                                <label class="label">Target Case</label>
-                                <div class="control">
-                                    <div class="select is-fullwidth">
-                                        <select id="feedTargetCaseId">
-                                            <option value="">-- Create New Case --</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="feedNewCaseFields">
-                                <div class="field">
-                                    <label class="label">Case Name</label>
+                    <section class="modal-card-body details-modal-body">
+                        <div class="modal-subform-container">
+                            <form id="feedCaseForm" novalidate>
+                                <div class="field mb-3">
+                                    <label class="label terminal-form-label">Target Case</label>
                                     <div class="control">
-                                        <input class="input" type="text" id="feedCaseName" placeholder="e.g. Investigation: CVE-2024-XXXX">
+                                        <div class="select is-fullwidth terminal-select">
+                                            <select id="feedTargetCaseId">
+                                                <option value="">-- Create New Case --</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="field">
-                                    <label class="label">Description</label>
+                                <div id="feedNewCaseFields">
+                                    <div class="field mb-3">
+                                        <label class="label terminal-form-label">Case Name *</label>
+                                        <div class="control">
+                                            <input class="input terminal-input" type="text" id="feedCaseName" placeholder="e.g. Investigation: CVE-2024-XXXX">
+                                        </div>
+                                    </div>
+                                    <div class="field mb-3">
+                                        <label class="label terminal-form-label">Description</label>
+                                        <div class="control">
+                                            <textarea class="textarea terminal-textarea" id="feedCaseDesc" rows="3" placeholder="Case details..."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="field mb-3">
+                                    <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
+                                        <label class="label terminal-form-label mb-0">Associated Indicators / CVE</label>
+                                        <span class="terminal-form-help">Line breaks or commas separated</span>
+                                    </div>
                                     <div class="control">
-                                        <textarea class="textarea" id="feedCaseDesc" rows="3" placeholder="Case details..."></textarea>
+                                        <textarea class="textarea terminal-textarea font-mono" id="feedCaseIocs" rows="2" placeholder="Indicators..."></textarea>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="field">
-                                <label class="label">Associated IOCs / CVE</label>
-                                <div class="control">
-                                    <input class="input" type="text" id="feedCaseIocs" readonly style="background-color: #111927; color: #38bdf8; border: 1px solid #1e293b;">
+                                <div id="feedCaseResult" class="mt-2"></div>
+                                <div class="buttons is-right mt-3">
+                                    <button type="button" class="button terminal-action-btn" id="feedCaseCancelBtn">Cancel</button>
+                                    <button type="submit" class="button terminal-action-btn modal-btn-case" id="feedCaseSubmitBtn">
+                                        <span class="icon is-small"><i class="material-icons">work</i></span>
+                                        <span>Create / Update Case</span>
+                                    </button>
                                 </div>
-                            </div>
-                            <div id="feedCaseResult" class="mt-3"></div>
-                            <div class="buttons is-right mt-4">
-                                <button type="button" class="button" id="feedCaseCancelBtn">Cancel</button>
-                                <button type="submit" class="button is-success" id="feedCaseSubmitBtn">
-                                    <span class="icon"><i class="material-icons">work</i></span>
-                                    <span>Create / Update Case</span>
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </section>
                 </div>
             </div>
 
-            <div class="modal" id="feedAiReportModal">
+            <!-- Feed AI Report Modal (Restyled Terminal Modal) -->
+            <div class="modal terminal-modal" id="feedAiReportModal">
                 <div class="modal-background"></div>
-                <div class="modal-card">
-                    <header class="modal-card-head">
-                        <p class="modal-card-title">Cached AI Report Available</p>
-                        <button class="delete" aria-label="close" id="feedAiReportModalClose"></button>
+                <div class="modal-card details-modal-card" style="max-width: 580px;">
+                    <header class="modal-card-head terminal-titlebar details-modal-titlebar">
+                        <div class="terminal-dots">
+                            <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                            <span class="terminal-dot dot-min"></span>
+                            <span class="terminal-dot dot-expand"></span>
+                        </div>
+                        <div class="terminal-title details-modal-title-wrap">
+                            <span class="terminal-status-dot details-status-dot"></span>
+                            <span class="modal-card-title details-modal-title">Cached AI Report Available</span>
+                        </div>
+                        <div class="terminal-actions details-modal-actions">
+                            <span class="system-status-pill details-status-pill">
+                                <span class="status-indicator-dot dot-details"></span>REPORT CACHE
+                            </span>
+                            <button class="button is-small terminal-action-btn modal-close-btn delete" aria-label="close" id="feedAiReportModalClose" title="Close modal">
+                                <span class="icon is-small"><i class="material-icons">close</i></span>
+                            </button>
+                        </div>
                     </header>
-                    <section class="modal-card-body">
-                        <p class="is-size-6 mb-3">
-                            An AI Report for <strong id="feedAiReportCveText" class="has-text-info">CVE-XXXX-YYYY</strong> was previously generated on <span id="feedAiReportDateText" class="has-text-weight-bold">--</span>.
-                        </p>
-                        <p class="is-size-6 has-text-grey-light">
-                            Would you like to view the cached report or rerun the report to fetch fresh data?
-                        </p>
+                    <section class="modal-card-body details-modal-body">
+                        <div class="modal-subform-container">
+                            <p class="is-size-6 mb-3" style="color: #cbd5e1;">
+                                An AI Report for <strong id="feedAiReportCveText" style="color: var(--modal-accent-light, #fbbf24);">CVE-XXXX-YYYY</strong> was previously generated on <span id="feedAiReportDateText" class="has-text-weight-bold" style="color: #f1f5f9;">--</span>.
+                            </p>
+                            <p class="is-size-6" style="color: #94a3b8;">
+                                Would you like to view the cached report or rerun the report to fetch fresh data?
+                            </p>
+                        </div>
                     </section>
-                    <footer class="modal-card-foot is-justify-content-space-between">
-                        <button type="button" class="button is-info" id="feedAiReportViewBtn">
-                            <span class="icon"><i class="material-icons">visibility</i></span>
-                            <span>View Cached Report</span>
-                        </button>
-                        <button type="button" class="button is-warning" id="feedAiReportRerunBtn">
-                            <span class="icon"><i class="material-icons">refresh</i></span>
-                            <span>Rerun Report</span>
-                        </button>
-                        <button type="button" class="button" id="feedAiReportCancelBtn">Cancel</button>
+                    <footer class="modal-card-foot details-modal-foot">
+                        <div class="details-foot-left">
+                            <button type="button" class="button terminal-action-btn modal-btn-copy" id="feedAiReportViewBtn" title="Open cached AI report">
+                                <span class="icon is-small"><i class="material-icons">visibility</i></span>
+                                <span>View Cached Report</span>
+                            </button>
+                            <button type="button" class="button terminal-action-btn modal-btn-archive" id="feedAiReportRerunBtn" title="Regenerate fresh AI report">
+                                <span class="icon is-small"><i class="material-icons">refresh</i></span>
+                                <span>Rerun Report</span>
+                            </button>
+                        </div>
+                        <div class="details-foot-right">
+                            <button type="button" class="button terminal-action-btn" id="feedAiReportCancelBtn">Cancel</button>
+                        </div>
                     </footer>
                 </div>
             </div>
@@ -508,8 +553,17 @@ export class FeedController {
         if (cancelBtn) cancelBtn.onclick = closeModal;
         if (closeBtn) closeBtn.onclick = closeModal;
 
-        const bg = modal.querySelector('.modal-background');
-        if (bg) bg.onclick = closeModal;
+        modal.querySelectorAll('.delete, .modal-background, .modal-close-dot, .modal-close-btn, #feedAiReportCancelBtn').forEach(el => {
+            el.onclick = closeModal;
+        });
+
+        const onEsc = (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('is-active')) {
+                closeModal();
+                document.removeEventListener('keydown', onEsc);
+            }
+        };
+        document.addEventListener('keydown', onEsc);
 
         modal.classList.add('is-active');
     }
@@ -525,10 +579,26 @@ export class FeedController {
 
         const iocSet = new Set();
         if (primaryCve) iocSet.add(primaryCve);
-        if (item.title && item.title !== primaryCve) iocSet.add(item.title);
         if (item.iocs && Array.isArray(item.iocs)) {
-            item.iocs.forEach(ioc => {
-                if (ioc && !ioc.startsWith('Event ID:')) iocSet.add(ioc);
+            item.iocs.forEach(raw => {
+                if (!raw || raw.startsWith('Event ID:')) return;
+                // Parse through contextualizer if available
+                if (this.contextualizer) {
+                    const parsed = this.contextualizer.extractAll(raw);
+                    let foundAny = false;
+                    for (const [kind, matches] of Object.entries(parsed)) {
+                        if (kind === 'base_domain') continue;
+                        for (const m of matches) {
+                            if (m.value) {
+                                iocSet.add(m.value.trim());
+                                foundAny = true;
+                            }
+                        }
+                    }
+                    if (!foundAny && raw.trim()) iocSet.add(raw.trim());
+                } else if (raw.trim()) {
+                    iocSet.add(raw.trim());
+                }
             });
         }
         const iocList = Array.from(iocSet);
@@ -564,16 +634,24 @@ export class FeedController {
         if (newFields) newFields.style.display = 'block';
         if (caseNameInput) caseNameInput.value = defaultName;
         if (caseDescText) caseDescText.value = defaultDesc;
-        if (caseIocsInput) caseIocsInput.value = iocList.join(', ');
+        if (caseIocsInput) caseIocsInput.value = iocList.join('\n');
         if (resultBox) resultBox.innerHTML = '';
 
         const closeModal = () => {
             modal.classList.remove('is-active');
         };
 
-        modal.querySelectorAll('.delete, .modal-background, #feedCaseCancelBtn').forEach(el => {
+        modal.querySelectorAll('.delete, .modal-background, #feedCaseCancelBtn, .modal-close-dot, .modal-close-btn').forEach(el => {
             el.onclick = closeModal;
         });
+
+        const onEsc = (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('is-active')) {
+                closeModal();
+                document.removeEventListener('keydown', onEsc);
+            }
+        };
+        document.addEventListener('keydown', onEsc);
 
         if (select) {
             select.onchange = () => {
@@ -589,6 +667,15 @@ export class FeedController {
                 submitBtn.classList.add('is-loading');
 
                 const targetId = select ? select.value : '';
+
+                // Parse IOCs from textarea (newlines, commas, semicolons)
+                const rawText = caseIocsInput ? caseIocsInput.value : '';
+                const parsedIocs = rawText
+                    .split(/[\r\n,;]+/)
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+                const finalIocs = Array.from(new Set(parsedIocs.length > 0 ? parsedIocs : iocList));
+
                 try {
                     let cachedAiReport = null;
                     if (primaryCve) {
@@ -615,7 +702,7 @@ export class FeedController {
                         const caseData = await getRes.json();
 
                         if (!caseData.iocs) caseData.iocs = [];
-                        iocList.forEach(ioc => {
+                        finalIocs.forEach(ioc => {
                             if (!caseData.iocs.includes(ioc)) {
                                 caseData.iocs.push(ioc);
                             }
@@ -632,8 +719,8 @@ export class FeedController {
                         if (!updateRes.ok) throw new Error(await updateRes.text());
                     } else {
                         // Create new case
-                        const name = caseNameInput.value.trim();
-                        const desc = caseDescText.value.trim();
+                        const name = caseNameInput ? caseNameInput.value.trim() : '';
+                        const desc = caseDescText ? caseDescText.value.trim() : '';
                         if (!name) throw new Error("Case Name is required.");
 
                         const createRes = await this.app._fetch('/cases/create', {
@@ -642,14 +729,14 @@ export class FeedController {
                                 name: name,
                                 description: desc,
                                 is_auto: false,
-                                iocs: iocList,
+                                iocs: finalIocs,
                                 ai_report: cachedAiReport || ''
                             })
                         });
                         if (!createRes.ok) throw new Error(await createRes.text());
                     }
 
-                    resultBox.innerHTML = `<div class="notification is-success is-light">Successfully saved to case!</div>`;
+                    resultBox.innerHTML = `<div class="notification terminal-form-notification is-success">Successfully saved to case!</div>`;
                     setTimeout(() => {
                         submitBtn.classList.remove('is-loading');
                         closeModal();
@@ -657,7 +744,7 @@ export class FeedController {
 
                 } catch (err) {
                     submitBtn.classList.remove('is-loading');
-                    resultBox.innerHTML = `<div class="notification is-danger is-dark">${escapeHtml(err.message)}</div>`;
+                    resultBox.innerHTML = `<div class="notification terminal-form-notification is-danger">${escapeHtml(err.message)}</div>`;
                 }
             };
         }

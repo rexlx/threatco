@@ -1946,7 +1946,7 @@ func (s *Server) GetResponseCacheHandler2(w http.ResponseWriter, r *http.Request
 	} else {
 		var lookbackTime time.Time
 		if searchID == "" {
-			lookbackTime = time.Now().UTC().Add(-24 * 365 * time.Hour) // all active responses
+			lookbackTime = time.Now().Add(-24 * 365 * time.Hour) // all active responses
 		}
 		responses, err = s.DB.GetResponses(lookbackTime)
 	}
@@ -2813,7 +2813,7 @@ func (s *Server) ExportResponseCSVHandler(w http.ResponseWriter, r *http.Request
 	} else {
 		var lookbackTime time.Time
 		if searchID == "" {
-			lookbackTime = time.Now().UTC().Add(-24 * 365 * time.Hour)
+			lookbackTime = time.Now().Add(-24 * 365 * time.Hour)
 		}
 		responses, err = s.DB.GetResponses(lookbackTime)
 	}

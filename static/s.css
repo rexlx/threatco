@@ -1933,14 +1933,17 @@ pre {
     --modal-accent-soft: #fde68a;
 }
 
-#detailsModal.modal .modal-background {
+#detailsModal.modal .modal-background,
+.terminal-modal.modal .modal-background {
     background-color: rgba(4, 7, 16, 0.82) !important;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
 
 #detailsModal.modal .modal-card,
-#detailsModal .details-modal-card {
+#detailsModal .details-modal-card,
+.terminal-modal.modal .modal-card,
+.terminal-modal .details-modal-card {
     width: 860px !important;
     max-width: 94vw !important;
     max-height: 85vh !important;
@@ -1969,7 +1972,9 @@ pre {
 
 /* Modal Titlebar */
 #detailsModal .modal-card-head,
-#detailsModal .details-modal-titlebar {
+#detailsModal .details-modal-titlebar,
+.terminal-modal .modal-card-head,
+.terminal-modal .details-modal-titlebar {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
@@ -1991,7 +1996,9 @@ pre {
 }
 
 #detailsModal .modal-card-title,
-#detailsModal .details-modal-title {
+#detailsModal .details-modal-title,
+.terminal-modal .modal-card-title,
+.terminal-modal .details-modal-title {
     font-family: 'IBMPlexMono', monospace !important;
     font-size: 0.84rem !important;
     font-weight: 600 !important;
@@ -2054,7 +2061,8 @@ pre {
     opacity: 0.85;
 }
 
-#detailsModal .modal-close-btn {
+#detailsModal .modal-close-btn,
+.terminal-modal .modal-close-btn {
     background: rgba(var(--modal-accent-rgb), 0.1) !important;
     border: 1px solid rgba(var(--modal-accent-rgb), 0.25) !important;
     color: #94a3b8 !important;
@@ -2069,20 +2077,25 @@ pre {
     transition: all 0.15s ease;
 }
 
-#detailsModal .modal-close-btn:hover {
+#detailsModal .modal-close-btn:hover,
+.terminal-modal .modal-close-btn:hover {
     background: rgba(239, 68, 68, 0.2) !important;
     border-color: rgba(239, 68, 68, 0.5) !important;
     color: #fca5a5 !important;
 }
 
 #detailsModal .modal-close-btn::before,
-#detailsModal .modal-close-btn::after {
+#detailsModal .modal-close-btn::after,
+.terminal-modal .modal-close-btn::before,
+.terminal-modal .modal-close-btn::after {
     display: none !important;
 }
 
 /* Modal Body & JSON Viewer */
 #detailsModal .modal-card-body,
-#detailsModal .details-modal-body {
+#detailsModal .details-modal-body,
+.terminal-modal .modal-card-body,
+.terminal-modal .details-modal-body {
     background: #05070f !important;
     color: #e2e8f0 !important;
     padding: 0 !important;
@@ -2092,26 +2105,32 @@ pre {
     max-height: calc(85vh - 110px) !important;
 }
 
-#detailsModal .modal-card-body::-webkit-scrollbar {
+#detailsModal .modal-card-body::-webkit-scrollbar,
+.terminal-modal .modal-card-body::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
-#detailsModal .modal-card-body::-webkit-scrollbar-track {
+#detailsModal .modal-card-body::-webkit-scrollbar-track,
+.terminal-modal .modal-card-body::-webkit-scrollbar-track {
     background: #080c16;
 }
 
-#detailsModal .modal-card-body::-webkit-scrollbar-thumb {
+#detailsModal .modal-card-body::-webkit-scrollbar-thumb,
+.terminal-modal .modal-card-body::-webkit-scrollbar-thumb {
     background: rgba(var(--modal-accent-rgb), 0.25);
     border-radius: 4px;
 }
 
-#detailsModal .modal-card-body::-webkit-scrollbar-thumb:hover {
+#detailsModal .modal-card-body::-webkit-scrollbar-thumb:hover,
+.terminal-modal .modal-card-body::-webkit-scrollbar-thumb:hover {
     background: rgba(var(--modal-accent-rgb), 0.5);
 }
 
 #detailsModal pre,
-#detailsModal .details-modal-pre {
+#detailsModal .details-modal-pre,
+.terminal-modal pre,
+.terminal-modal .details-modal-pre {
     margin: 0 !important;
     padding: 1.25rem 1.4rem !important;
     background: #05070f !important;
@@ -2128,7 +2147,9 @@ pre {
 
 /* Modal Footer */
 #detailsModal .modal-card-foot,
-#detailsModal .details-modal-foot {
+#detailsModal .details-modal-foot,
+.terminal-modal .modal-card-foot,
+.terminal-modal .details-modal-foot {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
@@ -2142,7 +2163,9 @@ pre {
 }
 
 #detailsModal .modal-card-foot.is-hidden,
-#detailsModal .details-modal-foot.is-hidden {
+#detailsModal .details-modal-foot.is-hidden,
+.terminal-modal .modal-card-foot.is-hidden,
+.terminal-modal .details-modal-foot.is-hidden {
     display: none !important;
 }
 
@@ -2155,7 +2178,8 @@ pre {
 }
 
 /* Action Buttons inside Details Modal */
-#detailsModal .terminal-action-btn {
+#detailsModal .terminal-action-btn,
+.terminal-modal .terminal-action-btn {
     font-family: 'IBMPlexSans', -apple-system, sans-serif !important;
     font-size: 0.78rem !important;
     height: 2.15em !important;
@@ -2170,52 +2194,60 @@ pre {
     transition: all 0.15s ease !important;
 }
 
-#detailsModal .terminal-action-btn .material-icons {
+#detailsModal .terminal-action-btn .material-icons,
+.terminal-modal .terminal-action-btn .material-icons {
     font-size: 15px !important;
 }
 
-#detailsModal .terminal-action-btn:hover:not([disabled]) {
+#detailsModal .terminal-action-btn:hover:not([disabled]),
+.terminal-modal .terminal-action-btn:hover:not([disabled]) {
     background-color: rgba(var(--modal-accent-rgb), 0.18) !important;
     border-color: var(--modal-accent) !important;
     color: #f3e8ff !important;
     box-shadow: 0 0 10px rgba(var(--modal-accent-rgb), 0.22);
 }
 
-#detailsModal .modal-btn-copy:hover:not([disabled]) {
+#detailsModal .modal-btn-copy:hover:not([disabled]),
+.terminal-modal .modal-btn-copy:hover:not([disabled]) {
     border-color: rgba(16, 185, 129, 0.5) !important;
     color: #34d399 !important;
     background-color: rgba(16, 185, 129, 0.12) !important;
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
 
-#detailsModal .modal-btn-copy.is-copied {
+#detailsModal .modal-btn-copy.is-copied,
+.terminal-modal .modal-btn-copy.is-copied {
     background-color: rgba(16, 185, 129, 0.2) !important;
     border-color: #10b981 !important;
     color: #34d399 !important;
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.3) !important;
 }
 
-#detailsModal .modal-btn-archive:hover:not([disabled]) {
+#detailsModal .modal-btn-archive:hover:not([disabled]),
+.terminal-modal .modal-btn-archive:hover:not([disabled]) {
     border-color: rgba(245, 158, 11, 0.5) !important;
     color: #fbbf24 !important;
     background-color: rgba(245, 158, 11, 0.12) !important;
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
 }
 
-#detailsModal .modal-btn-misp:hover:not([disabled]) {
+#detailsModal .modal-btn-misp:hover:not([disabled]),
+.terminal-modal .modal-btn-misp:hover:not([disabled]) {
     border-color: rgba(244, 63, 94, 0.5) !important;
     color: #fb7185 !important;
     background-color: rgba(244, 63, 94, 0.12) !important;
     box-shadow: 0 0 10px rgba(244, 63, 94, 0.2);
 }
 
-#detailsModal .modal-btn-case {
+#detailsModal .modal-btn-case,
+.terminal-modal .modal-btn-case {
     background-color: rgba(var(--modal-accent-rgb), 0.18) !important;
     border-color: rgba(var(--modal-accent-rgb), 0.45) !important;
     color: var(--modal-accent-soft) !important;
 }
 
-#detailsModal .modal-btn-case:hover:not([disabled]) {
+#detailsModal .modal-btn-case:hover:not([disabled]),
+.terminal-modal .modal-btn-case:hover:not([disabled]) {
     background-color: rgba(var(--modal-accent-rgb), 0.3) !important;
     border-color: var(--modal-accent-light) !important;
     color: #faf5ff !important;

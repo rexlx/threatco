@@ -619,7 +619,7 @@ func (db *PostgresDB) StoreResponse(archive bool, id string, data []byte, vendor
 	_, err := db.Pool.Exec(context.Background(),
 		fmt.Sprintf("INSERT INTO %s (id, data, created, vendor) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, created = EXCLUDED.created, vendor = EXCLUDED.vendor",
 			tableName),
-		id, data, time.Now().UTC(), vendor)
+		id, data, time.Now(), vendor)
 	return err
 }
 
@@ -689,7 +689,7 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
             SELECT id, data, created, vendor FROM responses 
             WHERE created > $1 
             ORDER BY created DESC`
-		args = append(args, expiration.UTC())
+		args = append(args, expiration)
 	}
 	// Pass the variable arguments (args...) to the query
 	rows, err := db.Pool.Query(context.Background(), query, args...)
@@ -706,7 +706,7 @@ func (db *PostgresDB) GetResponses(expiration time.Time) ([]ResponseItem, error)
 		if err := rows.Scan(&resp.ID, &data, &resp.Time, &resp.Vendor); err != nil {
 			return nil, err
 		}
-		resp.Time = resp.Time.UTC()
+		resp.Time = resp.Time
 		resp.Data = data
 		responses = append(responses, resp)
 	}
@@ -736,7 +736,7 @@ func (db *PostgresDB) GetArchivedResponses() ([]ResponseItem, error) {
 		if err := rows.Scan(&resp.ID, &data, &resp.Time, &resp.Vendor); err != nil {
 			return nil, err
 		}
-		resp.Time = resp.Time.UTC()
+		resp.Time = resp.Time
 		resp.Data = data
 		responses = append(responses, resp)
 	}
