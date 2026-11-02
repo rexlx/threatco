@@ -56,11 +56,65 @@ export class FeedController {
         const container = document.getElementById(this.containerId);
         if (!container) return;
         container.classList.remove('is-hidden');
+        container.classList.remove('has-background-custom');
+        container.classList.add('has-background-black');
 
-        // Show loading state matching existing styling conventions
+        // Show loading state matching terminal window conventions
         container.innerHTML = `
-            <p class="has-text-grey-light">Loading vulnerabilities from cache...</p>
-            <progress class="progress is-small is-info mt-2" max="100"></progress>
+            <div class="users-nav-bar feed-nav-bar mb-3" id="feed-top">
+                <div class="users-nav-left">
+                    <div class="users-nav-title-group">
+                        <span class="users-nav-title">Vulnerability Intel Feed</span>
+                        <span class="tag is-info is-dark is-rounded charts-count-badge" id="feedCountBadge">Checking...</span>
+                    </div>
+                </div>
+                <div class="users-nav-right">
+                    <button type="button" class="button is-small is-dark is-outlined" disabled>↻ Refresh</button>
+                </div>
+            </div>
+
+            <div class="users-window feed-window" id="feedViewer">
+                <div class="terminal-titlebar">
+                    <div class="terminal-dots">
+                        <span class="terminal-dot dot-close"></span>
+                        <span class="terminal-dot dot-min"></span>
+                        <span class="terminal-dot dot-expand"></span>
+                    </div>
+                    <div class="terminal-title">
+                        <span class="terminal-status-dot"></span>
+                        <span>vulnerabilities.feed.threatco</span>
+                    </div>
+                    <div class="terminal-actions">
+                        <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>SYNCING...</span>
+                    </div>
+                </div>
+
+                <div class="terminal-table-container">
+                    <table class="terminal-table users-table feed-table">
+                        <thead>
+                            <tr>
+                                <th class="feed-th-source">SOURCE</th>
+                                <th class="feed-th-vuln">VULNERABILITY &amp; INTEL</th>
+                                <th class="feed-th-date">PUBLISHED</th>
+                                <th class="feed-th-actions">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="terminal-table-row">
+                                <td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                                    <p class="has-text-info mb-2">Loading vulnerabilities from cache...</p>
+                                    <progress class="progress is-small is-info" max="100"></progress>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="terminal-statusbar">
+                    <span>Querying vulnerability telemetry cache...</span>
+                    <span class="is-pulled-right">threatco intel &bull; cve feed</span>
+                </div>
+            </div>
         `;
 
         // Fetch and cache raw data via the Application instance wrapper
@@ -68,8 +122,67 @@ export class FeedController {
 
         if (!this.feedItems || this.feedItems.length === 0) {
             container.innerHTML = `
-                <p class="has-text-warning">No vulnerability feed items found or cache is rebuilding.</p>
+                <div class="users-nav-bar feed-nav-bar mb-3" id="feed-top">
+                    <div class="users-nav-left">
+                        <div class="users-nav-title-group">
+                            <span class="users-nav-title">Vulnerability Intel Feed</span>
+                            <span class="tag is-warning is-dark is-rounded charts-count-badge" id="feedCountBadge">0 alerts</span>
+                        </div>
+                    </div>
+                    <div class="users-nav-right">
+                        <button type="button" class="button is-small is-dark is-outlined" id="feedRefreshBtn" title="Retry fetching feed">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <div class="users-window feed-window" id="feedViewer">
+                    <div class="terminal-titlebar">
+                        <div class="terminal-dots">
+                            <span class="terminal-dot dot-close"></span>
+                            <span class="terminal-dot dot-min"></span>
+                            <span class="terminal-dot dot-expand"></span>
+                        </div>
+                        <div class="terminal-title">
+                            <span class="terminal-status-dot"></span>
+                            <span>vulnerabilities.feed.threatco</span>
+                        </div>
+                        <div class="terminal-actions">
+                            <span class="system-status-pill status-warning"><span class="status-indicator-dot dot-warning"></span>NO DATA</span>
+                        </div>
+                    </div>
+
+                    <div class="terminal-table-container">
+                        <table class="terminal-table users-table feed-table">
+                            <thead>
+                                <tr>
+                                    <th class="feed-th-source">SOURCE</th>
+                                    <th class="feed-th-vuln">VULNERABILITY &amp; INTEL</th>
+                                    <th class="feed-th-date">PUBLISHED</th>
+                                    <th class="feed-th-actions">ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="terminal-table-row">
+                                    <td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                                        No vulnerability feed items found or cache is rebuilding.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="terminal-statusbar">
+                        <span>0 records found in telemetry cache</span>
+                        <span class="is-pulled-right">threatco intel &bull; cve feed</span>
+                    </div>
+                </div>
             `;
+            const refreshBtn = document.getElementById('feedRefreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', async () => {
+                    refreshBtn.classList.add('is-loading');
+                    await this.render();
+                });
+            }
             return;
         }
 
@@ -83,32 +196,72 @@ export class FeedController {
         // Build the option elements markup for our dropdown filter
         const filterOptionsHtml = [
             '<option value="All">All Sources</option>',
-            ...dynamicSources.map(source => `<option value="${source}">${source}</option>`)
+            ...dynamicSources.map(source => `<option value="${escapeHtml(source)}">${escapeHtml(source)}</option>`)
         ].join('');
 
-        // Render template scaffolding frame with the dynamic filter control
+        // Render template scaffolding frame with the dynamic filter control, terminal window, and modals
         container.innerHTML = `
-            <div class="is-flex is-justify-content-between is-align-items-center mb-4">
-                <div>
-                    <h1 class="title has-text-info mb-1">Vulnerability Intel Feed</h1>
-                    <p class="subtitle is-size-6 has-text-grey-light mb-0">Aggregated live alerts from centralized caches. Updated periodically.</p>
-                </div>
-                <div class="field mb-0">
-                    <div class="control has-icons-left">
-                        <div class="select is-small">
-                            <select id="feedSourceFilter">
-                                ${filterOptionsHtml}
-                            </select>
-                        </div>
-                        <span class="icon is-small is-left">
-                            <i class="material-icons">filter_list</i>
-                        </span>
+            <div class="users-nav-bar feed-nav-bar mb-3" id="feed-top">
+                <div class="users-nav-left">
+                    <div class="users-nav-title-group">
+                        <span class="users-nav-title">Vulnerability Intel Feed</span>
+                        <span class="tag is-info is-dark is-rounded charts-count-badge" id="feedCountBadge">${this.feedItems.length} alerts</span>
                     </div>
                 </div>
+                <div class="users-nav-right">
+                    <div class="field mb-0">
+                        <div class="control has-icons-left">
+                            <div class="select is-small terminal-select">
+                                <select id="feedSourceFilter">
+                                    ${filterOptionsHtml}
+                                </select>
+                            </div>
+                            <span class="icon is-small is-left">
+                                <i class="material-icons" style="font-size: 14px;">filter_list</i>
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" class="button is-small is-dark is-outlined" id="feedRefreshBtn" title="Refresh vulnerability feed">↻ Refresh</button>
+                </div>
             </div>
-            <div class="feed-list-wrapper" id="feedListItems"></div>
 
-            <!-- Feed Case Modal (Restyled Terminal Modal) -->
+            <div class="users-window feed-window" id="feedViewer">
+                <div class="terminal-titlebar">
+                    <div class="terminal-dots">
+                        <span class="terminal-dot dot-close"></span>
+                        <span class="terminal-dot dot-min"></span>
+                        <span class="terminal-dot dot-expand"></span>
+                    </div>
+                    <div class="terminal-title">
+                        <span class="terminal-status-dot"></span>
+                        <span>vulnerabilities.feed.threatco</span>
+                    </div>
+                    <div class="terminal-actions">
+                        <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>INTEL LIVE</span>
+                    </div>
+                </div>
+
+                <div class="terminal-table-container">
+                    <table class="terminal-table users-table feed-table">
+                        <thead>
+                            <tr>
+                                <th class="feed-th-source">SOURCE</th>
+                                <th class="feed-th-vuln">VULNERABILITY &amp; INTEL</th>
+                                <th class="feed-th-date">PUBLISHED</th>
+                                <th class="feed-th-actions">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="feedTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="terminal-statusbar">
+                    <span id="feedStatusbarText">Showing ${this.feedItems.length} of ${this.feedItems.length} alerts</span>
+                    <span class="is-pulled-right">threatco intel &bull; cve feed</span>
+                </div>
+            </div>
+
+            <!-- Feed Case Modal (Terminal Modal) -->
             <div class="modal terminal-modal" id="feedCaseModal">
                 <div class="modal-background"></div>
                 <div class="modal-card details-modal-card">
@@ -181,7 +334,7 @@ export class FeedController {
                 </div>
             </div>
 
-            <!-- Feed AI Report Modal (Restyled Terminal Modal) -->
+            <!-- Feed AI Report Modal (Terminal Modal) -->
             <div class="modal terminal-modal" id="feedAiReportModal">
                 <div class="modal-background"></div>
                 <div class="modal-card details-modal-card" style="max-width: 580px;">
@@ -247,14 +400,22 @@ export class FeedController {
             });
         }
 
+        // Bind refresh button
+        const refreshBtn = document.getElementById('feedRefreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                refreshBtn.classList.add('is-loading');
+                await this.render();
+            });
+        }
+
         // Initially render the items list
         this.updateList();
     }
 
-
     updateList() {
-        const listContainer = document.getElementById(this.containerId ? 'feedListItems' : 'feedListItems');
-        if (!listContainer) return;
+        const tableBody = document.getElementById('feedTableBody');
+        if (!tableBody) return;
 
         // Filter feed items safely by testing source matching
         const filteredItems = this.feedItems.filter(item => {
@@ -262,15 +423,32 @@ export class FeedController {
             return item.source === this.currentFilter;
         });
 
+        // Update count badge & statusbar text
+        const badge = document.getElementById('feedCountBadge');
+        if (badge) {
+            badge.textContent = this.currentFilter === 'All'
+                ? `${filteredItems.length} alerts`
+                : `${filteredItems.length} / ${this.feedItems.length} alerts`;
+        }
+
+        const statusText = document.getElementById('feedStatusbarText');
+        if (statusText) {
+            statusText.textContent = `Showing ${filteredItems.length} of ${this.feedItems.length} alerts • Filter: ${this.currentFilter}`;
+        }
+
         if (filteredItems.length === 0) {
-            listContainer.innerHTML = `
-                <p class="has-text-grey-light is-italic my-4">No vulnerabilities match the selected source filter.</p>
+            tableBody.innerHTML = `
+                <tr class="terminal-table-row">
+                    <td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                        No vulnerabilities match the selected source filter.
+                    </td>
+                </tr>
             `;
             return;
         }
 
-        // Map matching items to Bulma markup components
-        listContainer.innerHTML = filteredItems.map((item, index) => {
+        // Map matching items to terminal table rows
+        tableBody.innerHTML = filteredItems.map((item, index) => {
             const cveMatch = item.title ? item.title.match(/CVE-\d{4}-\d+/i) : null;
             const cveIdentifier = cveMatch ? cveMatch[0].toUpperCase() : (item.title || '');
 
@@ -303,10 +481,10 @@ export class FeedController {
                         <a href="${externalUrl}" 
                            target="_blank" 
                            rel="noopener noreferrer" 
-                           class="tag font-weight-bold is-family-code ml-1 mb-1" 
-                           style="${cweColorStyle} font-size: 0.7rem; border-radius: 3px; display: inline-block; cursor: pointer;"
-                           title="${cwe}: ${description} (Click to view official MITRE details)">
-                            ${cwe}
+                           class="tag font-weight-bold is-family-code mr-1 mb-1" 
+                           style="${cweColorStyle} font-size: 0.7rem; border-radius: 3px; display: inline-block; cursor: pointer; text-decoration: none !important;"
+                           title="${escapeHtml(cwe)}: ${escapeHtml(description)} (Click to view official MITRE details)">
+                            ${escapeHtml(cwe)}
                         </a>
                     `;
                 }).join('');
@@ -321,14 +499,14 @@ export class FeedController {
                             <span class="icon is-small has-text-danger mr-1">
                                 <i class="material-icons" style="font-size: 14px;">flag</i>
                             </span>
-                            <strong class="is-size-7 has-text-danger uppercase mr-2" style="letter-spacing: 0.5px;">
+                            <strong class="is-size-7 has-text-danger uppercase mr-2" style="letter-spacing: 0.5px; font-family: 'IBMPlexMono', monospace;">
                                 Campaigns / Actors:
                             </strong>
                         </span>
                         <div class="tags mb-0">
                             ${item.campaigns.map(camp => `
                                 <span class="tag is-danger is-light is-family-code is-small mb-1" style="border: 1px solid rgba(255, 56, 96, 0.3); height: 1.6em;">
-                                    ${camp}
+                                    ${escapeHtml(camp)}
                                 </span>
                             `).join('')}
                         </div>
@@ -345,7 +523,7 @@ export class FeedController {
                             <span class="icon is-small has-text-info mr-1">
                                 <i class="material-icons" style="font-size: 14px;">security</i>
                             </span>
-                            <strong class="is-size-7 has-text-info uppercase mr-2" style="letter-spacing: 0.5px;">
+                            <strong class="is-size-7 has-text-info uppercase mr-2" style="letter-spacing: 0.5px; font-family: 'IBMPlexMono', monospace;">
                                 CAPEC Patterns:
                             </strong>
                         </span>
@@ -360,8 +538,8 @@ export class FeedController {
                                        target="_blank" 
                                        rel="noopener noreferrer" 
                                        class="tag is-info is-light is-family-code is-small mb-1" 
-                                       style="border: 1px solid rgba(50, 115, 220, 0.3); height: 1.6em; text-decoration: none;">
-                                        ${capecId}${capecName}
+                                       style="border: 1px solid rgba(50, 115, 220, 0.3); height: 1.6em; text-decoration: none !important;">
+                                        ${escapeHtml(capecId)}${escapeHtml(capecName)}
                                     </a>
                                 `;
                             }).join('')}
@@ -374,11 +552,12 @@ export class FeedController {
             let iocHtml = '';
             if (item.iocs && Array.isArray(item.iocs) && item.iocs.length > 0) {
                 // Separate Event ID from actual IOC indicators
-                const eventIdEntry = item.iocs.find(ioc => ioc.startsWith('Event ID:'));
+                const eventIdEntry = item.iocs.find(ioc => typeof ioc === 'string' && ioc.startsWith('Event ID:'));
                 const eventId = eventIdEntry ? eventIdEntry.replace('Event ID:', '').trim() : null;
 
                 // Filter out the Event ID and exact duplicate of the full title
                 const indicators = item.iocs.filter(ioc => 
+                    typeof ioc === 'string' && 
                     !ioc.startsWith('Event ID:') && 
                     ioc !== item.title
                 );
@@ -389,89 +568,94 @@ export class FeedController {
                             <span class="icon is-small has-text-warning mr-1">
                                 <i class="material-icons" style="font-size: 14px;">hub</i>
                             </span>
-                            <strong class="is-size-7 has-text-warning uppercase mr-2" style="letter-spacing: 0.5px;">
+                            <strong class="is-size-7 has-text-warning uppercase mr-2" style="letter-spacing: 0.5px; font-family: 'IBMPlexMono', monospace;">
                                 Indicators / IOCs:
                             </strong>
                             ${eventId ? `
                                 <span class="tag is-dark is-small is-family-code" style="border: 1px solid rgba(255, 221, 87, 0.35); color: #ffdd57; height: 1.6em; padding: 0 6px;">
-                                    Misp Event #${eventId}
+                                    MISP Event #${escapeHtml(eventId)}
                                 </span>
                             ` : ''}
                         </span>
 
                         <div class="tags mb-0">
                             ${indicators.length > 0 ? indicators.map(ioc => `
-                                <span class="tag is-dark is-family-code is-small mb-1" style="background-color: #111927; border: 1px solid #1e293b; color: #38bdf8; height: 1.6em;">
-                                    <span class="icon is-small mr-1" style="opacity: 0.6;"><i class="material-icons" style="font-size: 11px;">crisis_alert</i></span>
-                                    ${ioc}
+                                <span class="tag is-dark is-family-code is-small mb-1" style="background-color: #0b141c; border: 1px solid rgba(56, 189, 248, 0.25); color: #38bdf8; height: 1.6em;">
+                                    <span class="icon is-small mr-1" style="opacity: 0.7;"><i class="material-icons" style="font-size: 11px;">crisis_alert</i></span>
+                                    ${escapeHtml(ioc)}
                                 </span>
                             `).join('') : '<span class="is-size-7 has-text-grey-light is-italic">No additional IOCs</span>'}
                         </div>
                     </div>
                 `;
-            } else {
-                iocHtml = `
-                    <div class="mt-2 is-size-7 has-text-grey-light is-italic">
-                        No known open-source technical indicators associated in current pool.
-                    </div>
-                `;
+            }
+
+            // Published date formatting
+            let pubTimeRFC = '';
+            let pubTimeFormatted = '—';
+            if (item.published) {
+                const pubDate = new Date(item.published);
+                if (!isNaN(pubDate.getTime())) {
+                    pubTimeRFC = pubDate.toISOString();
+                    pubTimeFormatted = pubDate.toLocaleDateString() + ' ' + pubDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
             }
             
             return `
-                <div class="box has-background-black has-text-light mb-3 item-card">
-                    <div class="columns is-mobile is-vcentered">
-                        <div class="column">
-                            <div class="is-flex is-align-items-center is-flex-wrap-wrap mb-2">
-                                <span class="tag ${tagColor} is-light mb-1">${item.source}</span>
-                                ${cweHtml}
-                                ${item.case_id ? `
-                                    <span class="tag is-warning is-light mb-1 ml-1" style="border: 1px solid rgba(255, 221, 87, 0.4);" title="Associated with Case: ${escapeHtml(item.case_name || item.case_id)}${item.matched_by ? ' (Matched via ' + escapeHtml(item.matched_by) + ')' : ''}">
-                                        <span class="icon is-small mr-1"><i class="material-icons" style="font-size: 12px;">work</i></span>
-                                        ${escapeHtml(item.case_name || 'Case: ' + item.case_id)}
-                                        ${item.matched_by ? `<span class="is-size-7 ml-1 has-text-grey-dark">(${escapeHtml(item.matched_by)})</span>` : ''}
-                                    </span>
-                                ` : ''}
-                            </div>
-
-                            <h4 class="title is-size-5 mb-1">
-                                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="has-text-info">
-                                    ${item.title || 'Unknown Identifier'}
-                                </a>
-                            </h4>
-                            
-                            <p class="has-text-white-ter is-size-6 mt-1">${item.description || 'No description provided.'}</p>
-                            
-                            ${campaignHtml}
-                            ${capecHtml}
-                            ${iocHtml}
-                            
-                            ${item.published ? `<p class="is-size-7 has-text-grey-light mt-2">Cached/Published: ${new Date(item.published).toLocaleString()}</p>` : ''}
+                <tr class="terminal-table-row">
+                    <td class="feed-cell-source">
+                        <span class="tag ${tagColor} is-family-code is-small" style="font-weight: 600; width: 100%; border-radius: 4px;">
+                            ${escapeHtml(item.source)}
+                        </span>
+                    </td>
+                    <td class="feed-cell-vuln">
+                        <div class="is-flex is-align-items-center is-flex-wrap-wrap mb-1">
+                            ${cweHtml}
+                            ${item.case_id ? `
+                                <span class="tag is-warning is-light mb-1 ml-1 is-family-code is-small" style="border: 1px solid rgba(255, 221, 87, 0.4); height: 1.6em;" title="Associated with Case: ${escapeHtml(item.case_name || item.case_id)}${item.matched_by ? ' (Matched via ' + escapeHtml(item.matched_by) + ')' : ''}">
+                                    <span class="icon is-small mr-1"><i class="material-icons" style="font-size: 12px;">work</i></span>
+                                    ${escapeHtml(item.case_name || 'Case: ' + item.case_id)}
+                                    ${item.matched_by ? `<span class="is-size-7 ml-1 has-text-grey-dark">(${escapeHtml(item.matched_by)})</span>` : ''}
+                                </span>
+                            ` : ''}
                         </div>
-                        <div class="column is-narrow">
-                            <div class="buttons">
-                                ${item.case_id ? `
-                                    <button class="button is-small is-warning is-outlined btn-feed-view-case mr-1 mb-0" data-case-id="${escapeHtml(item.case_id)}" title="View associated case: ${escapeHtml(item.case_name || item.case_id)}${item.matched_by ? ' (Matched via ' + escapeHtml(item.matched_by) + ')' : ''}">
-                                        <span class="icon"><i class="material-icons">visibility</i></span>
-                                    </button>
-                                ` : ''}
-                                <button class="button is-small is-primary is-light is-outlined btn-feed-ai-report mr-1 mb-0" data-cve="${cveIdentifier}" title="Generate AI Report">
-                                    <span class="icon"><i class="material-icons">auto_awesome</i></span>
-                                </button>
-                                <button class="button is-small is-success is-outlined btn-feed-open-case mr-1 mb-0" data-index="${index}" title="Open or update case for this CVE">
-                                    <span class="icon"><i class="material-icons">work_outline</i></span>
 
-                                </button>
-                                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="button is-small is-info is-outlined mb-0" title="Open reference link">
-                                    <span class="icon"><i class="material-icons">open_in_new</i></span>
-                                </a>
-                            </div>
+                        <div>
+                            <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="feed-item-title">
+                                ${escapeHtml(item.title || 'Unknown Identifier')}
+                            </a>
                         </div>
-                    </div>
-                </div>
+                        
+                        <div class="feed-item-desc">${escapeHtml(item.description || 'No description provided.')}</div>
+                        
+                        ${campaignHtml}
+                        ${capecHtml}
+                        ${iocHtml}
+                    </td>
+                    <td class="feed-cell-date" title="${escapeHtml(pubTimeRFC)}">${escapeHtml(pubTimeFormatted)}</td>
+                    <td class="feed-cell-actions">
+                        <div class="user-action-group">
+                            ${item.case_id ? `
+                                <button class="button is-small terminal-action-btn terminal-btn-warning btn-feed-view-case" data-case-id="${escapeHtml(item.case_id)}" title="View associated case: ${escapeHtml(item.case_name || item.case_id)}${item.matched_by ? ' (Matched via ' + escapeHtml(item.matched_by) + ')' : ''}">
+                                    <span class="icon is-small"><i class="material-icons">visibility</i></span>
+                                </button>
+                            ` : ''}
+                            <button class="button is-small terminal-action-btn terminal-btn-primary btn-feed-ai-report" data-cve="${escapeHtml(cveIdentifier)}" title="Generate AI Report">
+                                <span class="icon is-small"><i class="material-icons">auto_awesome</i></span>
+                            </button>
+                            <button class="button is-small terminal-action-btn modal-btn-case btn-feed-open-case" data-index="${index}" title="Open or update case for this CVE">
+                                <span class="icon is-small"><i class="material-icons">work_outline</i></span>
+                            </button>
+                            <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="button is-small terminal-action-btn" title="Open reference link">
+                                <span class="icon is-small"><i class="material-icons">open_in_new</i></span>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
             `;
         }).join('');
 
-        listContainer.querySelectorAll('.btn-feed-view-case').forEach(btn => {
+        tableBody.querySelectorAll('.btn-feed-view-case').forEach(btn => {
             btn.onclick = (e) => {
                 const caseId = e.currentTarget.dataset.caseId;
                 if (caseId) {
@@ -480,7 +664,7 @@ export class FeedController {
             };
         });
 
-        listContainer.querySelectorAll('.btn-feed-ai-report').forEach(btn => {
+        tableBody.querySelectorAll('.btn-feed-ai-report').forEach(btn => {
             btn.onclick = async (e) => {
                 const cve = e.currentTarget.dataset.cve;
                 if (!cve) return;
@@ -488,9 +672,9 @@ export class FeedController {
             };
         });
 
-        listContainer.querySelectorAll('.btn-feed-open-case').forEach(btn => {
+        tableBody.querySelectorAll('.btn-feed-open-case').forEach(btn => {
             btn.onclick = (e) => {
-                const idx = parseInt(e.currentTarget.dataset.index);
+                const idx = parseInt(e.currentTarget.dataset.index, 10);
                 const item = filteredItems[idx];
                 if (item) {
                     this.openCaseModal(item);

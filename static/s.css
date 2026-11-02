@@ -1474,13 +1474,17 @@ pre {
 /* --- Users Directory & Modern Data Table --- */
 .users-section,
 .responses-section,
-.health-section {
+.health-section,
+.feed-section,
+.cases-section {
     min-height: calc(100vh - 180px);
 }
 
 .users-nav-bar,
 .responses-nav-bar,
-.health-nav-bar {
+.health-nav-bar,
+.feed-nav-bar,
+.cases-nav-bar {
     position: sticky;
     top: 0;
     z-index: 20;
@@ -1533,7 +1537,9 @@ pre {
 
 .users-window,
 .responses-window,
-.health-window {
+.health-window,
+.feed-window,
+.cases-window {
     width: 100%;
     margin: 0 auto;
     background: #070d14;
@@ -1603,7 +1609,9 @@ pre {
 .terminal-table,
 .users-table,
 .responses-table,
-.health-table {
+.health-table,
+.feed-table,
+.cases-table {
     width: 100%;
     border-collapse: collapse;
     font-family: 'IBMPlexMono', monospace;
@@ -1615,7 +1623,9 @@ pre {
 .terminal-table thead th,
 .users-table thead th,
 .responses-table thead th,
-.health-table thead th {
+.health-table thead th,
+.feed-table thead th,
+.cases-table thead th {
     background: #0a131f;
     color: #64748b;
     font-family: 'IBMPlexMono', monospace;
@@ -1632,7 +1642,9 @@ pre {
 .terminal-table tbody tr,
 .users-table tbody tr,
 .responses-table tbody tr,
-.health-table tbody tr {
+.health-table tbody tr,
+.feed-table tbody tr,
+.cases-table tbody tr {
     border-bottom: 1px solid rgba(56, 189, 248, 0.08);
     transition: background-color 0.15s ease;
 }
@@ -1640,21 +1652,27 @@ pre {
 .terminal-table tbody tr:hover,
 .users-table tbody tr:hover,
 .responses-table tbody tr:hover,
-.health-table tbody tr:hover {
+.health-table tbody tr:hover,
+.feed-table tbody tr:hover,
+.cases-table tbody tr:hover {
     background-color: rgba(56, 189, 248, 0.04);
 }
 
 .terminal-table tbody tr:last-child,
 .users-table tbody tr:last-child,
 .responses-table tbody tr:last-child,
-.health-table tbody tr:last-child {
+.health-table tbody tr:last-child,
+.feed-table tbody tr:last-child,
+.cases-table tbody tr:last-child {
     border-bottom: none;
 }
 
 .terminal-table td,
 .users-table td,
 .responses-table td,
-.health-table td {
+.health-table td,
+.feed-table td,
+.cases-table td {
     padding: 0.85rem 1.25rem;
     vertical-align: middle;
 }
@@ -1813,6 +1831,338 @@ pre {
     color: #38bdf8;
     border-color: rgba(56, 189, 248, 0.4);
     box-shadow: 0 0 8px rgba(56, 189, 248, 0.18);
+}
+
+/* --- Feed Table Specific Alignments & Sizing --- */
+.feed-th-source,
+.feed-cell-source {
+    width: 125px;
+    text-align: center;
+    vertical-align: top;
+}
+
+.feed-th-vuln,
+.feed-cell-vuln {
+    min-width: 320px;
+    vertical-align: top;
+}
+
+.feed-th-date,
+.feed-cell-date {
+    width: 165px;
+    font-size: 0.78rem;
+    color: #64748b;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.feed-th-actions,
+.feed-cell-actions {
+    width: 175px;
+    text-align: right;
+    vertical-align: top;
+}
+
+.feed-item-title {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #38bdf8 !important;
+    letter-spacing: 0.02em;
+    display: inline-block;
+    margin-bottom: 0.35rem;
+    word-break: break-word;
+    transition: color 0.15s ease;
+}
+
+.feed-item-title:hover {
+    color: #7dd3fc !important;
+    text-decoration: underline !important;
+}
+
+.feed-item-desc {
+    font-family: 'IBMPlexSans', sans-serif;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #cbd5e1;
+    margin-top: 0.25rem;
+    margin-bottom: 0.35rem;
+    word-break: break-word;
+}
+
+/* Feed View Black Background Theme Overrides (Maintain Black Background) */
+#feedContainer {
+    background-color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+.feed-nav-bar {
+    background: #000000 !important;
+    border-color: rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85) !important;
+}
+
+.feed-nav-bar .select select,
+.feed-nav-bar .terminal-select select {
+    background-color: #000000 !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    color: #f1f5f9 !important;
+    font-family: 'IBMPlexMono', monospace !important;
+    font-size: 0.8rem;
+}
+
+.feed-window {
+    background: #000000 !important;
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.9), 0 0 20px rgba(56, 189, 248, 0.08) !important;
+}
+
+.feed-window .terminal-titlebar {
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
+}
+
+.feed-window .terminal-table-container {
+    background: #000000 !important;
+}
+
+.feed-table {
+    background-color: #000000 !important;
+}
+
+.feed-table thead th {
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.28) !important;
+}
+
+.feed-table tbody tr {
+    background-color: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
+}
+
+.feed-table tbody tr:hover {
+    background-color: rgba(56, 189, 248, 0.06) !important;
+}
+
+.feed-table td {
+    padding: 0.95rem 1.25rem;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.14) !important;
+}
+
+.feed-window .terminal-statusbar {
+    background: #000000 !important;
+    border-top: 1px solid rgba(56, 189, 248, 0.12) !important;
+}
+
+/* --- Cases Table Specific Alignments & Sizing --- */
+.cases-th-select,
+.cases-cell-select {
+    width: 44px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.cases-th-status,
+.cases-cell-status {
+    width: 95px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.cases-th-priority,
+.cases-cell-priority {
+    width: 100px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.cases-th-title,
+.cases-cell-title {
+    min-width: 280px;
+    vertical-align: middle;
+}
+
+.cases-th-assignee,
+.cases-cell-assignee {
+    width: 155px;
+    vertical-align: middle;
+}
+
+.cases-th-iocs,
+.cases-cell-iocs {
+    width: 90px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.cases-th-date,
+.cases-cell-date {
+    width: 130px;
+    font-size: 0.78rem;
+    color: #64748b;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.cases-th-actions,
+.cases-cell-actions {
+    width: 110px;
+    text-align: right;
+    vertical-align: middle;
+}
+
+.case-item-title {
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #38bdf8 !important;
+    letter-spacing: 0.02em;
+    display: inline-block;
+    word-break: break-word;
+    transition: color 0.15s ease;
+}
+
+.case-item-title:hover {
+    color: #7dd3fc !important;
+    text-decoration: underline !important;
+}
+
+.case-item-desc {
+    font-family: 'IBMPlexSans', sans-serif;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: #cbd5e1;
+    margin-top: 0.2rem;
+    word-break: break-word;
+}
+
+/* Priority Badges */
+.priority-pill {
+    display: inline-block;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.priority-pill.priority-critical {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #f87171;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+}
+
+.priority-pill.priority-high {
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+}
+
+.priority-pill.priority-medium {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    color: #38bdf8;
+}
+
+.priority-pill.priority-low {
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    color: #94a3b8;
+}
+
+/* Status Badges */
+.status-pill {
+    display: inline-block;
+    font-family: 'IBMPlexMono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.status-pill.status-open {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
+.status-pill.status-closed {
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #94a3b8;
+}
+
+/* Cases View Black Background Theme Overrides (Maintain Black Background) */
+#casesContainer {
+    background-color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+.cases-nav-bar {
+    background: #000000 !important;
+    border-color: rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85) !important;
+}
+
+.cases-filter-subbar {
+    background: #000000 !important;
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65) !important;
+}
+
+.cases-window {
+    background: #000000 !important;
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.9), 0 0 20px rgba(56, 189, 248, 0.08) !important;
+}
+
+.cases-window .terminal-titlebar {
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
+}
+
+.cases-window .terminal-table-container {
+    background: #000000 !important;
+}
+
+.cases-table {
+    background-color: #000000 !important;
+}
+
+.cases-table thead th {
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.28) !important;
+}
+
+.cases-table tbody tr {
+    background-color: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
+    cursor: pointer;
+}
+
+.cases-table tbody tr:hover {
+    background-color: rgba(56, 189, 248, 0.06) !important;
+}
+
+.cases-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.14) !important;
+}
+
+.cases-window .terminal-statusbar {
+    background: #000000 !important;
+    border-top: 1px solid rgba(56, 189, 248, 0.12) !important;
 }
 
 /* Terminal Modern Pagination */
