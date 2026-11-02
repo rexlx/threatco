@@ -65,14 +65,14 @@ export class ResponseController {
         <!-- Responses Terminal Window -->
         <div class="users-window responses-window" id="responsesViewer">
             <div class="terminal-titlebar">
-                <div class="terminal-dots">
-                    <span class="terminal-dot dot-close"></span>
+                <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
                     <span class="terminal-dot dot-min"></span>
                     <span class="terminal-dot dot-expand"></span>
-                </div>
+                </div> -->
                 <div class="terminal-title">
                     <span class="terminal-status-dot"></span>
-                    <span>responses.telemetry.threatco</span>
+                    <span>responses</span>
                 </div>
                 <div class="terminal-actions">
                     <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>CACHE ONLINE</span>

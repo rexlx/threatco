@@ -29,14 +29,14 @@ var ServicesViewSection = `<section class="section has-background-black services
 		<!-- Services List Container -->
 		<div class="services-window" id="serviceViewer">
 			<div class="terminal-titlebar">
-				<div class="terminal-dots">
-					<span class="terminal-dot dot-close"></span>
-					<span class="terminal-dot dot-min"></span>
-					<span class="terminal-dot dot-expand"></span>
-				</div>
+				<!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
 				<div class="terminal-title">
 					<span class="terminal-status-dot"></span>
-					<span>services.registry.threatco</span>
+					<span>services</span>
 				</div>
 				<div class="terminal-actions">
 					<span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>CONNECTORS LIVE</span>
@@ -59,14 +59,14 @@ var ServicesViewSection = `<section class="section has-background-black services
 		<!-- News & Advisories Section -->
 		<div class="news-window mt-5" id="news">
 			<div class="terminal-titlebar">
-				<div class="terminal-dots">
-					<span class="terminal-dot dot-close"></span>
-					<span class="terminal-dot dot-min"></span>
-					<span class="terminal-dot dot-expand"></span>
-				</div>
+				<!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
 				<div class="terminal-title">
 					<span class="terminal-status-dot"></span>
-					<span>threatco-bulletins.broadcast</span>
+					<span>threatco-bulletins</span>
 				</div>
 				<div class="terminal-actions">
 					<span class="tag is-info is-dark is-rounded charts-count-badge">SYSTEM ADVISORY</span>

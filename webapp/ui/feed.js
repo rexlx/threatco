@@ -75,14 +75,14 @@ export class FeedController {
 
             <div class="users-window feed-window" id="feedViewer">
                 <div class="terminal-titlebar">
-                    <div class="terminal-dots">
-                        <span class="terminal-dot dot-close"></span>
-                        <span class="terminal-dot dot-min"></span>
-                        <span class="terminal-dot dot-expand"></span>
-                    </div>
+                    <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                     <div class="terminal-title">
                         <span class="terminal-status-dot"></span>
-                        <span>vulnerabilities.feed.threatco</span>
+                        <span>vulnerability feed</span>
                     </div>
                     <div class="terminal-actions">
                         <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>SYNCING...</span>
@@ -136,14 +136,14 @@ export class FeedController {
 
                 <div class="users-window feed-window" id="feedViewer">
                     <div class="terminal-titlebar">
-                        <div class="terminal-dots">
-                            <span class="terminal-dot dot-close"></span>
-                            <span class="terminal-dot dot-min"></span>
-                            <span class="terminal-dot dot-expand"></span>
-                        </div>
+                        <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                         <div class="terminal-title">
                             <span class="terminal-status-dot"></span>
-                            <span>vulnerabilities.feed.threatco</span>
+                            <span>vulnerability feed</span>
                         </div>
                         <div class="terminal-actions">
                             <span class="system-status-pill status-warning"><span class="status-indicator-dot dot-warning"></span>NO DATA</span>
@@ -227,14 +227,14 @@ export class FeedController {
 
             <div class="users-window feed-window" id="feedViewer">
                 <div class="terminal-titlebar">
-                    <div class="terminal-dots">
-                        <span class="terminal-dot dot-close"></span>
-                        <span class="terminal-dot dot-min"></span>
-                        <span class="terminal-dot dot-expand"></span>
-                    </div>
+                    <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                     <div class="terminal-title">
                         <span class="terminal-status-dot"></span>
-                        <span>vulnerabilities.feed.threatco</span>
+                        <span>vulnerability feed</span>
                     </div>
                     <div class="terminal-actions">
                         <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>INTEL LIVE</span>
@@ -266,11 +266,11 @@ export class FeedController {
                 <div class="modal-background"></div>
                 <div class="modal-card details-modal-card">
                     <header class="modal-card-head terminal-titlebar details-modal-titlebar">
-                        <div class="terminal-dots">
-                            <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
-                            <span class="terminal-dot dot-min"></span>
-                            <span class="terminal-dot dot-expand"></span>
-                        </div>
+                        <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                         <div class="terminal-title details-modal-title-wrap">
                             <span class="terminal-status-dot details-status-dot"></span>
                             <span class="modal-card-title details-modal-title" id="feedCaseModalTitle">Open Case for Vulnerability</span>
@@ -339,11 +339,11 @@ export class FeedController {
                 <div class="modal-background"></div>
                 <div class="modal-card details-modal-card" style="max-width: 580px;">
                     <header class="modal-card-head terminal-titlebar details-modal-titlebar">
-                        <div class="terminal-dots">
-                            <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
-                            <span class="terminal-dot dot-min"></span>
-                            <span class="terminal-dot dot-expand"></span>
-                        </div>
+                        <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                         <div class="terminal-title details-modal-title-wrap">
                             <span class="terminal-status-dot details-status-dot"></span>
                             <span class="modal-card-title details-modal-title">Cached AI Report Available</span>

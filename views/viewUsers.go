@@ -31,14 +31,14 @@ var ViewUsersSection string = `<section class="section has-background-black user
 		<!-- Users Terminal Window -->
 		<div class="users-window" id="usersViewer">
 			<div class="terminal-titlebar">
-				<div class="terminal-dots">
-					<span class="terminal-dot dot-close"></span>
-					<span class="terminal-dot dot-min"></span>
-					<span class="terminal-dot dot-expand"></span>
-				</div>
+				<!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
 				<div class="terminal-title">
 					<span class="terminal-status-dot"></span>
-					<span>users.registry.threatco</span>
+					<span>users</span>
 				</div>
 				<div class="terminal-actions">
 					<span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>DATABASE ONLINE</span>

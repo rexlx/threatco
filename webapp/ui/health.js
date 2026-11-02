@@ -49,14 +49,14 @@ export class HealthController {
         <!-- Health Terminal Window -->
         <div class="users-window health-window" id="healthViewer">
             <div class="terminal-titlebar">
-                <div class="terminal-dots">
-                    <span class="terminal-dot dot-close"></span>
+                <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
                     <span class="terminal-dot dot-min"></span>
                     <span class="terminal-dot dot-expand"></span>
-                </div>
+                </div> -->
                 <div class="terminal-title">
                     <span class="terminal-status-dot"></span>
-                    <span>health.system.threatco</span>
+                    <span>system health</span>
                 </div>
                 <div class="terminal-actions">
                     <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>CHECKING...</span>
@@ -110,14 +110,14 @@ export class HealthController {
 
         <div class="users-window health-window" id="healthViewer">
             <div class="terminal-titlebar">
-                <div class="terminal-dots">
-                    <span class="terminal-dot dot-close"></span>
+                <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
                     <span class="terminal-dot dot-min"></span>
                     <span class="terminal-dot dot-expand"></span>
-                </div>
+                </div> -->
                 <div class="terminal-title">
                     <span class="terminal-status-dot"></span>
-                    <span>health.system.threatco</span>
+                    <span>system health</span>
                 </div>
                 <div class="terminal-actions">
                     <span class="system-status-pill status-danger"><span class="status-indicator-dot dot-danger"></span>OFFLINE</span>
@@ -318,14 +318,14 @@ export class HealthController {
         <!-- Health Terminal Window -->
         <div class="users-window health-window" id="healthViewer">
             <div class="terminal-titlebar">
-                <div class="terminal-dots">
-                    <span class="terminal-dot dot-close"></span>
+                <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
                     <span class="terminal-dot dot-min"></span>
                     <span class="terminal-dot dot-expand"></span>
-                </div>
+                </div> -->
                 <div class="terminal-title">
                     <span class="terminal-status-dot"></span>
-                    <span>health.system.threatco</span>
+                    <span>system health/span>
                 </div>
                 <div class="terminal-actions">
                     ${uptimePill}

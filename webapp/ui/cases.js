@@ -142,14 +142,14 @@ export class CaseController {
             <!-- Cases Terminal Window -->
             <div class="users-window cases-window" id="casesViewer">
                 <div class="terminal-titlebar">
-                    <div class="terminal-dots">
-                        <span class="terminal-dot dot-close"></span>
-                        <span class="terminal-dot dot-min"></span>
-                        <span class="terminal-dot dot-expand"></span>
-                    </div>
+                    <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                     <div class="terminal-title">
                         <span class="terminal-status-dot"></span>
-                        <span>cases.registry.threatco</span>
+                        <span>internal cases</span>
                     </div>
                     <div class="terminal-actions">
                         <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>DATABASE ONLINE</span>
@@ -192,11 +192,11 @@ export class CaseController {
                 <div class="modal-background"></div>
                 <div class="modal-card details-modal-card" style="max-width: 620px;">
                     <header class="modal-card-head terminal-titlebar details-modal-titlebar">
-                        <div class="terminal-dots">
-                            <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
-                            <span class="terminal-dot dot-min"></span>
-                            <span class="terminal-dot dot-expand"></span>
-                        </div>
+                        <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                         <div class="terminal-title details-modal-title-wrap">
                             <span class="terminal-status-dot details-status-dot"></span>
                             <span class="modal-card-title details-modal-title">Create New Case</span>
@@ -947,11 +947,11 @@ export class CaseController {
                     <div class="modal-background"></div>
                     <div class="modal-card details-modal-card" style="width: 92%; max-width: 1200px;">
                         <header class="modal-card-head terminal-titlebar details-modal-titlebar">
-                            <div class="terminal-dots">
-                                <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
-                                <span class="terminal-dot dot-min"></span>
-                                <span class="terminal-dot dot-expand"></span>
-                            </div>
+                            <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                             <div class="terminal-title details-modal-title-wrap">
                                 <span class="terminal-status-dot details-status-dot"></span>
                                 <span class="modal-card-title details-modal-title">AI Threat &amp; Vulnerability Report</span>
@@ -987,11 +987,11 @@ export class CaseController {
                     <div class="modal-background"></div>
                     <div class="modal-card details-modal-card" style="max-width: 600px;">
                         <header class="modal-card-head terminal-titlebar details-modal-titlebar">
-                            <div class="terminal-dots">
-                                <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
-                                <span class="terminal-dot dot-min"></span>
-                                <span class="terminal-dot dot-expand"></span>
-                            </div>
+                            <!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
                             <div class="terminal-title details-modal-title-wrap">
                                 <span class="terminal-status-dot details-status-dot"></span>
                                 <span class="modal-card-title details-modal-title">Send Indicators to MISP</span>

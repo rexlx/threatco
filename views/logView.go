@@ -8,11 +8,11 @@ var LoggingSection = `<section class="section has-background-black" style="paddi
 	<div class="container is-fluid">
 		<div class="terminal-window">
 			<div class="terminal-titlebar">
-				<div class="terminal-dots">
-					<span class="terminal-dot dot-close"></span>
-					<span class="terminal-dot dot-min"></span>
-					<span class="terminal-dot dot-expand"></span>
-				</div>
+				<!-- <div class="terminal-dots">
+                    <span class="terminal-dot dot-close modal-close-dot" title="Close modal"></span>
+                    <span class="terminal-dot dot-min"></span>
+                    <span class="terminal-dot dot-expand"></span>
+                </div> -->
 				<div class="terminal-title">
 					<span class="terminal-status-dot"></span>
 					<span>threatco-daemon.log</span>
@@ -38,7 +38,7 @@ var LoggingSection = `<section class="section has-background-black" style="paddi
 			</div>
 			<div class="terminal-statusbar">
 				<span id="logCountDisplay">Loading lines...</span>
-				<span class="is-pulled-right">threatco runtime • live</span>
+				<span class="is-pulled-right">threatco runtime •</span>
 			</div>
 		</div>
 	</div>
