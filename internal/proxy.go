@@ -1340,24 +1340,38 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	var attrCount int = 0
 	var err error
 
+	baseURL := strings.TrimRight(ep.GetURL(), "/")
+
 	switch req.Type {
 	case "domain", "url":
-		thisURL = fmt.Sprintf("%s/intel/domain/%s", ep.GetURL(), req.Value)
+		domainVal := strings.TrimSpace(req.Value)
+		if req.Type == "url" || strings.Contains(domainVal, "://") || strings.Contains(domainVal, "/") {
+			raw := domainVal
+			if !strings.Contains(raw, "://") {
+				raw = "http://" + raw
+			}
+			if u, err := url.Parse(raw); err == nil && u.Hostname() != "" {
+				domainVal = u.Hostname()
+			}
+		}
+		domainVal = strings.Trim(domainVal, "/")
+
+		thisURL = fmt.Sprintf("%s/intel/domain", baseURL)
 		request, err = http.NewRequest("GET", thisURL, nil)
 		if err != nil {
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to create request: %v", err))
 		}
 		q := request.URL.Query()
-		q.Add("domain", req.Value)
+		q.Set("domain", domainVal)
 		request.URL.RawQuery = q.Encode()
-	case "ipv4, ipv6":
-		thisURL = fmt.Sprintf("%s/intel/ip/%s", ep.GetURL(), req.Value)
+	case "ipv4", "ipv6":
+		thisURL = fmt.Sprintf("%s/intel/ip", baseURL)
 		request, err = http.NewRequest("GET", thisURL, nil)
 		if err != nil {
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("failed to create request: %v", err))
 		}
 		q := request.URL.Query()
-		q.Add(req.Type, req.Value)
+		q.Set(req.Type, strings.TrimSpace(req.Value))
 		request.URL.RawQuery = q.Encode()
 	default:
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("unsupported IOC type for Cloudflare: %s", req.Type))
@@ -1373,6 +1387,10 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 	}
 	if len(respBytes) == 0 {
 		return CreateAndWriteSummarizedEvent(req, true, "got a zero length response from Cloudflare")
+	}
+
+	if !json.Valid(respBytes) {
+		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response: non-JSON response received: %s", truncateString(string(respBytes), 100)))
 	}
 
 	// Send the full raw response to the response channel for storage/caching
@@ -1426,7 +1444,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 			return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response: %v", err))
 		}
 
-		if !response.Success || response.Result == nil {
+		if !response.Success || len(response.Result) == 0 {
 			if len(response.Errors) > 0 {
 				return CreateAndWriteSummarizedEvent(req, false, fmt.Sprintf("no hits: %s", response.Errors[0].Message))
 			}
@@ -1441,7 +1459,7 @@ func CloudflareProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 			riskTypes = append(riskTypes, rt.Name)
 		}
 		attrCount = len(riskTypes)
-		info = fmt.Sprintf("Risk Stypes: %s, results length: %d", strings.Join(riskTypes, ", "), len(response.Result))
+		info = fmt.Sprintf("Risk Types: %s, results length: %d", strings.Join(riskTypes, ", "), len(response.Result))
 
 	}
 

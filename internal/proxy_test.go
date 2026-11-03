@@ -151,3 +151,158 @@ func TestVirusTotalProxyHelper_LegacyVT(t *testing.T) {
 		t.Errorf("Expected AttrCount 2 (for tags), got %d", sum.AttrCount)
 	}
 }
+
+func TestCloudflareProxyHelper(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/intel/domain" {
+			domain := r.URL.Query().Get("domain")
+			if domain == "pandora.com" {
+				resp := map[string]interface{}{
+					"success": true,
+					"result": map[string]interface{}{
+						"domain":     "pandora.com",
+						"risk_score": 15,
+						"risk_types": []map[string]interface{}{
+							{"name": "Spam"},
+						},
+						"content_categories": []map[string]interface{}{
+							{"name": "Music"},
+						},
+					},
+				}
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+		}
+		if r.URL.Path == "/intel/ip" {
+			ip := r.URL.Query().Get("ipv4")
+			if ip == "1.1.1.1" {
+				resp := map[string]interface{}{
+					"success": true,
+					"result": []map[string]interface{}{
+						{
+							"ip":         "1.1.1.1",
+							"risk_score": 0,
+							"risk_types": []map[string]interface{}{},
+						},
+					},
+				}
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	ep := NewEndpoint(ts.URL, &XAPIKeyAuth{Token: "cf-key"}, false, nil, "cloudflare")
+
+	t.Run("URL without https", func(t *testing.T) {
+		resch := make(chan ResponseItem, 1)
+		req := ProxyRequest{
+			Value:         "pandora.com",
+			Type:          "url",
+			To:            "cloudflare",
+			TransactionID: "tx-cf-1",
+			Username:      "user@example.com",
+		}
+
+		respBytes, err := CloudflareProxyHelper(resch, ep, req)
+		if err != nil {
+			t.Fatalf("CloudflareProxyHelper returned error: %v", err)
+		}
+
+		var sum SummarizedEvent
+		if err := json.Unmarshal(respBytes, &sum); err != nil {
+			t.Fatalf("Failed to unmarshal summary: %v", err)
+		}
+
+		if sum.Error {
+			t.Fatalf("Expected no error, got: %s", sum.Info)
+		}
+		if !sum.Matched {
+			t.Errorf("Expected sum.Matched to be true")
+		}
+		if sum.ThreatLevelID == 0 {
+			t.Errorf("Expected positive ThreatLevelID, got 0")
+		}
+	})
+
+	t.Run("URL with https and path", func(t *testing.T) {
+		resch := make(chan ResponseItem, 1)
+		req := ProxyRequest{
+			Value:         "https://pandora.com/station/play/123",
+			Type:          "url",
+			To:            "cloudflare",
+			TransactionID: "tx-cf-2",
+			Username:      "user@example.com",
+		}
+
+		respBytes, err := CloudflareProxyHelper(resch, ep, req)
+		if err != nil {
+			t.Fatalf("CloudflareProxyHelper returned error: %v", err)
+		}
+
+		var sum SummarizedEvent
+		if err := json.Unmarshal(respBytes, &sum); err != nil {
+			t.Fatalf("Failed to unmarshal summary: %v", err)
+		}
+
+		if sum.Error {
+			t.Fatalf("Expected no error, got: %s", sum.Info)
+		}
+		if !sum.Matched {
+			t.Errorf("Expected sum.Matched to be true")
+		}
+	})
+
+	t.Run("IPv4 lookup", func(t *testing.T) {
+		resch := make(chan ResponseItem, 1)
+		req := ProxyRequest{
+			Value:         "1.1.1.1",
+			Type:          "ipv4",
+			To:            "cloudflare",
+			TransactionID: "tx-cf-3",
+			Username:      "user@example.com",
+		}
+
+		respBytes, err := CloudflareProxyHelper(resch, ep, req)
+		if err != nil {
+			t.Fatalf("CloudflareProxyHelper returned error: %v", err)
+		}
+
+		var sum SummarizedEvent
+		if err := json.Unmarshal(respBytes, &sum); err != nil {
+			t.Fatalf("Failed to unmarshal summary: %v", err)
+		}
+
+		if sum.Error {
+			t.Fatalf("Expected no error, got: %s", sum.Info)
+		}
+	})
+
+	t.Run("Non-JSON 404 response handling", func(t *testing.T) {
+		resch := make(chan ResponseItem, 1)
+		req := ProxyRequest{
+			Value:         "nonexistent.domain",
+			Type:          "domain",
+			To:            "cloudflare",
+			TransactionID: "tx-cf-4",
+			Username:      "user@example.com",
+		}
+
+		respBytes, err := CloudflareProxyHelper(resch, ep, req)
+		if err != nil {
+			t.Fatalf("CloudflareProxyHelper returned error: %v", err)
+		}
+
+		var sum SummarizedEvent
+		if err := json.Unmarshal(respBytes, &sum); err != nil {
+			t.Fatalf("Failed to unmarshal summary: %v", err)
+		}
+
+		if !sum.Error {
+			t.Errorf("Expected sum.Error to be true for non-JSON 404")
+		}
+	})
+}
