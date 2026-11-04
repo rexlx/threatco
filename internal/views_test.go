@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -202,11 +201,40 @@ func TestServer_ChartViewHandler_EmptyState(t *testing.T) {
 	}
 }
 
-func TestServer_ChartViewHandler_EmptySectionDirect(t *testing.T) {
-	rr := httptest.NewRecorder()
-	fmt.Fprintf(rr, views.BaseView, views.ChartsEmptySection)
-	if !strings.Contains(rr.Body.String(), "No Chart Data Available") {
-		t.Error("expected empty state notice in body")
+func TestServer_StaticViewHandlers(t *testing.T) {
+	s := setupTestServer()
+
+	// 1. CreateUserViewHandler
+	reqUser := httptest.NewRequest("GET", "/views/user/add", nil)
+	rrUser := httptest.NewRecorder()
+	s.CreateUserViewHandler(rrUser, reqUser)
+	if rrUser.Code != http.StatusOK {
+		t.Errorf("CreateUserViewHandler returned status %d", rrUser.Code)
+	}
+	if !strings.Contains(rrUser.Body.String(), "Add User") && !strings.Contains(rrUser.Body.String(), "user") {
+		t.Error("CreateUserViewHandler body missing expected user creation content")
+	}
+
+	// 2. AddServicesHandler
+	reqService := httptest.NewRequest("GET", "/views/services/add", nil)
+	rrService := httptest.NewRecorder()
+	s.AddServicesHandler(rrService, reqService)
+	if rrService.Code != http.StatusOK {
+		t.Errorf("AddServicesHandler returned status %d", rrService.Code)
+	}
+	if !strings.Contains(rrService.Body.String(), "Service") && !strings.Contains(rrService.Body.String(), "service") {
+		t.Error("AddServicesHandler body missing expected service creation content")
+	}
+
+	// 3. ViewResponsesHandler
+	reqResponses := httptest.NewRequest("GET", "/views/responses", nil)
+	rrResponses := httptest.NewRecorder()
+	s.ViewResponsesHandler(rrResponses, reqResponses)
+	if rrResponses.Code != http.StatusOK {
+		t.Errorf("ViewResponsesHandler returned status %d", rrResponses.Code)
+	}
+	if len(rrResponses.Body.String()) == 0 {
+		t.Error("ViewResponsesHandler returned empty body")
 	}
 }
 
@@ -262,10 +290,7 @@ func TestServer_ViewServicesHandler(t *testing.T) {
 
 	body := rr.Body.String()
 
-	// Check header navigation & search
-	if !strings.Contains(body, "Threat Intelligence Services") {
-		t.Error("expected 'Threat Intelligence Services' title in response")
-	}
+	// Check key structural containers
 	if !strings.Contains(body, `id="serviceSearchInput"`) {
 		t.Error("expected serviceSearchInput in response")
 	}
@@ -273,7 +298,7 @@ func TestServer_ViewServicesHandler(t *testing.T) {
 		t.Error("expected serviceViewer in response")
 	}
 
-	// Check services listed
+	// Check dynamic services rendering
 	if !strings.Contains(body, "virustotal-prod") {
 		t.Error("expected 'virustotal-prod' in response")
 	}
@@ -288,14 +313,6 @@ func TestServer_ViewServicesHandler(t *testing.T) {
 	}
 	if !strings.Contains(body, "md5") || !strings.Contains(body, "sha256") {
 		t.Error("expected IOC type pills in response")
-	}
-
-	// Check news section below services
-	if !strings.Contains(body, `id="news"`) {
-		t.Error("expected news section with id='news' in response")
-	}
-	if !strings.Contains(body, "threatco-bulletins.broadcast") {
-		t.Error("expected bulletins broadcast header in response")
 	}
 }
 

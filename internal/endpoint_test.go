@@ -167,4 +167,12 @@ func TestAuthMethods_Apply(t *testing.T) {
 	if req.Header.Get("Key") != "abuse-key" {
 		t.Errorf("AbuseIPDBAuth failed to set Key header")
 	}
+
+	// OTXAuth
+	oAuth := &OTXAuth{Token: "otx-key"}
+	oAuth.GetAndStoreToken(stop)
+	oAuth.Apply(req)
+	if req.Header.Get("X-OTX-API-KEY") != "otx-key" {
+		t.Errorf("OTXAuth failed to set X-OTX-API-KEY header")
+	}
 }

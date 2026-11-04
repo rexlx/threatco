@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -746,5 +747,290 @@ func TestServer_GetResponseCacheHandler2_Archived(t *testing.T) {
 	}
 	if !strings.Contains(rrEmptyArchived.Body.String(), "No archived responses found.") {
 		t.Errorf("expected 'No archived responses found.' message")
+	}
+}
+
+func TestServer_LoginAndLogoutHandlers(t *testing.T) {
+	s := setupTestServer()
+	mockDb := s.DB.(*MockDB)
+
+	user, err := NewUser("authuser@threat.co", false, nil)
+	if err != nil {
+		t.Fatalf("NewUser failed: %v", err)
+	}
+	if err := user.SetPassword("correctPassword123!"); err != nil {
+		t.Fatalf("SetPassword failed: %v", err)
+	}
+	mockDb.users = append(mockDb.users, *user)
+
+	loginHandler := s.Session.LoadAndSave(http.HandlerFunc(s.LoginHandler))
+	logoutHandler := s.Session.LoadAndSave(http.HandlerFunc(s.LogoutHandler))
+
+	// 1. Successful Login
+	formSuccess := url.Values{
+		"username": {"authuser@threat.co"},
+		"password": {"correctPassword123!"},
+	}
+	reqSuccess := httptest.NewRequest("POST", "/login", strings.NewReader(formSuccess.Encode()))
+	reqSuccess.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrSuccess := httptest.NewRecorder()
+	loginHandler.ServeHTTP(rrSuccess, reqSuccess)
+
+	if rrSuccess.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303 SeeOther on successful login, got %d", rrSuccess.Code)
+	}
+	if loc := rrSuccess.Header().Get("Location"); loc != "/app" {
+		t.Errorf("expected redirect to /app, got %s", loc)
+	}
+	cookie := rrSuccess.Result().Header.Get("Set-Cookie")
+	if cookie == "" {
+		t.Fatal("expected Set-Cookie header on successful login")
+	}
+
+	// 2. Failed Login: Incorrect Password
+	formWrongPass := url.Values{
+		"username": {"authuser@threat.co"},
+		"password": {"wrongPassword!"},
+	}
+	reqWrongPass := httptest.NewRequest("POST", "/login", strings.NewReader(formWrongPass.Encode()))
+	reqWrongPass.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrWrongPass := httptest.NewRecorder()
+	loginHandler.ServeHTTP(rrWrongPass, reqWrongPass)
+
+	if rrWrongPass.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 Unauthorized for wrong password, got %d", rrWrongPass.Code)
+	}
+
+	// 3. Failed Login: Non-existent User
+	formNoUser := url.Values{
+		"username": {"ghost@threat.co"},
+		"password": {"somePassword!"},
+	}
+	reqNoUser := httptest.NewRequest("POST", "/login", strings.NewReader(formNoUser.Encode()))
+	reqNoUser.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrNoUser := httptest.NewRecorder()
+	loginHandler.ServeHTTP(rrNoUser, reqNoUser)
+
+	if rrNoUser.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 Not Found for nonexistent user, got %d", rrNoUser.Code)
+	}
+
+	// 4. Logout Handler
+	reqLogout := httptest.NewRequest("GET", "/logout", nil)
+	reqLogout.Header.Set("Cookie", cookie)
+	rrLogout := httptest.NewRecorder()
+	logoutHandler.ServeHTTP(rrLogout, reqLogout)
+
+	if rrLogout.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303 on logout, got %d", rrLogout.Code)
+	}
+	if loc := rrLogout.Header().Get("Location"); loc != "/" {
+		t.Errorf("expected logout redirect to /, got %s", loc)
+	}
+}
+
+func TestServer_ToolsEncryptDecrypt_Roundtrip(t *testing.T) {
+	s := setupTestServer()
+	password := "superSecretPassphrase42!"
+	plaintext := "Threat intelligence payload for incident response #999"
+
+	// 1. Encrypt plaintext via ToolsEncryptHandler
+	var encBuf bytes.Buffer
+	encWriter := multipart.NewWriter(&encBuf)
+	encWriter.WriteField("password", password)
+	encWriter.WriteField("text", plaintext)
+	encWriter.Close()
+
+	reqEnc := httptest.NewRequest("POST", "/tools/encrypt", &encBuf)
+	reqEnc.Header.Set("Content-Type", encWriter.FormDataContentType())
+	rrEnc := httptest.NewRecorder()
+	s.ToolsEncryptHandler(rrEnc, reqEnc)
+
+	if rrEnc.Code != http.StatusOK {
+		t.Fatalf("ToolsEncryptHandler failed with status %d", rrEnc.Code)
+	}
+	ciphertext := rrEnc.Body.Bytes()
+	if len(ciphertext) <= 28 {
+		t.Fatalf("encrypted output too short: %d bytes", len(ciphertext))
+	}
+
+	// 2. Decrypt with correct password
+	var decBuf bytes.Buffer
+	decWriter := multipart.NewWriter(&decBuf)
+	decWriter.WriteField("password", password)
+	part, err := decWriter.CreateFormFile("file", "encrypted.txt.enc")
+	if err != nil {
+		t.Fatalf("CreateFormFile failed: %v", err)
+	}
+	part.Write(ciphertext)
+	decWriter.Close()
+
+	reqDec := httptest.NewRequest("POST", "/tools/decrypt", &decBuf)
+	reqDec.Header.Set("Content-Type", decWriter.FormDataContentType())
+	rrDec := httptest.NewRecorder()
+	s.ToolsDecryptHandler(rrDec, reqDec)
+
+	if rrDec.Code != http.StatusOK {
+		t.Fatalf("ToolsDecryptHandler failed with status %d: %s", rrDec.Code, rrDec.Body.String())
+	}
+	if rrDec.Body.String() != plaintext {
+		t.Errorf("decrypted output mismatch: got %q, want %q", rrDec.Body.String(), plaintext)
+	}
+
+	// 3. Decrypt with wrong password
+	var wrongBuf bytes.Buffer
+	wrongWriter := multipart.NewWriter(&wrongBuf)
+	wrongWriter.WriteField("password", "incorrectPassword!")
+	partWrong, _ := wrongWriter.CreateFormFile("file", "encrypted.txt.enc")
+	partWrong.Write(ciphertext)
+	wrongWriter.Close()
+
+	reqWrong := httptest.NewRequest("POST", "/tools/decrypt", &wrongBuf)
+	reqWrong.Header.Set("Content-Type", wrongWriter.FormDataContentType())
+	rrWrong := httptest.NewRecorder()
+	s.ToolsDecryptHandler(rrWrong, reqWrong)
+
+	if rrWrong.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 Unauthorized for wrong decryption password, got %d", rrWrong.Code)
+	}
+}
+
+func TestServer_CaseHandlers_CRUD(t *testing.T) {
+	s := setupTestServer()
+
+	// 1. CreateCaseHandler
+	newCasePayload := `{"name":"Investigation Alpha","description":"Suspicious outbound traffic","iocs":["198.51.100.22","malicious.site"]}`
+	reqCreate := httptest.NewRequest("POST", "/cases/create", strings.NewReader(newCasePayload))
+	reqCreate = reqCreate.WithContext(context.WithValue(reqCreate.Context(), "email", "lead-analyst@threat.co"))
+	rrCreate := httptest.NewRecorder()
+
+	s.CreateCaseHandler(rrCreate, reqCreate)
+
+	if rrCreate.Code != http.StatusOK {
+		t.Fatalf("CreateCaseHandler failed: %d (body: %s)", rrCreate.Code, rrCreate.Body.String())
+	}
+
+	var createdCase Case
+	if err := json.Unmarshal(rrCreate.Body.Bytes(), &createdCase); err != nil {
+		t.Fatalf("failed to decode created case: %v", err)
+	}
+
+	if createdCase.ID == "" {
+		t.Error("expected non-empty case ID")
+	}
+	if createdCase.CreatedBy != "lead-analyst@threat.co" {
+		t.Errorf("expected CreatedBy 'lead-analyst@threat.co', got %s", createdCase.CreatedBy)
+	}
+	if createdCase.Status != "Open" {
+		t.Errorf("expected Status 'Open', got %s", createdCase.Status)
+	}
+	if createdCase.Priority != "Medium" {
+		t.Errorf("expected default Priority 'Medium', got %s", createdCase.Priority)
+	}
+	if len(createdCase.IOCs) != 2 {
+		t.Errorf("expected 2 IOCs, got %d", len(createdCase.IOCs))
+	}
+
+	// 2. GetCaseHandler
+	reqGet := httptest.NewRequest("GET", "/cases/get?id="+createdCase.ID, nil)
+	rrGet := httptest.NewRecorder()
+	s.GetCaseHandler(rrGet, reqGet)
+
+	if rrGet.Code != http.StatusOK {
+		t.Fatalf("GetCaseHandler failed: %d", rrGet.Code)
+	}
+	var fetchedCase Case
+	json.Unmarshal(rrGet.Body.Bytes(), &fetchedCase)
+	if fetchedCase.ID != createdCase.ID || fetchedCase.Name != "Investigation Alpha" {
+		t.Errorf("GetCaseHandler returned incorrect case: %+v", fetchedCase)
+	}
+
+	// 3. GetCasesHandler
+	reqGetAll := httptest.NewRequest("GET", "/cases", nil)
+	rrGetAll := httptest.NewRecorder()
+	s.GetCasesHandler(rrGetAll, reqGetAll)
+
+	if rrGetAll.Code != http.StatusOK {
+		t.Fatalf("GetCasesHandler failed: %d", rrGetAll.Code)
+	}
+	var casesList []Case
+	json.Unmarshal(rrGetAll.Body.Bytes(), &casesList)
+	if len(casesList) != 1 || casesList[0].ID != createdCase.ID {
+		t.Errorf("GetCasesHandler returned unexpected list: %+v", casesList)
+	}
+
+	// 4. DeleteCaseHandler
+	deletePayload := `{"id":"` + createdCase.ID + `"}`
+	reqDelete := httptest.NewRequest("POST", "/cases/delete", strings.NewReader(deletePayload))
+	reqDelete = reqDelete.WithContext(context.WithValue(reqDelete.Context(), "email", "lead-analyst@threat.co"))
+	rrDelete := httptest.NewRecorder()
+
+	s.DeleteCaseHandler(rrDelete, reqDelete)
+
+	if rrDelete.Code != http.StatusOK {
+		t.Fatalf("DeleteCaseHandler failed: %d", rrDelete.Code)
+	}
+
+	// Verify case is removed from DB
+	afterDelete, _ := s.DB.GetCase(createdCase.ID)
+	if afterDelete.ID != "" {
+		t.Errorf("case still exists in DB after deletion: %+v", afterDelete)
+	}
+}
+
+func TestServer_ToolsNpmCheckHandler_Validation(t *testing.T) {
+	s := setupTestServer()
+
+	// 1. Invalid JSON payload
+	reqBadJSON := httptest.NewRequest("POST", "/tools/npm", strings.NewReader("invalid-json"))
+	reqBadJSON.Header.Set("Content-Type", "application/json")
+	reqBadJSON = reqBadJSON.WithContext(context.WithValue(reqBadJSON.Context(), "email", "tester@threat.co"))
+	rrBadJSON := httptest.NewRecorder()
+	s.ToolsNpmCheckHandler(rrBadJSON, reqBadJSON)
+	if rrBadJSON.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for invalid JSON, got %d", rrBadJSON.Code)
+	}
+
+	// 2. Empty repository URL
+	reqEmptyURL := httptest.NewRequest("POST", "/tools/npm", strings.NewReader(`{"url":""}`))
+	reqEmptyURL.Header.Set("Content-Type", "application/json")
+	reqEmptyURL = reqEmptyURL.WithContext(context.WithValue(reqEmptyURL.Context(), "email", "tester@threat.co"))
+	rrEmptyURL := httptest.NewRecorder()
+	s.ToolsNpmCheckHandler(rrEmptyURL, reqEmptyURL)
+	if rrEmptyURL.Code != http.StatusBadRequest || !strings.Contains(rrEmptyURL.Body.String(), "cannot be empty") {
+		t.Errorf("expected 400 with 'cannot be empty', got %d: %s", rrEmptyURL.Code, rrEmptyURL.Body.String())
+	}
+
+	// 3. Disallowed scheme (e.g. ftp:// or file://)
+	reqDisallowed := httptest.NewRequest("POST", "/tools/npm", strings.NewReader(`{"url":"file:///etc/passwd"}`))
+	reqDisallowed.Header.Set("Content-Type", "application/json")
+	reqDisallowed = reqDisallowed.WithContext(context.WithValue(reqDisallowed.Context(), "email", "tester@threat.co"))
+	rrDisallowed := httptest.NewRecorder()
+	s.ToolsNpmCheckHandler(rrDisallowed, reqDisallowed)
+	if rrDisallowed.Code != http.StatusBadRequest || !strings.Contains(rrDisallowed.Body.String(), "HTTP/HTTPS") {
+		t.Errorf("expected 400 with schema error, got %d: %s", rrDisallowed.Code, rrDisallowed.Body.String())
+	}
+
+	// 4. Command injection attempt in URL
+	reqInjection := httptest.NewRequest("POST", "/tools/npm", strings.NewReader(`{"url":"https://github.com/test;rm -rf /"}`))
+	reqInjection.Header.Set("Content-Type", "application/json")
+	reqInjection = reqInjection.WithContext(context.WithValue(reqInjection.Context(), "email", "tester@threat.co"))
+	rrInjection := httptest.NewRecorder()
+	s.ToolsNpmCheckHandler(rrInjection, reqInjection)
+	if rrInjection.Code != http.StatusBadRequest || !strings.Contains(rrInjection.Body.String(), "Malicious parameters detected") {
+		t.Errorf("expected 400 with malicious parameter error, got %d: %s", rrInjection.Code, rrInjection.Body.String())
+	}
+
+	// 5. Multipart direct upload with no files
+	var emptyBuf bytes.Buffer
+	emptyWriter := multipart.NewWriter(&emptyBuf)
+	emptyWriter.Close()
+	reqNoFiles := httptest.NewRequest("POST", "/tools/npm", &emptyBuf)
+	reqNoFiles.Header.Set("Content-Type", emptyWriter.FormDataContentType())
+	reqNoFiles = reqNoFiles.WithContext(context.WithValue(reqNoFiles.Context(), "email", "tester@threat.co"))
+	rrNoFiles := httptest.NewRecorder()
+	s.ToolsNpmCheckHandler(rrNoFiles, reqNoFiles)
+	if rrNoFiles.Code != http.StatusBadRequest || !strings.Contains(rrNoFiles.Body.String(), "No files") {
+		t.Errorf("expected 400 with 'No files', got %d: %s", rrNoFiles.Code, rrNoFiles.Body.String())
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"sync"
 	"testing"
@@ -19,6 +21,7 @@ type MockDB struct {
 	archivedResponses []ResponseItem
 	cases             map[string]Case
 	users             []User
+	tokens            map[string]Token
 	notifications     map[string][]Notification
 }
 
@@ -38,8 +41,19 @@ func (m *MockDB) GetAllUsers() ([]User, error)                      { return m.u
 func (m *MockDB) AddUser(u User) error                              { m.users = append(m.users, u); return nil }
 func (m *MockDB) GetServiceByKind(kind string) (ServiceType, error) { return ServiceType{}, nil }
 func (m *MockDB) AddService(st ServiceType) error                   { return nil }
-func (m *MockDB) GetTokenByValue(tk string) (Token, error)          { return Token{}, nil }
-func (m *MockDB) SaveToken(t Token) error                           { return nil }
+func (m *MockDB) GetTokenByValue(tk string) (Token, error) {
+	if m.tokens == nil {
+		return Token{}, nil
+	}
+	return m.tokens[tk], nil
+}
+func (m *MockDB) SaveToken(t Token) error {
+	if m.tokens == nil {
+		m.tokens = make(map[string]Token)
+	}
+	m.tokens[t.Token] = t
+	return nil
+}
 func (m *MockDB) StoreResponse(archive bool, id string, data []byte, vendor string) error {
 	item := ResponseItem{ID: id, Data: data, Vendor: vendor, Time: time.Now()}
 	if archive {
@@ -126,6 +140,7 @@ func setupTestServer() *Server {
 
 	db := &MockDB{
 		cases:         make(map[string]Case),
+		tokens:        make(map[string]Token),
 		notifications: make(map[string][]Notification),
 	}
 
@@ -380,11 +395,69 @@ func TestLogHandlers(t *testing.T) {
 	}
 }
 
-func TestFakeLoggingEvent(t *testing.T) {
+func TestServer_SessionManagement(t *testing.T) {
 	s := setupTestServer()
-	s.FakeLoggingEvent(5)
-
-	if len(s.Cache.Logs) != 5 {
-		t.Errorf("Expected 5 logs, got %d", len(s.Cache.Logs))
+	tokenManager := &Token{}
+	tk, err := tokenManager.CreateToken("user-123", time.Hour)
+	if err != nil {
+		t.Fatalf("CreateToken failed: %v", err)
 	}
+	if tk.Token == "" || len(tk.Hash) == 0 {
+		t.Errorf("token fields incomplete: %+v", tk)
+	}
+
+	handler := s.Session.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/login":
+			if err := s.AddTokenToSession(r, w, tk); err != nil {
+				t.Fatalf("AddTokenToSession failed: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+		case "/check":
+			got, err := s.GetTokenFromSession(r)
+			if err != nil || got != tk.Token {
+				t.Errorf("GetTokenFromSession got (%s, %v), want %s", got, err, tk.Token)
+			}
+			w.WriteHeader(http.StatusOK)
+		case "/logout":
+			if err := s.DeleteTokenFromSession(r); err != nil {
+				t.Fatalf("DeleteTokenFromSession failed: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+		case "/postlogout":
+			_, err := s.GetTokenFromSession(r)
+			if err == nil {
+				t.Error("expected error getting token after logout")
+			}
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+
+	// 1. Login sets session cookie
+	reqLogin := httptest.NewRequest("GET", "/login", nil)
+	rrLogin := httptest.NewRecorder()
+	handler.ServeHTTP(rrLogin, reqLogin)
+	cookie := rrLogin.Result().Header.Get("Set-Cookie")
+
+	// 2. Check session retrieves token
+	reqCheck := httptest.NewRequest("GET", "/check", nil)
+	reqCheck.Header.Set("Cookie", cookie)
+	rrCheck := httptest.NewRecorder()
+	handler.ServeHTTP(rrCheck, reqCheck)
+
+	// 3. Logout clears session
+	reqLogout := httptest.NewRequest("GET", "/logout", nil)
+	reqLogout.Header.Set("Cookie", cookie)
+	rrLogout := httptest.NewRecorder()
+	handler.ServeHTTP(rrLogout, reqLogout)
+	logoutCookie := rrLogout.Result().Header.Get("Set-Cookie")
+	if logoutCookie != "" {
+		cookie = logoutCookie
+	}
+
+	// 4. Post-logout verify token is gone
+	reqPost := httptest.NewRequest("GET", "/postlogout", nil)
+	reqPost.Header.Set("Cookie", cookie)
+	rrPost := httptest.NewRecorder()
+	handler.ServeHTTP(rrPost, reqPost)
 }

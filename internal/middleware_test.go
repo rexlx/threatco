@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestGetVisitor(t *testing.T) {
@@ -137,5 +138,123 @@ func TestServer_ProtectedFileServer(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestServer_RateLimit(t *testing.T) {
+	s := setupTestServer()
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	rateLimitedHandler := s.RateLimit(nextHandler)
+
+	// Single request should succeed
+	req := httptest.NewRequest("GET", "/api/data", nil)
+	req.RemoteAddr = "192.0.2.1:12345"
+	rr := httptest.NewRecorder()
+	rateLimitedHandler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200 on initial request, got %d", rr.Code)
+	}
+
+	// Burst beyond rate limiter capacity
+	var hitLimit bool
+	for i := 0; i < 50; i++ {
+		reqBurst := httptest.NewRequest("GET", "/api/data", nil)
+		reqBurst.RemoteAddr = "192.0.2.1:12345"
+		rrBurst := httptest.NewRecorder()
+		rateLimitedHandler.ServeHTTP(rrBurst, reqBurst)
+		if rrBurst.Code == http.StatusTooManyRequests {
+			hitLimit = true
+			break
+		}
+	}
+
+	if !hitLimit {
+		t.Error("expected rate limit to trigger HTTP 429 Too Many Requests after burst")
+	}
+}
+
+func TestServer_ValidateSessionToken_SessionCookie(t *testing.T) {
+	s := setupTestServer()
+	mockDb := s.DB.(*MockDB)
+
+	validToken := Token{
+		Token:     "session-token-valid",
+		Email:     "sessionuser@threat.co",
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	expiredToken := Token{
+		Token:     "session-token-expired",
+		Email:     "sessionuser@threat.co",
+		ExpiresAt: time.Now().Add(-1 * time.Hour),
+	}
+	mockDb.SaveToken(validToken)
+	mockDb.SaveToken(expiredToken)
+
+	nextCalled := false
+	handler := s.ValidateSessionToken(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		email := r.Context().Value("email")
+		if email != "sessionuser@threat.co" {
+			http.Error(w, "incorrect email in context", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("authenticated via cookie"))
+	})
+
+	// 1. Valid session token in session context
+	wrappedValid := s.Session.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.Session.Put(r.Context(), "token", "session-token-valid")
+		handler.ServeHTTP(w, r)
+	}))
+
+	reqValid := httptest.NewRequest("GET", "/protected", nil)
+	rrValid := httptest.NewRecorder()
+	wrappedValid.ServeHTTP(rrValid, reqValid)
+
+	if rrValid.Code != http.StatusOK {
+		t.Errorf("expected status 200 for valid session token, got %d: %s", rrValid.Code, rrValid.Body.String())
+	}
+	if !nextCalled {
+		t.Error("expected next handler to be called for valid session token")
+	}
+	if rrValid.Header().Get("Content-Security-Policy") == "" {
+		t.Error("expected CSP header to be set")
+	}
+
+	// 2. Expired session token in session context
+	wrappedExpired := s.Session.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.Session.Put(r.Context(), "token", "session-token-expired")
+		handler.ServeHTTP(w, r)
+	}))
+
+	reqExpired := httptest.NewRequest("GET", "/protected", nil)
+	rrExpired := httptest.NewRecorder()
+	wrappedExpired.ServeHTTP(rrExpired, reqExpired)
+
+	if rrExpired.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for expired session token, got %d", rrExpired.Code)
+	}
+
+	// 3. Header fallback with wrong key
+	rawKey := "correct-api-key"
+	encKey, _ := s.Encrypt(rawKey)
+	mockDb.users = append(mockDb.users, User{
+		Email: "wrongkeyuser@threat.co",
+		Key:   encKey,
+	})
+
+	wrappedHeader := s.Session.LoadAndSave(http.HandlerFunc(handler))
+	reqWrongKey := httptest.NewRequest("GET", "/protected", nil)
+	reqWrongKey.Header.Set("Authorization", "wrongkeyuser@threat.co:wrong-key")
+	rrWrongKey := httptest.NewRecorder()
+	wrappedHeader.ServeHTTP(rrWrongKey, reqWrongKey)
+
+	if rrWrongKey.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for wrong API key in header, got %d", rrWrongKey.Code)
 	}
 }
