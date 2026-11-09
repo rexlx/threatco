@@ -448,27 +448,7 @@ export class SearchController {
         this.app.errors = [];
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
 
-        this.container.innerHTML = `
-        <div class="terminal-window">
-            <div class="terminal-titlebar">
-                <div class="terminal-title">
-                    <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
-                    <span>ioc-analysis.running</span>
-                </div>
-            </div>
-            <div class="terminal-body" style="min-height: 200px; height: auto;">
-                <div class="terminal-placeholder">
-                    <p class="has-text-info mb-3">
-                        <span class="animate-spin" style="display: inline-block; margin-right: 8px;">⏳</span> Analyzing indicators across threat intelligence sources...
-                    </p>
-                    <progress class="progress is-small is-info" max="100"></progress>
-                </div>
-            </div>
-            <div class="terminal-statusbar">
-                <span>query in progress...</span>
-                <span class="is-pulled-right">threatco runtime • active</span>
-            </div>
-        </div>`;
+        this.renderRunningTerminal('ioc-analysis.running', 'Analyzing indicators across threat intelligence sources...');
 
         try {
             if (dontParse) {
@@ -504,7 +484,7 @@ export class SearchController {
             }
         } finally {
             this.isSearching = false;
-            this.renderResultCards(this.app.results);
+            this.finalizeSearchResults();
         }
     }
 
@@ -514,27 +494,7 @@ export class SearchController {
         this.app.errors = [];
         this.app.notifications = this.app.notifications.filter(n => n.type !== 'search');
 
-        this.container.innerHTML = `
-        <div class="terminal-window">
-            <div class="terminal-titlebar">
-                <div class="terminal-title">
-                    <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
-                    <span>ioc-analysis.queue</span>
-                </div>
-            </div>
-            <div class="terminal-body" style="min-height: 200px; height: auto;">
-                <div class="terminal-placeholder">
-                    <p class="has-text-info mb-3">
-                        <span class="animate-spin" style="display: inline-block; margin-right: 8px;">⏳</span> Processing reviewed indicators...
-                    </p>
-                    <progress class="progress is-small is-info" max="100"></progress>
-                </div>
-            </div>
-            <div class="terminal-statusbar">
-                <span>analyzing selected queue...</span>
-                <span class="is-pulled-right">threatco runtime • active</span>
-            </div>
-        </div>`;
+        this.renderRunningTerminal('ioc-analysis.queue', 'Processing reviewed indicators...');
 
         // Combine all selected queue items into a single space-separated string
         const blob = this.currentQueue.map(q => q.value).join(' ');
@@ -546,9 +506,13 @@ export class SearchController {
             let result = await this.app.fetchMatchDontParse(blob, true);
             
             if (Array.isArray(result)) {
-                this.app.results.push(...result);
+                for (const item of result) {
+                    this.app.results.push(item);
+                    this.appendStreamingResult(item);
+                }
             } else if (result) {
                 this.app.results.push(result);
+                this.appendStreamingResult(result);
             }
         } catch (error) {
             this.app.errors.push(error.toString());
@@ -558,7 +522,7 @@ export class SearchController {
             this.currentQueue = [];
             this.extractedMatches = [];
             await this.app.setHistory();
-            this.renderResultCards(this.app.results);
+            this.finalizeSearchResults();
         }
     }
 
@@ -568,9 +532,13 @@ export class SearchController {
             try {
                 let result = await this.app.fetchMatchDontParse(matchData.value);
                 if (Array.isArray(result)) {
-                    this.app.results.push(...result);
+                    for (const item of result) {
+                        this.app.results.push(item);
+                        this.appendStreamingResult(item);
+                    }
                 } else if (result) {
                     this.app.results.push(result);
+                    this.appendStreamingResult(result);
                 }
             } catch (error) {
                 this.app.errors.push(error.toString());
@@ -585,7 +553,10 @@ export class SearchController {
 
                 const promise = this.app.fetchMatch(kind, match, matchData.type, route)
                     .then(result => {
-                        this.app.results.push(result);
+                        if (result) {
+                            this.app.results.push(result);
+                            this.appendStreamingResult(result);
+                        }
                     })
                     .catch(error => {
                         this.app.errors.push(error.toString());
@@ -614,6 +585,287 @@ export class SearchController {
 
     renderGoToForm() {
         this.container.innerHTML = `<div class="field"><label class="label has-text-info">Enter ID</label><div class="control"><input class="input" type="text" placeholder="ID" id="goToValue"></div><div class="control"><button class="button is-primary mt-2" id="goButton">Go</button></div></div>`;
+    }
+
+    renderRunningTerminal(titleText = 'ioc-analysis.running', messageText = 'Analyzing indicators across threat intelligence sources...') {
+        this.container.innerHTML = `
+        <div class="terminal-window">
+            <div class="terminal-titlebar">
+                <div class="terminal-title">
+                    <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
+                    <span id="runningTerminalTitle">${escapeHtml(titleText)}</span>
+                    <span class="tag is-dark is-small ml-2" id="resultsCountBadge">0 items</span>
+                </div>
+                <div class="terminal-actions">
+                    <input id="iocFilterInput" type="text" class="input is-small terminal-search" placeholder="Filter results (IOC, vendor, info)..." />
+                    <div class="buttons has-addons mb-0">
+                        <button id="filterAllResultsBtn" class="button is-small terminal-btn terminal-btn-active" type="button">All (<span id="countAllBtn">0</span>)</button>
+                        <button id="filterMatchedOnlyBtn" class="button is-small terminal-btn" type="button">Matches (<span id="countMatchedBtn">0</span>)</button>
+                    </div>
+                    <button id="terminalBackBtn" class="button is-small terminal-btn" type="button" title="Back to Search Form">
+                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
+                        <span>Search</span>
+                    </button>
+                    <button id="terminalClearBtn" class="button is-small terminal-btn terminal-btn-danger" type="button" title="Clear">
+                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">delete_sweep</i></span>
+                        <span>Clear Results</span>
+                    </button>
+                </div>
+            </div>
+            <div class="terminal-body" id="iocResultsBody" style="min-height: 220px; height: auto;">
+                <div class="terminal-placeholder" id="iocStreamingPlaceholder">
+                    <p class="has-text-info mb-3">
+                        <span class="animate-spin" style="display: inline-block; margin-right: 8px;">⏳</span> ${escapeHtml(messageText)}
+                    </p>
+                    <progress class="progress is-small is-info" max="100"></progress>
+                </div>
+            </div>
+            <div class="terminal-statusbar">
+                <span id="terminalStatusCount">Query in progress • waiting for vendor telemetry...</span>
+                <span class="is-pulled-right" id="terminalStatusRight">threatco runtime • active</span>
+            </div>
+        </div>`;
+
+        this._wireLiveTerminalControls();
+    }
+
+    _wireLiveTerminalControls(isHistoryView = false) {
+        const backBtn = this.container.querySelector('#terminalBackBtn');
+        if (backBtn) {
+            backBtn.onclick = () => this.renderForm();
+        }
+
+        const clearBtn = this.container.querySelector('#terminalClearBtn');
+        if (clearBtn) {
+            clearBtn.onclick = (e) => {
+                e.preventDefault();
+                if (isHistoryView) {
+                    this.app.resultHistory = [];
+                    this.app.setHistory();
+                }
+                this.app.results = [];
+                this.renderForm();
+            };
+        }
+
+        const filterInput = this.container.querySelector('#iocFilterInput');
+        const filterAllBtn = this.container.querySelector('#filterAllResultsBtn');
+        const filterMatchedBtn = this.container.querySelector('#filterMatchedOnlyBtn');
+
+        const applyFilter = () => {
+            const body = this.container.querySelector('#iocResultsBody');
+            if (!body) return;
+            const items = body.querySelectorAll('.terminal-result-item');
+            const q = (filterInput?.value || '').trim().toLowerCase();
+            const onlyMatches = filterMatchedBtn?.classList.contains('terminal-btn-active');
+            let visibleCount = 0;
+            let totalMatches = 0;
+
+            items.forEach(el => {
+                const isMatch = el.getAttribute('data-matched') === 'true';
+                if (isMatch) totalMatches++;
+                const text = el.textContent.toLowerCase();
+                const matchesQ = !q || text.includes(q);
+                const matchesFilter = !onlyMatches || isMatch;
+
+                if (matchesQ && matchesFilter) {
+                    el.style.display = '';
+                    visibleCount++;
+                } else {
+                    el.style.display = 'none';
+                }
+            });
+
+            const statusCountEl = this.container.querySelector('#terminalStatusCount');
+            if (statusCountEl) {
+                statusCountEl.textContent = `Showing ${visibleCount} of ${items.length} items (${totalMatches} threat matches)`;
+            }
+        };
+
+        let filterDebounce = null;
+        if (filterInput) {
+            filterInput.oninput = () => {
+                clearTimeout(filterDebounce);
+                filterDebounce = setTimeout(applyFilter, 120);
+            };
+        }
+
+        if (filterAllBtn && filterMatchedBtn) {
+            filterAllBtn.onclick = () => {
+                filterAllBtn.classList.add('terminal-btn-active');
+                filterMatchedBtn.classList.remove('terminal-btn-active');
+                applyFilter();
+            };
+            filterMatchedBtn.onclick = () => {
+                filterMatchedBtn.classList.add('terminal-btn-active');
+                filterAllBtn.classList.remove('terminal-btn-active');
+                applyFilter();
+            };
+        }
+    }
+
+    _createResultItemElement(result) {
+        const isMatched = result.matched === true || 
+                          result.matched === 'true' || 
+                          (typeof result.threat_level_id === 'number' && result.threat_level_id > 1);
+
+        const item = document.createElement('div');
+        item.className = `terminal-result-item ${isMatched ? 'is-match' : 'is-clean'} spa-view-container fade-enter`;
+        item.setAttribute('data-matched', isMatched ? 'true' : 'false');
+        item.setAttribute('data-threat-level', String(result.threat_level_id || 0));
+
+        const threatScore = result.threat_level_id ?? 0;
+        const threatScoreClass = threatScore > 1 ? 'terminal-v-score-high' : '';
+
+        const statusBadgeHtml = isMatched ? `
+            <span class="terminal-match-badge match-flagged">
+                <i class="material-icons" style="font-size: 13px;">warning</i> MATCH
+            </span>
+        ` : `
+            <span class="terminal-match-badge match-clean">
+                <i class="material-icons" style="font-size: 13px;">check_circle</i> NO MATCH
+            </span>
+        `;
+
+        item.innerHTML = `
+            <div class="terminal-result-header">
+                <div class="terminal-result-meta-left">
+                    ${statusBadgeHtml}
+                    <span class="tag is-dark is-small terminal-vendor-tag">${escapeHtml(result.from || 'VENDOR')}</span>
+                    <span class="terminal-ioc-val">${escapeHtml(String(result.value || ''))}</span>
+                </div>
+                <div class="terminal-result-actions">
+                    <button class="button is-small terminal-action-btn past-searches-btn" type="button" data-val="${escapeHtml(String(result.value || ''))}" title="View past searches for this indicator">
+                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">history</i></span>
+                        <span>Past Searches</span>
+                    </button>
+                    <button class="button is-small terminal-action-btn view-details-btn" type="button" data-link="${escapeHtml(String(result.link || ''))}" title="View raw vendor response details" ${(!result.link || result.link === "none") ? 'disabled' : ''}>
+                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">visibility</i></span>
+                        <span>View Details</span>
+                    </button>
+                </div>
+            </div>
+            <div class="terminal-result-body">
+                <div class="terminal-kv-row">
+                    <span class="terminal-k">INFO:</span>
+                    <span class="terminal-v terminal-v-info">${escapeHtml(String(result.info || 'No description provided'))}</span>
+                </div>
+                <div class="terminal-kv-meta">
+                    <span><span class="terminal-k">SCORE:</span> <span class="terminal-v ${threatScoreClass}">${escapeHtml(String(threatScore))}</span></span>
+                    <span><span class="terminal-k">ATTRS:</span> <span class="terminal-v">${escapeHtml(String(result.attr_count ?? 0))}</span></span>
+                    <span><span class="terminal-k">ID:</span> <span class="terminal-v">${escapeHtml(String(result.id || 'none'))}</span></span>
+                    <span><span class="terminal-k">SERVER ID:</span> <span class="terminal-v">${escapeHtml(String(result.link || 'none'))}</span></span>
+                </div>
+            </div>
+        `;
+
+        const pastSearchesBtn = item.querySelector('.past-searches-btn');
+        if (pastSearchesBtn) {
+            pastSearchesBtn.onclick = async (e) => {
+                e.preventDefault();
+                const pastSearches = await this.app.fetchPastSearches(result.value);
+                if (!pastSearches || pastSearches.length === 0) {
+                    alert(`No past searches found for: ${result.value}`);
+                    return;
+                }
+                const historyReport = pastSearches
+                    .map(search => `• ${search.info}`)
+                    .join('\n');
+                alert(`Historical matches for ${result.value}:\n\n${historyReport}`);
+            };
+        }
+
+        const viewDetailsBtn = item.querySelector('.view-details-btn');
+        if (viewDetailsBtn) {
+            viewDetailsBtn.onclick = (e) => {
+                e.preventDefault();
+                if (!result.link || result.link === "none") return;
+                const customEvent = new CustomEvent('req-open-details', { detail: result.link });
+                document.dispatchEvent(customEvent);
+            };
+        }
+
+        return item;
+    }
+
+    appendStreamingResult(result) {
+        let body = this.container.querySelector('#iocResultsBody');
+        if (!body) {
+            this.renderRunningTerminal('ioc-analysis.results', 'Processing incoming telemetry...');
+            body = this.container.querySelector('#iocResultsBody');
+        }
+
+        const placeholder = this.container.querySelector('#iocStreamingPlaceholder');
+        if (placeholder) {
+            placeholder.remove();
+        }
+
+        const item = this._createResultItemElement(result);
+        const newScore = result.threat_level_id || 0;
+        
+        // Find insert location to maintain sorted order by threat level descending
+        const existingItems = Array.from(body.querySelectorAll('.terminal-result-item'));
+        let inserted = false;
+        for (const existing of existingItems) {
+            const existingScore = parseInt(existing.getAttribute('data-threat-level') || '0', 10);
+            if (newScore > existingScore) {
+                body.insertBefore(item, existing);
+                inserted = true;
+                break;
+            }
+        }
+        if (!inserted) {
+            body.appendChild(item);
+        }
+
+        // Animate smooth fade-in
+        requestAnimationFrame(() => {
+            item.classList.add('fade-enter-active');
+            setTimeout(() => {
+                item.classList.remove('fade-enter', 'fade-enter-active');
+            }, 180);
+        });
+
+        // Update counts
+        const allItems = body.querySelectorAll('.terminal-result-item');
+        const matchedItems = body.querySelectorAll('.terminal-result-item[data-matched="true"]');
+        const totalCount = allItems.length;
+        const matchedCount = matchedItems.length;
+
+        const countBadge = this.container.querySelector('#resultsCountBadge');
+        if (countBadge) countBadge.textContent = `${totalCount} items`;
+
+        const countAllBtn = this.container.querySelector('#countAllBtn');
+        if (countAllBtn) countAllBtn.textContent = totalCount;
+
+        const countMatchedBtn = this.container.querySelector('#countMatchedBtn');
+        if (countMatchedBtn) countMatchedBtn.textContent = matchedCount;
+
+        const statusCountEl = this.container.querySelector('#terminalStatusCount');
+        if (statusCountEl) {
+            statusCountEl.textContent = `Showing ${totalCount} of ${totalCount} items (${matchedCount} threat matches)`;
+        }
+    }
+
+    finalizeSearchResults() {
+        const placeholder = this.container.querySelector('#iocStreamingPlaceholder');
+        if (placeholder) {
+            placeholder.remove();
+        }
+
+        const body = this.container.querySelector('#iocResultsBody');
+        const count = body ? body.querySelectorAll('.terminal-result-item').length : 0;
+        
+        if (count === 0) {
+            this.renderResultCards([], false);
+            return;
+        }
+
+        const titleEl = this.container.querySelector('#runningTerminalTitle');
+        if (titleEl) titleEl.textContent = 'ioc-analysis.results';
+
+        const statusRight = this.container.querySelector('#terminalStatusRight');
+        if (statusRight) statusRight.textContent = 'threatco ioc analysis • complete';
     }
 
     renderResultCards(resultsArray, isHistoryView = false) {
@@ -847,7 +1099,13 @@ export class SearchController {
             }
         };
 
-        if (filterInput) filterInput.addEventListener('input', applyFilter);
+        let filterDebounce = null;
+        const debouncedApplyFilter = () => {
+            clearTimeout(filterDebounce);
+            filterDebounce = setTimeout(applyFilter, 120);
+        };
+
+        if (filterInput) filterInput.addEventListener('input', debouncedApplyFilter);
         if (filterAllBtn && filterMatchedBtn) {
             filterAllBtn.addEventListener('click', () => {
                 filterAllBtn.classList.add('terminal-btn-active');

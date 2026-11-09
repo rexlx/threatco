@@ -363,8 +363,18 @@ export class CaseController {
 
         const searchInput = document.getElementById('caseSearchInput');
         if (searchInput) {
+            let searchDebounce = null;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchDebounce);
+                searchDebounce = setTimeout(() => {
+                    runSearch();
+                }, 250);
+            });
             searchInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') runSearch();
+                if (e.key === 'Enter') {
+                    clearTimeout(searchDebounce);
+                    runSearch();
+                }
             });
         }
 
@@ -518,14 +528,20 @@ export class CaseController {
     async loadCases() {
         const container = document.getElementById('caseListContainer');
         if (!container) return;
-        container.innerHTML = `
-            <tr class="terminal-table-row">
-                <td colspan="8" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
-                    <p class="has-text-info mb-2">Loading cases from database...</p>
-                    <progress class="progress is-small is-info" max="100"></progress>
-                </td>
-            </tr>
-        `;
+
+        const table = container.closest('table');
+        if (table && container.children.length > 0) {
+            table.classList.add('is-table-loading');
+        } else {
+            container.innerHTML = `
+                <tr class="terminal-table-row">
+                    <td colspan="8" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                        <p class="has-text-info mb-2">Loading cases from database...</p>
+                        <progress class="progress is-small is-info" max="100"></progress>
+                    </td>
+                </tr>
+            `;
+        }
 
         try {
             const res = await this.app._fetch(`/cases/list?limit=${this.itemsPerPage}&page=${this.currentPage}&type=${this.currentFilter}`);
@@ -535,10 +551,12 @@ export class CaseController {
                 cases = [];
             }
 
+            if (table) table.classList.remove('is-table-loading');
             this.renderCaseList(cases);
             this.updatePaginationControls(cases.length);
 
         } catch (e) {
+            if (table) table.classList.remove('is-table-loading');
             container.innerHTML = `
                 <tr class="terminal-table-row">
                     <td colspan="8" class="terminal-placeholder has-text-danger" style="text-align: center; padding: 2rem;">

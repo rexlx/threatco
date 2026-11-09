@@ -229,13 +229,21 @@ export class ResponseController {
         const tableContainer = document.getElementById('responseTableContainer');
         if (!tableContainer) return;
 
-        tableContainer.innerHTML = '<div class="terminal-table-container"><table class="terminal-table users-table responses-table"><thead><tr><th class="resp-th-time">TIME</th><th class="resp-th-vendor">VENDOR</th><th class="resp-th-value">VALUE</th><th class="resp-th-actions">ACTIONS</th></tr></thead><tbody><tr class="terminal-table-row"><td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;"><p class="has-text-info mb-2">Fetching responses...</p><progress class="progress is-small is-info" max="100"></progress></td></tr></tbody></table></div>';
+        // Non-destructive loading: keep table structure if already present, just dim and show top status
+        const existingTable = tableContainer.querySelector('table');
+        if (existingTable) {
+            existingTable.classList.add('is-table-loading');
+        } else {
+            tableContainer.innerHTML = '<div class="terminal-table-container"><table class="terminal-table users-table responses-table"><thead><tr><th class="resp-th-time">TIME</th><th class="resp-th-vendor">VENDOR</th><th class="resp-th-value">VALUE</th><th class="resp-th-actions">ACTIONS</th></tr></thead><tbody><tr class="terminal-table-row"><td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;"><p class="has-text-info mb-2">Fetching responses...</p><progress class="progress is-small is-info" max="100"></progress></td></tr></tbody></table></div>';
+        }
 
         // Fetch data
         const { html, total } = await this.app.fetchResponseCache(this.currentOptions);
 
         // Render Table
         tableContainer.innerHTML = html;
+        const newTable = tableContainer.querySelector('table');
+        if (newTable) newTable.classList.remove('is-table-loading');
 
         // UPDATE TITLE AND BADGE WITH COUNT
         const titleEl = document.getElementById('responseViewTitle');
