@@ -325,7 +325,7 @@ export class HealthController {
                 </div> -->
                 <div class="terminal-title">
                     <span class="terminal-status-dot"></span>
-                    <span>system health/span>
+                    <span>system health</span>
                 </div>
                 <div class="terminal-actions">
                     ${uptimePill}
