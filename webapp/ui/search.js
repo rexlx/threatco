@@ -14,8 +14,8 @@ export class SearchController {
 
     async renderForm() {
         this.container.classList.remove('is-hidden'); 
-        this.container.classList.remove('has-background-custom');
-        this.container.classList.add('has-background-black');
+        // this.container.classList.remove('has-background-custom');
+        // this.container.classList.add('has-background-black');
         this.container.classList.add('search-view');
 
         let stats = {
@@ -133,7 +133,7 @@ export class SearchController {
         content.innerHTML = `
         <div class="search-form-card">
             <div class="search-form-header">
-                <h2 class="search-form-title">New Search/h2>
+                <h2 class="search-form-title">New Search</h2>
                 <p class="search-form-subtitle">Enter IP addresses, domains, hashes (MD5, SHA256), URLs, or raw threat telemetry text to extract and query.</p>
             </div>
             <form onsubmit="return false;">

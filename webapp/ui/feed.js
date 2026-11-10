@@ -56,8 +56,8 @@ export class FeedController {
         const container = document.getElementById(this.containerId);
         if (!container) return;
         container.classList.remove('is-hidden');
-        container.classList.remove('has-background-custom');
-        container.classList.add('has-background-black');
+        // container.classList.remove('has-background-custom');
+        // container.classList.add('has-background-black');
 
         // Show loading state matching terminal window conventions
         container.innerHTML = `

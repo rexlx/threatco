@@ -48,8 +48,8 @@ export class CaseController {
 
     async render() {
         this.container.classList.remove('is-hidden');
-        this.container.classList.remove('has-background-custom');
-        this.container.classList.add('has-background-black');
+        // this.container.classList.remove('has-background-custom');
+        // this.container.classList.add('has-background-black');
 
         this.container.innerHTML = `
             <!-- Sticky Cases Header / Navigation Bar -->

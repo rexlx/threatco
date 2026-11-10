@@ -2119,6 +2119,73 @@ pre {
     padding: 0 !important;
 }
 
+/* Responses & Health Views Black Background Theme Overrides */
+#responsesContainer,
+#healthStatusContainer {
+    background-color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+.responses-nav-bar,
+.health-nav-bar {
+    background: #000000 !important;
+    border-color: rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85) !important;
+}
+
+.responses-window,
+.health-window {
+    background: #000000 !important;
+    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.9), 0 0 20px rgba(56, 189, 248, 0.08) !important;
+}
+
+.responses-window .terminal-titlebar,
+.health-window .terminal-titlebar {
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
+}
+
+.responses-window .terminal-table-container,
+.health-window .terminal-table-container {
+    background: #000000 !important;
+}
+
+.responses-table,
+.health-table {
+    background-color: #000000 !important;
+}
+
+.responses-table thead th,
+.health-table thead th {
+    background: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.28) !important;
+}
+
+.responses-table tbody tr,
+.health-table tbody tr {
+    background-color: #000000 !important;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
+}
+
+.responses-table tbody tr:hover,
+.health-table tbody tr:hover {
+    background-color: rgba(56, 189, 248, 0.06) !important;
+}
+
+.responses-table td,
+.health-table td {
+    border-bottom: 1px solid rgba(56, 189, 248, 0.14) !important;
+}
+
+.responses-window .terminal-statusbar,
+.health-window .terminal-statusbar {
+    background: #000000 !important;
+    border-top: 1px solid rgba(56, 189, 248, 0.12) !important;
+}
+
 .cases-nav-bar {
     background: #000000 !important;
     border-color: rgba(56, 189, 248, 0.22) !important;

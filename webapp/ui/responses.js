@@ -38,7 +38,7 @@ export class ResponseController {
         </div>
 
         <!-- Filter Sub-bar for Options -->
-        <div class="box p-3 mb-3" style="background: rgba(11, 20, 28, 0.96); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px;">
+        <div class="box p-3 mb-3" style="background: #000000; border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px;">
             <div class="field is-grouped is-grouped-multiline is-align-items-center mb-0">
                 <p class="control">
                     <input class="input is-small" type="number" id="filterLimit" placeholder="Limit" value="100" style="width: 80px; background: #060b11; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-family: 'IBMPlexMono', monospace;">
