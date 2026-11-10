@@ -14,6 +14,9 @@ export class SearchController {
 
     async renderForm() {
         this.container.classList.remove('is-hidden'); 
+        this.container.classList.remove('has-background-custom');
+        this.container.classList.add('has-background-black');
+        this.container.classList.add('search-view');
 
         let stats = {
             open_cases: 0,
@@ -31,44 +34,80 @@ export class SearchController {
         }
 
         this.container.innerHTML = `
-        <h1 class="title has-text-info">Overview</h1>
-        
-        <div class="columns is-multiline is-mobile mb-6">
-            ${this._renderStatBox("Open Cases", stats.open_cases, "warning", "statBoxOpenCases")}
-            ${this._renderStatBox("Responses", stats.active_responses, "info", "statBoxResponses")}
-            ${this._renderStatBox("Archived", stats.archived_responses, "grey", "statBoxArchived")}
-            ${this._renderStatBox("Users", stats.total_users, "success", "statBoxUsers")}
-            ${this._renderStatBox("Proxied", stats.server_metrics?.vendor_responses || 0, "white", "statBoxProxied")}
+        <!-- Sticky Search Header / Navigation Bar -->
+        <div class="users-nav-bar search-nav-bar mb-3" id="search-top">
+            <div class="users-nav-left">
+                <div class="users-nav-title-group">
+                    <span class="users-nav-title">Indicator Search</span>
+                    <span class="tag is-info is-dark is-rounded charts-count-badge" id="searchCountBadge">Ready</span>
+                </div>
+            </div>
+
+            <div class="users-nav-right">
+                <button type="button" class="button is-small terminal-btn" id="historyButton" title="View past search history">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">history</i></span>
+                    <span>History</span>
+                </button>
+                <button type="button" class="button is-small terminal-btn" id="goToButton" title="Look up record by transaction ID">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">double_arrow</i></span>
+                    <span>Lookup ID</span>
+                </button>
+                <button type="button" class="button is-small terminal-btn" id="uploadButton" title="Upload threat intelligence file">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">upload_file</i></span>
+                    <span>Upload</span>
+                </button>
+                <button type="button" class="button is-small is-dark is-outlined" id="searchRefreshBtn" title="Refresh dashboard stats">↻ Refresh</button>
+            </div>
         </div>
 
-        <div class="tabs is-boxed mt-6">
-            <ul>
-                <li class="${this.activeTab === 'search' ? 'is-active' : ''}">
-                    <a id="searchTabBtn">
-                        <span class="icon is-small"><i class="material-icons">search</i></span>
-                        <span>Search</span>
-                    </a>
-                </li>
-                <li class="${this.activeTab === 'fetch' ? 'is-active' : ''}">
-                    <a id="fetchTabBtn">
-                        <span class="icon is-small"><i class="material-icons">cloud_download</i></span>
-                        <span>Fetch URL</span>
-                    </a>
-                </li>
-                <li class="${this.activeTab === 'failed' ? 'is-active' : ''}">
-                    <a id="failedTabBtn">
-                        <span class="icon is-small"><i class="material-icons">report_problem</i></span>
-                        <span>Failed</span>
-                    </a>
-                </li>
-            </ul>
+        <!-- Telemetry Overview Metric Cards -->
+        <div class="search-stats-grid mb-4">
+            ${this._renderStatBox("Open Cases", stats.open_cases, "warning", "statBoxOpenCases", "work_outline")}
+            ${this._renderStatBox("Responses", stats.active_responses, "info", "statBoxResponses", "history")}
+            ${this._renderStatBox("Archived", stats.archived_responses, "grey", "statBoxArchived", "archive")}
+            ${this._renderStatBox("Users", stats.total_users, "success", "statBoxUsers", "people")}
+            ${this._renderStatBox("Proxied", stats.server_metrics?.vendor_responses || 0, "white", "statBoxProxied", "alt_route")}
         </div>
-        <div id="tabContent"></div>`;
+
+        <!-- Main Search Window -->
+        <div class="users-window search-window" id="searchWindow">
+            <div class="terminal-titlebar">
+                <div class="terminal-title">
+                    <span class="terminal-status-dot"></span>
+                    <span>indicator investigation console</span>
+                </div>
+                <div class="terminal-actions">
+                    <div class="buttons has-addons mb-0 search-tab-buttons">
+                        <button id="searchTabBtn" class="button is-small terminal-btn ${this.activeTab === 'search' ? 'terminal-btn-active' : ''}" type="button">
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">search</i></span>
+                            <span>Search</span>
+                        </button>
+                        <button id="fetchTabBtn" class="button is-small terminal-btn ${this.activeTab === 'fetch' ? 'terminal-btn-active' : ''}" type="button">
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">cloud_download</i></span>
+                            <span>Fetch URL</span>
+                        </button>
+                        <button id="failedTabBtn" class="button is-small terminal-btn ${this.activeTab === 'failed' ? 'terminal-btn-active' : ''}" type="button">
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">report_problem</i></span>
+                            <span>Failed</span>
+                        </button>
+                    </div>
+                    <span class="system-status-pill status-nominal">
+                        <span class="status-indicator-dot dot-nominal"></span>ONLINE
+                    </span>
+                </div>
+            </div>
+
+            <div class="search-window-body" id="tabContent"></div>
+
+            <div class="terminal-statusbar">
+                <span id="searchStatusbarText">Intel Search Engine &bull; Ready</span>
+                <span class="is-pulled-right">threatco telemetry &bull; query pipeline</span>
+            </div>
+        </div>`;
 
         // Render the content for the active tab
         if (this.activeTab === 'search') {
             this.renderSearchTab();
-            // If matches are staged for review, render the selection grid
             if (this.extractedMatches.length > 0) this.renderMatchSelection();
         } else if (this.activeTab === 'fetch') {
             this.renderFetchTab();
@@ -77,100 +116,142 @@ export class SearchController {
         }
     }
 
-    _renderStatBox(label, value, colorClass, id = '') {
+    _renderStatBox(label, value, colorClass, id = '', icon = 'analytics') {
         return `
-            <div class="column is-one-fifth-tablet is-half-mobile">
-                <div class="box has-background-black has-text-centered stat-box" ${id ? `id="${id}"` : ''} style="border: 1px solid #333; height: 100%; cursor: pointer;">
-                    <p class="heading has-text-grey-light">${label}</p>
-                    <p class="title is-4 has-text-${colorClass}">${value}</p>
+            <div class="search-stat-card stat-box" ${id ? `id="${id}"` : ''} title="Click to view ${escapeHtml(label)}">
+                <div class="search-stat-card-header">
+                    <span class="search-stat-label">${escapeHtml(label)}</span>
+                    <i class="material-icons search-stat-icon">${escapeHtml(icon)}</i>
                 </div>
+                <div class="search-stat-value val-${colorClass} has-text-${colorClass}">${escapeHtml(String(value ?? 0))}</div>
             </div>`;
     }
 
     renderSearchTab() {
         const content = document.getElementById('tabContent');
+        if (!content) return;
         content.innerHTML = `
-        <h2 class="subtitle has-text-info mt-4">New Search</h2>
-        <form>
-            <div class="field"><div class="control"><textarea class="textarea" placeholder="Paste text or IOCs here..." id="userSearch"></textarea></div></div>
-            <div class="field"><div class="control">
-                <label class="checkbox has-text-grey-light"><input type="checkbox" id="dontParseCheckbox"> parse on server</label>
-                <label class="checkbox has-text-grey-light ml-4"><input type="checkbox" id="viewQueueCheckbox"> preview matches</label>
-            </div></div>
-            <div class="field"><div class="control">
-                <button class="button is-info is-outlined" id="searchButton" type="submit">
-                    <span class="icon-text"><span class="icon"><i class="material-icons">search</i></span><span>Find IOCs</span></span>
-                </button>
-                <button class="button is-success is-outlined is-hidden" id="executeQueueButton" type="button">
-                    <span class="icon-text"><span class="icon"><i class="material-icons">bolt</i></span><span>Analyze Selected (<span id="queueCount">0</span>)</span></span>
-                </button>
-            </div></div>
-            
-            <div id="iocSelectionArea" class="mt-4"></div>
-
-            <div class="field"><div class="control"><div class="buttons are-small">
-                <button type="button" class="button is-black has-text-info-light" id="historyButton"><span class="icon-text"><span class="icon"><i class="material-icons">history</i></span><span>history</span></span></button>
-                <button type="button" class="button is-black has-text-info-light" id="goToButton"><span class="icon-text"><span class="icon"><i class="material-icons">double_arrow</i></span><span>go to</span></span></button>
-                <button type="button" class="button is-black has-text-info-light" id="uploadButton"><span class="icon-text"><span class="icon"><i class="material-icons">upload_file</i></span><span>upload</span></span></button>
-            </div></div></div>
-        </form>`;
+        <div class="search-form-card">
+            <div class="search-form-header">
+                <h2 class="search-form-title">New Search/h2>
+                <p class="search-form-subtitle">Enter IP addresses, domains, hashes (MD5, SHA256), URLs, or raw threat telemetry text to extract and query.</p>
+            </div>
+            <form onsubmit="return false;">
+                <div class="field">
+                    <div class="control">
+                        <textarea class="textarea search-textarea" placeholder="Paste IOCs, logs, emails, or threat intel reports here..." id="userSearch" rows="6"></textarea>
+                    </div>
+                </div>
+                
+                <div class="search-controls-row">
+                    <div class="search-options-group">
+                        <label class="search-check-pill" title="Send raw payload directly to server without client parsing">
+                            <input type="checkbox" id="dontParseCheckbox">
+                            <span>Parse on Server</span>
+                        </label>
+                        <label class="search-check-pill" title="Preview extracted IOCs in staging area before querying intelligence sources">
+                            <input type="checkbox" id="viewQueueCheckbox">
+                            <span>Preview Matches (Staging)</span>
+                        </label>
+                    </div>
+                    
+                    <div class="search-actions-group">
+                        <button class="button search-btn-primary" id="searchButton" type="submit">
+                            <span class="icon-text">
+                                <span class="icon"><i class="material-icons">search</i></span>
+                                <span>Find IOCs</span>
+                            </span>
+                        </button>
+                        <button class="button search-btn-success is-hidden" id="executeQueueButton" type="button">
+                            <span class="icon-text">
+                                <span class="icon"><i class="material-icons">bolt</i></span>
+                                <span>Analyze Selected (<span id="queueCount">0</span>)</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="iocSelectionArea" class="mt-4"></div>
+            </form>
+        </div>`;
     }
 
     renderFetchTab() {
         const content = document.getElementById('tabContent');
+        if (!content) return;
         content.innerHTML = `
-        <h2 class="subtitle has-text-info mt-4">Fetch and Extract URL</h2>
-        <p class="has-text-grey-light mb-4">Input a URL to extract IOCs for manual review.</p>
-        <form id="fetchUrlForm">
-            <div class="field">
-                <div class="control has-icons-left">
-                    <input class="input" type="url" id="userUrlSearch" placeholder="https://example.com/threat-report" required>
-                    <span class="icon is-small is-left"><i class="material-icons">link</i></span>
-                </div>
+        <div class="search-form-card">
+            <div class="search-form-header">
+                <h2 class="search-form-title">Fetch & Extract from URL</h2>
+                <p class="search-form-subtitle">Input a threat report, blog post, or advisory URL to crawl and automatically extract IOCs for manual review.</p>
             </div>
-            <div class="field">
-                <div class="control">
-                    <button class="button is-info is-outlined" id="fetchSearchButton" type="submit">
-                        <span class="icon-text"><span class="icon"><i class="material-icons">cloud_download</i></span><span>Fetch & Review</span></span>
-                    </button>
+            <form id="fetchUrlForm" onsubmit="return false;">
+                <div class="field mb-4">
+                    <div class="control has-icons-left">
+                        <input class="input search-input" type="url" id="userUrlSearch" placeholder="https://example.com/threat-report" required>
+                        <span class="icon is-small is-left has-text-info"><i class="material-icons">link</i></span>
+                    </div>
                 </div>
-            </div>
-        </form>`;
+                <div class="field">
+                    <div class="control">
+                        <button class="button search-btn-primary" id="fetchSearchButton" type="submit">
+                            <span class="icon-text">
+                                <span class="icon"><i class="material-icons">cloud_download</i></span>
+                                <span>Fetch & Review</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>`;
     }
 
     /**
      * Renders the Opt-In selection grid. Items are dark by default.
-     * Click a tag to turn it blue and add it to the execution queue.
+     * Click a tag to highlight and add it to the execution queue.
      */
     renderMatchSelection() {
         const area = document.getElementById('iocSelectionArea');
         const execBtn = document.getElementById('executeQueueButton');
         if (!area || !execBtn) return;
 
-        area.innerHTML = `<h3 class="subtitle is-5 has-text-info">Found Indicators (Click to select)</h3>`;
+        const totalCount = this.extractedMatches.reduce((acc, g) => acc + g.matches.length, 0);
+
+        area.innerHTML = `
+            <div class="is-flex is-justify-content-between is-align-items-center mb-3">
+                <h3 class="search-form-title" style="font-size: 0.95rem;">Extracted Indicators (Click to Select)</h3>
+                <span class="tag is-dark is-small" style="color: #94a3b8;">${totalCount} detected</span>
+            </div>`;
         
         this.extractedMatches.forEach(group => {
             const box = document.createElement('div');
-            box.className = "box has-background-black-bis mb-3";
-            box.innerHTML = `<h6 class="title is-6 has-text-grey-light mb-2">${group.type.toUpperCase()}</h6>`;
+            box.className = "ioc-match-group mb-3";
+            box.innerHTML = `
+                <div class="ioc-match-group-title">
+                    <i class="material-icons" style="font-size: 14px;">label</i>
+                    <span>${escapeHtml(group.type.toUpperCase())}</span>
+                    <span class="tag is-dark is-small ml-1" style="font-size: 0.7rem;">${group.matches.length}</span>
+                </div>`;
             
             const tagsDiv = document.createElement('div');
-            tagsDiv.className = "field is-grouped is-grouped-multiline";
+            tagsDiv.className = "is-flex is-flex-wrap-wrap";
             
             group.matches.forEach(val => {
                 const tag = document.createElement('span');
                 const isSelected = this.currentQueue.some(q => q.value === val && q.type === group.type);
                 
-                tag.className = `tag is-medium ${isSelected ? 'is-info' : 'is-dark'}`;
+                tag.className = `tag is-medium ioc-chip ${isSelected ? 'is-info is-selected' : 'is-dark is-unselected'}`;
                 tag.style.cursor = "pointer";
                 tag.textContent = val;
                 
                 tag.onclick = () => {
-                    if (tag.classList.contains('is-dark')) {
-                        tag.classList.replace('is-dark', 'is-info');
+                    if (tag.classList.contains('is-unselected') || tag.classList.contains('is-dark')) {
+                        tag.classList.remove('is-dark', 'is-unselected');
+                        tag.classList.add('is-info', 'is-selected');
                         this.currentQueue.push({ value: val, type: group.type });
                     } else {
-                        tag.classList.replace('is-info', 'is-dark');
+                        tag.classList.remove('is-info', 'is-selected');
+                        tag.classList.add('is-dark', 'is-unselected');
                         this.currentQueue = this.currentQueue.filter(q => !(q.value === val && q.type === group.type));
                     }
                     this.updateQueueCount();
@@ -193,58 +274,74 @@ export class SearchController {
 
     async renderFailedTab() {
         const content = document.getElementById('tabContent');
-        content.innerHTML = '<p class="has-text-grey-light">Loading failed requests...</p><progress class="progress is-small is-info" max="100"></progress>';
+        if (!content) return;
+        content.innerHTML = `
+            <div class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                <p class="has-text-info mb-2">Loading failed requests...</p>
+                <progress class="progress is-small is-info" max="100"></progress>
+            </div>`;
 
         try {
             const resp = await fetch('/failed-requests');
             const requests = await resp.json();
 
             if (!requests || requests.length === 0) {
-                content.innerHTML = '<h2 class="subtitle has-text-info mt-4">Failed Requests</h2><p class="has-text-white">No failed requests found.</p>';
+                content.innerHTML = `
+                    <div class="terminal-placeholder" style="text-align: center; padding: 3rem 1.5rem; color: #64748b;">
+                        <p class="mb-2"><i class="material-icons" style="font-size: 36px; color: #10b981;">check_circle</i></p>
+                        <p class="has-text-info" style="font-size: 1rem; font-weight: 600;">No Failed Requests</p>
+                        <p class="has-text-grey-light" style="font-size: 0.85rem;">All vendor intelligence queries completed successfully.</p>
+                    </div>`;
                 return;
             }
 
             let html = `
-                <h2 class="subtitle has-text-info mt-4">Failed Requests</h2>
-                <table class="table is-fullwidth is-striped mt-4">
-                    <thead>
-                        <tr>
-                            <th>Vendor</th>
-                            <th>Type</th>
-                            <th>Value</th>
-                            <th class="has-text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+                <div class="search-form-header mb-3">
+                    <h2 class="search-form-title">Failed Query Records</h2>
+                    <p class="search-form-subtitle">${requests.length} failed requests awaiting retry or removal.</p>
+                </div>
+                <div class="terminal-table-container">
+                    <table class="terminal-table users-table search-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 160px;">VENDOR</th>
+                                <th style="width: 120px;">TYPE</th>
+                                <th>VALUE</th>
+                                <th style="width: 120px; text-align: right;">ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
 
             requests.forEach((req) => {
                 html += `
-                    <tr>
-                        <td class="is-vcentered"><strong>${escapeHtml(req.to)}</strong></td>
-                        <td class="is-vcentered">${escapeHtml(req.type)}</td>
-                        <td class="is-vcentered" style="word-break: break-all;">${escapeHtml(req.value)}</td>
+                    <tr class="terminal-table-row">
                         <td class="is-vcentered">
-                            <div class="field is-grouped is-grouped-right">
-                                <p class="control">
-                                    <button class="button is-small is-info is-light retry-failed-btn" 
-                                            title="Retry Request"
-                                            data-vendor="${req.to}" data-val="${req.value}" data-type="${req.type}">
-                                        <span class="icon is-small"><i class="material-icons">refresh</i></span>
-                                    </button>
-                                </p>
-                                <p class="control">
-                                    <button class="button is-small is-danger is-light delete-failed-btn" 
-                                            title="Remove Record"
-                                            data-id="${req.transaction_id}">
-                                        <span class="icon is-small"><i class="material-icons">delete</i></span>
-                                    </button>
-                                </p>
+                            <span class="tag is-dark is-small terminal-vendor-tag">${escapeHtml(req.to)}</span>
+                        </td>
+                        <td class="is-vcentered">
+                            <span class="tag is-dark is-small" style="color: #cbd5e1; border: 1px solid rgba(56, 189, 248, 0.2);">${escapeHtml(req.type)}</span>
+                        </td>
+                        <td class="is-vcentered">
+                            <span class="search-ioc-val">${escapeHtml(req.value)}</span>
+                        </td>
+                        <td class="is-vcentered" style="text-align: right;">
+                            <div class="buttons is-right are-small mb-0">
+                                <button class="button is-small terminal-btn retry-failed-btn" 
+                                        title="Retry Request"
+                                        data-vendor="${escapeHtml(req.to)}" data-val="${escapeHtml(req.value)}" data-type="${escapeHtml(req.type)}">
+                                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">refresh</i></span>
+                                </button>
+                                <button class="button is-small terminal-btn terminal-btn-danger delete-failed-btn" 
+                                        title="Remove Record"
+                                        data-id="${escapeHtml(req.transaction_id)}">
+                                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">delete</i></span>
+                                </button>
                             </div>
                         </td>
                     </tr>`;
             });
 
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
             content.innerHTML = html;
 
             // Retry listener
@@ -254,9 +351,11 @@ export class SearchController {
                     btn.classList.add('is-loading');
                     try {
                         const result = await this.app.fetchMatch(vendor, val, type, "");
-                        this.renderResultCards([result]);
+                        const results = Array.isArray(result) ? result : [result];
+                        this.renderResultCards(results.filter(Boolean), false);
                     } catch (err) {
                         alert("Retry failed: " + err);
+                    } finally {
                         btn.classList.remove('is-loading');
                     }
                 });
@@ -288,7 +387,7 @@ export class SearchController {
             });
 
         } catch (e) {
-            content.innerHTML = `<p class="has-text-danger">Error loading failed requests: ${e.message}</p>`;
+            content.innerHTML = `<p class="has-text-danger p-4">Error loading failed requests: ${escapeHtml(e.message)}</p>`;
         }
     }
 
@@ -344,15 +443,23 @@ export class SearchController {
                 event.preventDefault();
                 await this.handleExecuteQueue();
             } else if (targetId === 'historyButton') {
-                this.renderResultCards(this.app.resultHistory, true);
+                if (typeof this.app.fetchHistory === 'function') {
+                    await this.app.fetchHistory();
+                }
+                this.renderResultCards(this.app.resultHistory || [], true);
             } else if (targetId === 'goToButton') {
                 this.renderGoToForm();
+            } else if (targetId === 'goToBackBtn' || targetId === 'searchRefreshBtn') {
+                await this.renderForm();
             } else if (targetId === 'uploadButton') {
                 this.handleUpload();
             } else if (targetId === 'goButton') {
-                const id = document.getElementById('goToValue').value;
-                const customEvent = new CustomEvent('req-open-details', { detail: id });
-                document.dispatchEvent(customEvent);
+                const inputEl = document.getElementById('goToValue');
+                const id = inputEl?.value;
+                if (id) {
+                    const customEvent = new CustomEvent('req-open-details', { detail: id });
+                    document.dispatchEvent(customEvent);
+                }
             }
         });
     }
@@ -362,11 +469,10 @@ export class SearchController {
         if (!userSearchInput) return;
 
         const searchText = userSearchInput.value;
-        const dontParse = document.getElementById('dontParseCheckbox').checked;
-        const viewQueue = document.getElementById('viewQueueCheckbox').checked;
+        const dontParse = document.getElementById('dontParseCheckbox')?.checked || false;
+        const viewQueue = document.getElementById('viewQueueCheckbox')?.checked || false;
 
         if (viewQueue && !dontParse) {
-            // Updated to use the new extractAll parser method
             const extractedQueue = this.contextualizer.extractAll(searchText);
             
             this.extractedMatches = Object.keys(extractedQueue).map(key => ({
@@ -395,7 +501,11 @@ export class SearchController {
         btn.classList.add('is-loading');
         const content = document.getElementById('tabContent');
         const originalContent = content.innerHTML;
-        content.innerHTML = `<p class="has-text-info">Fetching URL and extracting IOCs for review...</p><progress class='progress is-info' max='100'></progress>`;
+        content.innerHTML = `
+            <div class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                <p class="has-text-info mb-2">Fetching URL and extracting IOCs for review...</p>
+                <progress class="progress is-small is-info" max="100"></progress>
+            </div>`;
 
         try {
             const res = await this.app._fetch('/tools/parse-url', {
@@ -454,7 +564,6 @@ export class SearchController {
             if (dontParse) {
                 await this.processMatches(null, { value: searchText }, null, true);
             } else {
-                // Updated to use extractAll instead of getMatches
                 const extracted = this.contextualizer.extractAll(searchText);
                 const allMatches = Object.keys(extracted).map(key => ({
                     type: key,
@@ -467,7 +576,6 @@ export class SearchController {
                         if (matchPair.type === "domain" && matchPair.matches.length > 0) {
                             const baseDomains = new Set();
                             for (const domain of matchPair.matches) {
-                                // Updated to use the local merged helper method
                                 const baseDomain = this._extractSecondLevelDomain(domain);
                                 if (baseDomain) baseDomains.add(baseDomain);
                             }
@@ -584,32 +692,111 @@ export class SearchController {
     }
 
     renderGoToForm() {
-        this.container.innerHTML = `<div class="field"><label class="label has-text-info">Enter ID</label><div class="control"><input class="input" type="text" placeholder="ID" id="goToValue"></div><div class="control"><button class="button is-primary mt-2" id="goButton">Go</button></div></div>`;
+        this.container.classList.remove('is-hidden');
+        this.container.classList.remove('has-background-custom');
+        this.container.classList.add('has-background-black');
+        this.container.classList.add('search-view');
+
+        this.container.innerHTML = `
+        <div class="users-nav-bar search-nav-bar mb-3" id="search-top">
+            <div class="users-nav-left">
+                <div class="users-nav-title-group">
+                    <span class="users-nav-title">Indicator Search</span>
+                    <span class="tag is-info is-dark is-rounded charts-count-badge">Record Lookup</span>
+                </div>
+            </div>
+            <div class="users-nav-right">
+                <button type="button" class="button is-small terminal-btn" id="goToBackBtn" title="Back to Search">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
+                    <span>Back to Search</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="users-window search-window" id="searchWindow">
+            <div class="terminal-titlebar">
+                <div class="terminal-title">
+                    <span class="terminal-status-dot"></span>
+                    <span>telemetry record lookup</span>
+                </div>
+                <div class="terminal-actions">
+                    <span class="system-status-pill status-nominal"><span class="status-indicator-dot dot-nominal"></span>LOOKUP READY</span>
+                </div>
+            </div>
+            <div class="search-window-body p-5">
+                <div class="search-form-card" style="max-width: 580px; margin: 1.5rem auto;">
+                    <div class="search-form-header">
+                        <h2 class="search-form-title">Enter Transaction ID</h2>
+                        <p class="search-form-subtitle">Look up and view raw response telemetry by its unique transaction link identifier.</p>
+                    </div>
+                    <form onsubmit="return false;">
+                        <div class="field mb-4">
+                            <div class="control has-icons-left">
+                                <input class="input search-input" type="text" placeholder="Transaction ID (e.g. 1042)..." id="goToValue" autocomplete="off" />
+                                <span class="icon is-small is-left has-text-info"><i class="material-icons">key</i></span>
+                            </div>
+                        </div>
+                        <div class="field is-grouped">
+                            <p class="control">
+                                <button class="button search-btn-primary" id="goButton" type="button">
+                                    <span class="icon-text">
+                                        <span class="icon"><i class="material-icons">visibility</i></span>
+                                        <span>Lookup Details</span>
+                                    </span>
+                                </button>
+                            </p>
+                            <p class="control">
+                                <button class="button is-dark terminal-btn" id="goToBackBtn" type="button">Cancel</button>
+                            </p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="terminal-statusbar">
+                <span>Direct Telemetry Store &bull; Transaction Lookup</span>
+                <span class="is-pulled-right">threatco runtime &bull; direct query</span>
+            </div>
+        </div>`;
     }
 
     renderRunningTerminal(titleText = 'ioc-analysis.running', messageText = 'Analyzing indicators across threat intelligence sources...') {
+        this.container.classList.remove('is-hidden');
+        this.container.classList.remove('has-background-custom');
+        this.container.classList.add('has-background-black');
+        this.container.classList.add('search-view');
+
         this.container.innerHTML = `
-        <div class="terminal-window">
+        <div class="users-nav-bar search-nav-bar mb-3" id="search-top">
+            <div class="users-nav-left">
+                <div class="users-nav-title-group">
+                    <span class="users-nav-title">Indicator Search</span>
+                    <span class="tag is-info is-dark is-rounded charts-count-badge" id="resultsCountBadge">0 items</span>
+                </div>
+            </div>
+            <div class="users-nav-right">
+                <button id="terminalBackBtn" class="button is-small terminal-btn" type="button" title="Back to Search Form">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
+                    <span>Search</span>
+                </button>
+                <button id="terminalClearBtn" class="button is-small terminal-btn terminal-btn-danger" type="button" title="Clear">
+                    <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">delete_sweep</i></span>
+                    <span>Clear Results</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="users-window search-window terminal-window">
             <div class="terminal-titlebar">
                 <div class="terminal-title">
-                    <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
+                    <span class="terminal-status-dot"></span>
                     <span id="runningTerminalTitle">${escapeHtml(titleText)}</span>
-                    <span class="tag is-dark is-small ml-2" id="resultsCountBadge">0 items</span>
                 </div>
                 <div class="terminal-actions">
-                    <input id="iocFilterInput" type="text" class="input is-small terminal-search" placeholder="Filter results (IOC, vendor, info)..." />
+                    <input id="iocFilterInput" type="text" class="input is-small search-input" style="min-width: 200px;" placeholder="Filter results (IOC, vendor, info)..." />
                     <div class="buttons has-addons mb-0">
                         <button id="filterAllResultsBtn" class="button is-small terminal-btn terminal-btn-active" type="button">All (<span id="countAllBtn">0</span>)</button>
                         <button id="filterMatchedOnlyBtn" class="button is-small terminal-btn" type="button">Matches (<span id="countMatchedBtn">0</span>)</button>
                     </div>
-                    <button id="terminalBackBtn" class="button is-small terminal-btn" type="button" title="Back to Search Form">
-                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
-                        <span>Search</span>
-                    </button>
-                    <button id="terminalClearBtn" class="button is-small terminal-btn terminal-btn-danger" type="button" title="Clear">
-                        <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">delete_sweep</i></span>
-                        <span>Clear Results</span>
-                    </button>
                 </div>
             </div>
             <div class="terminal-body" id="iocResultsBody" style="min-height: 220px; height: auto;">
@@ -621,12 +808,12 @@ export class SearchController {
                 </div>
             </div>
             <div class="terminal-statusbar">
-                <span id="terminalStatusCount">Query in progress • waiting for vendor telemetry...</span>
-                <span class="is-pulled-right" id="terminalStatusRight">threatco runtime • active</span>
+                <span id="terminalStatusCount">Query in progress &bull; waiting for vendor telemetry...</span>
+                <span class="is-pulled-right" id="terminalStatusRight">threatco runtime &bull; active</span>
             </div>
         </div>`;
 
-        this._wireLiveTerminalControls();
+        this._wireLiveTerminalControls(false);
     }
 
     _wireLiveTerminalControls(isHistoryView = false) {
@@ -704,13 +891,15 @@ export class SearchController {
         }
     }
 
-    _createResultItemElement(result) {
+    _createResultItemElement(result, isStreaming = false) {
+        if (!result) return document.createElement('div');
+
         const isMatched = result.matched === true || 
                           result.matched === 'true' || 
                           (typeof result.threat_level_id === 'number' && result.threat_level_id > 1);
 
         const item = document.createElement('div');
-        item.className = `terminal-result-item ${isMatched ? 'is-match' : 'is-clean'} spa-view-container fade-enter`;
+        item.className = `terminal-result-item ${isMatched ? 'is-match' : 'is-clean'}${isStreaming ? ' item-fade-enter' : ''}`;
         item.setAttribute('data-matched', isMatched ? 'true' : 'false');
         item.setAttribute('data-threat-level', String(result.threat_level_id || 0));
 
@@ -735,11 +924,11 @@ export class SearchController {
                     <span class="terminal-ioc-val">${escapeHtml(String(result.value || ''))}</span>
                 </div>
                 <div class="terminal-result-actions">
-                    <button class="button is-small terminal-action-btn past-searches-btn" type="button" data-val="${escapeHtml(String(result.value || ''))}" title="View past searches for this indicator">
+                    <button class="button is-small terminal-btn past-searches-btn" type="button" data-val="${escapeHtml(String(result.value || ''))}" title="View past searches for this indicator">
                         <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">history</i></span>
                         <span>Past Searches</span>
                     </button>
-                    <button class="button is-small terminal-action-btn view-details-btn" type="button" data-link="${escapeHtml(String(result.link || ''))}" title="View raw vendor response details" ${(!result.link || result.link === "none") ? 'disabled' : ''}>
+                    <button class="button is-small terminal-btn view-details-btn" type="button" data-link="${escapeHtml(String(result.link || ''))}" title="View raw vendor response details" ${(!result.link || result.link === "none") ? 'disabled' : ''}>
                         <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">visibility</i></span>
                         <span>View Details</span>
                     </button>
@@ -800,7 +989,7 @@ export class SearchController {
             placeholder.remove();
         }
 
-        const item = this._createResultItemElement(result);
+        const item = this._createResultItemElement(result, true);
         const newScore = result.threat_level_id || 0;
         
         // Find insert location to maintain sorted order by threat level descending
@@ -820,9 +1009,9 @@ export class SearchController {
 
         // Animate smooth fade-in
         requestAnimationFrame(() => {
-            item.classList.add('fade-enter-active');
+            item.classList.add('item-fade-enter-active');
             setTimeout(() => {
-                item.classList.remove('fade-enter', 'fade-enter-active');
+                item.classList.remove('item-fade-enter', 'item-fade-enter-active');
             }, 180);
         });
 
@@ -873,32 +1062,55 @@ export class SearchController {
             return;
         }
 
+        this.container.classList.remove('is-hidden');
+        this.container.classList.remove('has-background-custom');
+        this.container.classList.add('has-background-black');
+        this.container.classList.add('search-view');
+
         this.container.innerHTML = "";
 
-        if (!resultsArray || resultsArray.length === 0) {
+        const validResults = Array.isArray(resultsArray) 
+            ? resultsArray.filter(r => r && typeof r === 'object') 
+            : [];
+
+        if (validResults.length === 0) {
             this.container.innerHTML = `
-                <div class="terminal-window">
+                <div class="users-nav-bar search-nav-bar mb-3" id="search-top">
+                    <div class="users-nav-left">
+                        <div class="users-nav-title-group">
+                            <span class="users-nav-title">${isHistoryView ? 'Search History' : 'Indicator Search'}</span>
+                            <span class="tag is-info is-dark is-rounded charts-count-badge">0 items</span>
+                        </div>
+                    </div>
+                    <div class="users-nav-right">
+                        <button class="button is-small terminal-btn" id="emptyBackBtn" type="button">
+                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
+                            <span>Back to Search</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="users-window search-window terminal-window">
                     <div class="terminal-titlebar">
                         <div class="terminal-title">
-                            <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
-                            <span>ioc-results.log</span>
+                            <span class="terminal-status-dot"></span>
+                            <span>${isHistoryView ? 'ioc-history.log' : 'ioc-analysis.results'}</span>
                         </div>
                         <div class="terminal-actions">
-                            <button class="button is-small is-dark" id="emptyBackBtn" type="button">
-                                <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
-                                <span>Back to Search</span>
-                            </button>
+                            <span class="system-status-pill status-unknown">
+                                <span class="status-indicator-dot dot-unknown"></span>EMPTY
+                            </span>
                         </div>
                     </div>
                     <div class="terminal-body" style="min-height: 220px; height: auto;">
                         <div class="terminal-placeholder">
-                            <p class="has-text-grey-light mb-2"><i class="material-icons" style="font-size: 32px; vertical-align: middle;">search_off</i></p>
+                            <p class="has-text-grey-light mb-2"><i class="material-icons" style="font-size: 36px; vertical-align: middle;">search_off</i></p>
                             <p class="has-text-info">${isHistoryView ? 'History is empty.' : 'No results found.'}</p>
                         </div>
                     </div>
                     <div class="terminal-statusbar">
                         <span>0 items</span>
-                        <span class="is-pulled-right">threatco ioc analysis • ${isHistoryView ? 'history' : 'live'}</span>
+                        <span class="is-pulled-right">threatco ioc analysis &bull; ${isHistoryView ? 'history' : 'live'}</span>
                     </div>
                 </div>`;
             const backBtn = this.container.querySelector('#emptyBackBtn');
@@ -906,32 +1118,24 @@ export class SearchController {
             return;
         }
 
+        const resultsList = isHistoryView ? [...validResults].reverse() : [...validResults];
         if (!isHistoryView) {
-            resultsArray.sort((a, b) => (b.threat_level_id || 0) - (a.threat_level_id || 0));
+            resultsList.sort((a, b) => (b.threat_level_id || 0) - (a.threat_level_id || 0));
         }
 
-        const matchedCount = resultsArray.filter(r => 
+        const matchedCount = resultsList.filter(r => 
             r.matched === true || r.matched === 'true' || (typeof r.threat_level_id === 'number' && r.threat_level_id > 1)
         ).length;
 
-        const terminalWindow = document.createElement('div');
-        terminalWindow.className = 'terminal-window';
-
-        // Titlebar WITHOUT fake window control buttons (no terminal dots)
-        const titlebar = document.createElement('div');
-        titlebar.className = 'terminal-titlebar';
-        titlebar.innerHTML = `
-            <div class="terminal-title">
-                <span class="icon is-small has-text-info mr-1"><i class="material-icons" style="font-size: 16px;">terminal</i></span>
-                <span>${isHistoryView ? 'ioc-history.log' : 'ioc-analysis.results'}</span>
-                <span class="tag is-dark is-small ml-2" id="resultsCountBadge">${resultsArray.length} items</span>
-            </div>
-            <div class="terminal-actions">
-                <input id="iocFilterInput" type="text" class="input is-small terminal-search" placeholder="Filter results (IOC, vendor, info)..." />
-                <div class="buttons has-addons mb-0">
-                    <button id="filterAllResultsBtn" class="button is-small terminal-btn terminal-btn-active" type="button">All (${resultsArray.length})</button>
-                    <button id="filterMatchedOnlyBtn" class="button is-small terminal-btn" type="button">Matches (${matchedCount})</button>
+        this.container.innerHTML = `
+        <div class="users-nav-bar search-nav-bar mb-3" id="search-top">
+            <div class="users-nav-left">
+                <div class="users-nav-title-group">
+                    <span class="users-nav-title">${isHistoryView ? 'Search History' : 'Indicator Search'}</span>
+                    <span class="tag is-info is-dark is-rounded charts-count-badge" id="resultsCountBadge">${resultsList.length} items</span>
                 </div>
+            </div>
+            <div class="users-nav-right">
                 <button id="terminalBackBtn" class="button is-small terminal-btn" type="button" title="Back to Search Form">
                     <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">arrow_back</i></span>
                     <span>Search</span>
@@ -941,182 +1145,35 @@ export class SearchController {
                     <span>${isHistoryView ? 'Clear History' : 'Clear Results'}</span>
                 </button>
             </div>
-        `;
-        terminalWindow.appendChild(titlebar);
+        </div>
 
-        // Terminal body container
-        const terminalBody = document.createElement('div');
-        terminalBody.className = 'terminal-body';
-        terminalBody.id = 'iocResultsBody';
-
-        for (const result of resultsArray) {
-            const isMatched = result.matched === true || 
-                              result.matched === 'true' || 
-                              (typeof result.threat_level_id === 'number' && result.threat_level_id > 1);
-
-            const item = document.createElement('div');
-            item.className = `terminal-result-item ${isMatched ? 'is-match' : 'is-clean'}`;
-            item.setAttribute('data-matched', isMatched ? 'true' : 'false');
-
-            const threatScore = result.threat_level_id ?? 0;
-            const threatScoreClass = threatScore > 1 ? 'terminal-v-score-high' : '';
-
-            // Status badge color-coded highlight element
-            const statusBadgeHtml = isMatched ? `
-                <span class="terminal-match-badge match-flagged">
-                    <i class="material-icons" style="font-size: 13px;">warning</i> MATCH
-                </span>
-            ` : `
-                <span class="terminal-match-badge match-clean">
-                    <i class="material-icons" style="font-size: 13px;">check_circle</i> NO MATCH
-                </span>
-            `;
-
-            item.innerHTML = `
-                <div class="terminal-result-header">
-                    <div class="terminal-result-meta-left">
-                        ${statusBadgeHtml}
-                        <span class="tag is-dark is-small terminal-vendor-tag">${escapeHtml(result.from || 'VENDOR')}</span>
-                        <span class="terminal-ioc-val">${escapeHtml(String(result.value || ''))}</span>
-                    </div>
-                    <div class="terminal-result-actions">
-                        <button class="button is-small terminal-action-btn past-searches-btn" type="button" data-val="${escapeHtml(String(result.value || ''))}" title="View past searches for this indicator">
-                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">history</i></span>
-                            <span>Past Searches</span>
-                        </button>
-                        <button class="button is-small terminal-action-btn view-details-btn" type="button" data-link="${escapeHtml(String(result.link || ''))}" title="View raw vendor response details" ${(!result.link || result.link === "none") ? 'disabled' : ''}>
-                            <span class="icon is-small"><i class="material-icons" style="font-size: 14px;">visibility</i></span>
-                            <span>View Details</span>
-                        </button>
+        <div class="users-window search-window terminal-window">
+            <div class="terminal-titlebar">
+                <div class="terminal-title">
+                    <span class="terminal-status-dot"></span>
+                    <span>${isHistoryView ? 'ioc-history.log' : 'ioc-analysis.results'}</span>
+                </div>
+                <div class="terminal-actions">
+                    <input id="iocFilterInput" type="text" class="input is-small search-input" style="min-width: 200px;" placeholder="Filter results (IOC, vendor, info)..." />
+                    <div class="buttons has-addons mb-0">
+                        <button id="filterAllResultsBtn" class="button is-small terminal-btn terminal-btn-active" type="button">All (${resultsList.length})</button>
+                        <button id="filterMatchedOnlyBtn" class="button is-small terminal-btn" type="button">Matches (${matchedCount})</button>
                     </div>
                 </div>
-                <div class="terminal-result-body">
-                    <div class="terminal-kv-row">
-                        <span class="terminal-k">INFO:</span>
-                        <span class="terminal-v terminal-v-info">${escapeHtml(String(result.info || 'No description provided'))}</span>
-                    </div>
-                    <div class="terminal-kv-meta">
-                        <span><span class="terminal-k">SCORE:</span> <span class="terminal-v ${threatScoreClass}">${escapeHtml(String(threatScore))}</span></span>
-                        <span><span class="terminal-k">ATTRS:</span> <span class="terminal-v">${escapeHtml(String(result.attr_count ?? 0))}</span></span>
-                        <span><span class="terminal-k">ID:</span> <span class="terminal-v">${escapeHtml(String(result.id || 'none'))}</span></span>
-                        <span><span class="terminal-k">SERVER ID:</span> <span class="terminal-v">${escapeHtml(String(result.link || 'none'))}</span></span>
-                    </div>
-                </div>
-            `;
+            </div>
+            <div class="terminal-body" id="iocResultsBody" style="min-height: 220px; height: auto;"></div>
+            <div class="terminal-statusbar">
+                <span id="terminalStatusCount">Showing ${resultsList.length} of ${resultsList.length} items (${matchedCount} threat matches)</span>
+                <span class="is-pulled-right">threatco ioc analysis &bull; ${isHistoryView ? 'history' : 'live'}</span>
+            </div>
+        </div>`;
 
-            // Functionality for "Past Searches" button
-            const pastSearchesBtn = item.querySelector('.past-searches-btn');
-            if (pastSearchesBtn) {
-                pastSearchesBtn.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    const pastSearches = await this.app.fetchPastSearches(result.value);
-                    if (!pastSearches || pastSearches.length === 0) {
-                        alert(`No past searches found for: ${result.value}`);
-                        return;
-                    }
-                    const historyReport = pastSearches
-                        .map(search => `• ${search.info}`)
-                        .join('\n');
-                    alert(`Historical matches for ${result.value}:\n\n${historyReport}`);
-                });
-            }
-
-            // Functionality for "View Details" button
-            const viewDetailsBtn = item.querySelector('.view-details-btn');
-            if (viewDetailsBtn) {
-                viewDetailsBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (!result.link || result.link === "none") return;
-                    const customEvent = new CustomEvent('req-open-details', { detail: result.link });
-                    document.dispatchEvent(customEvent);
-                });
-            }
-
-            terminalBody.appendChild(item);
+        const body = this.container.querySelector('#iocResultsBody');
+        for (const result of resultsList) {
+            const item = this._createResultItemElement(result, false);
+            body.appendChild(item);
         }
 
-        terminalWindow.appendChild(terminalBody);
-
-        // Statusbar
-        const statusbar = document.createElement('div');
-        statusbar.className = 'terminal-statusbar';
-        statusbar.innerHTML = `
-            <span id="terminalStatusCount">Showing ${resultsArray.length} of ${resultsArray.length} items (${matchedCount} threat matches)</span>
-            <span class="is-pulled-right">threatco ioc analysis • ${isHistoryView ? 'history' : 'live'}</span>
-        `;
-        terminalWindow.appendChild(statusbar);
-
-        this.container.appendChild(terminalWindow);
-
-        // Wire up Titlebar and Global Controls
-        const backBtn = terminalWindow.querySelector('#terminalBackBtn');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                this.renderForm();
-            });
-        }
-
-        const clearBtn = terminalWindow.querySelector('#terminalClearBtn');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (isHistoryView) {
-                    this.app.resultHistory = [];
-                    this.app.setHistory();
-                }
-                this.app.results = [];
-                this.renderForm();
-            });
-        }
-
-        const filterInput = terminalWindow.querySelector('#iocFilterInput');
-        const filterAllBtn = terminalWindow.querySelector('#filterAllResultsBtn');
-        const filterMatchedBtn = terminalWindow.querySelector('#filterMatchedOnlyBtn');
-        const items = terminalBody.querySelectorAll('.terminal-result-item');
-        const statusCountEl = terminalWindow.querySelector('#terminalStatusCount');
-
-        const applyFilter = () => {
-            const q = (filterInput?.value || '').trim().toLowerCase();
-            const onlyMatches = filterMatchedBtn?.classList.contains('terminal-btn-active');
-            let visibleCount = 0;
-
-            items.forEach(el => {
-                const matchVal = el.getAttribute('data-matched') === 'true';
-                const text = el.textContent.toLowerCase();
-                const matchesQ = !q || text.includes(q);
-                const matchesFilter = !onlyMatches || matchVal;
-
-                if (matchesQ && matchesFilter) {
-                    el.style.display = '';
-                    visibleCount++;
-                } else {
-                    el.style.display = 'none';
-                }
-            });
-
-            if (statusCountEl) {
-                statusCountEl.textContent = `Showing ${visibleCount} of ${items.length} items (${matchedCount} threat matches)`;
-            }
-        };
-
-        let filterDebounce = null;
-        const debouncedApplyFilter = () => {
-            clearTimeout(filterDebounce);
-            filterDebounce = setTimeout(applyFilter, 120);
-        };
-
-        if (filterInput) filterInput.addEventListener('input', debouncedApplyFilter);
-        if (filterAllBtn && filterMatchedBtn) {
-            filterAllBtn.addEventListener('click', () => {
-                filterAllBtn.classList.add('terminal-btn-active');
-                filterMatchedBtn.classList.remove('terminal-btn-active');
-                applyFilter();
-            });
-            filterMatchedBtn.addEventListener('click', () => {
-                filterMatchedBtn.classList.add('terminal-btn-active');
-                filterAllBtn.classList.remove('terminal-btn-active');
-                applyFilter();
-            });
-        }
+        this._wireLiveTerminalControls(isHistoryView);
     }
 }
