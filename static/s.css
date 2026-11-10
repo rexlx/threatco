@@ -1900,14 +1900,6 @@ pre {
     word-break: break-word;
 }
 
-/* Feed View Black Background Theme Overrides (Maintain Black Background) */
-#feedContainer {
-    background-color: #000000 !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-}
-
 .feed-nav-bar {
     background: #000000 !important;
     border-color: rgba(56, 189, 248, 0.22) !important;
@@ -2109,23 +2101,6 @@ pre {
     background: rgba(148, 163, 184, 0.1);
     border: 1px solid rgba(148, 163, 184, 0.25);
     color: #94a3b8;
-}
-
-/* Cases View Black Background Theme Overrides (Maintain Black Background) */
-#casesContainer {
-    background-color: #000000 !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-}
-
-/* Responses & Health Views Black Background Theme Overrides */
-#responsesContainer,
-#healthStatusContainer {
-    background-color: #000000 !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
 }
 
 .responses-nav-bar,
@@ -2942,6 +2917,10 @@ pre {
 #mainColumns > .column:last-child {
     min-height: calc(100vh - 120px);
     position: relative;
+}
+
+.spa-view-container.has-background-custom {
+    background-color: var(--background-dark) !important;
 }
 
 .spa-view-container {
