@@ -81,7 +81,7 @@ export class Application {
                     document.dispatchEvent(notifyEvent);
                 } else {
                     // New unique notification
-                    notification.id = `notif-${now}`;
+                    notification.id = notification.id || `notif-${now}`;
                     notification.signature = signature;
                     notification.lastSeen = now;
                     notification.count = 1;

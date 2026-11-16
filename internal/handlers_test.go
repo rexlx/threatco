@@ -389,6 +389,15 @@ func TestCommentNotifications(t *testing.T) {
 	if !strings.Contains(user1Notifs3[0].Info, "by user2@gmail.com") {
 		t.Errorf("unexpected notification content: %s", user1Notifs3[0].Info)
 	}
+	if user1Notifs3[0].TargetType != "case" {
+		t.Errorf("expected TargetType 'case', got '%s'", user1Notifs3[0].TargetType)
+	}
+	if user1Notifs3[0].TargetID != "case-comment-test" {
+		t.Errorf("expected TargetID 'case-comment-test', got '%s'", user1Notifs3[0].TargetID)
+	}
+	if user1Notifs3[0].ID == "" {
+		t.Errorf("expected non-empty notification ID")
+	}
 
 	user2Notifs3, _ := s.DB.GetNotifications("user2@gmail.com")
 	if len(user2Notifs3) != 0 {
@@ -403,10 +412,18 @@ func TestCommentNotifications(t *testing.T) {
 	if len(user1Notifs4) != 2 {
 		t.Errorf("expected 2 total notifications for user1, got %d", len(user1Notifs4))
 	}
+	if user1Notifs4[1].TargetType != "case" || user1Notifs4[1].TargetID != "case-comment-test" {
+		t.Errorf("expected TargetType 'case' and TargetID 'case-comment-test' on second notif, got type '%s', id '%s'",
+			user1Notifs4[1].TargetType, user1Notifs4[1].TargetID)
+	}
 
 	user2Notifs4, _ := s.DB.GetNotifications("user2@gmail.com")
 	if len(user2Notifs4) != 1 {
 		t.Errorf("expected 1 notification for user2 after user3 commented, got %d", len(user2Notifs4))
+	}
+	if user2Notifs4[0].TargetType != "case" || user2Notifs4[0].TargetID != "case-comment-test" {
+		t.Errorf("expected TargetType 'case' and TargetID 'case-comment-test' on user2 notif, got type '%s', id '%s'",
+			user2Notifs4[0].TargetType, user2Notifs4[0].TargetID)
 	}
 
 	user3Notifs4, _ := s.DB.GetNotifications("user3@yahoo.com")

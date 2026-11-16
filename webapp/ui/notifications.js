@@ -16,6 +16,26 @@ export class NotificationManager {
     }
 
     /**
+     * Handles navigation for a notification based on its target_type/target_id/link.
+     */
+    navigateNotification(targetType, targetId, link) {
+        if (targetType === 'case' && targetId) {
+            document.dispatchEvent(new CustomEvent('req-open-case', { detail: targetId }));
+            return true;
+        }
+        if (targetType === 'event' && targetId) {
+            document.dispatchEvent(new CustomEvent('req-open-details', { detail: targetId }));
+            return true;
+        }
+        const targetUrl = link || (targetType === 'link' ? targetId : null);
+        if (targetUrl) {
+            window.open(targetUrl, '_blank');
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Creates a transient dark "Toast" notification at the top-right of the screen.
      */
     showToast(notif) {
@@ -33,6 +53,15 @@ export class NotificationManager {
         
         const timestamp = new Date(notif.created || Date.now()).toLocaleTimeString();
         const iconName = isErr ? 'error_outline' : 'check_circle_outline';
+
+        const targetType = notif.target_type || '';
+        const targetId = notif.target_id || '';
+        const link = notif.link || '';
+        const isClickable = Boolean((targetType === 'case' && targetId) || (targetType === 'event' && targetId) || link || (targetType === 'link' && targetId));
+
+        if (isClickable) {
+            toast.style.cursor = 'pointer';
+        }
         
         toast.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
@@ -50,7 +79,18 @@ export class NotificationManager {
 
         const deleteBtn = toast.querySelector('.delete-toast-btn');
         if (deleteBtn) {
-            deleteBtn.onclick = () => toast.remove();
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                toast.remove();
+            };
+        }
+
+        if (isClickable) {
+            toast.onclick = (e) => {
+                if (e.target.closest('.delete-toast-btn')) return;
+                this.navigateNotification(targetType, targetId, link);
+                toast.remove();
+            };
         }
 
         toastContainer.appendChild(toast);
@@ -117,10 +157,13 @@ export class NotificationManager {
                 return;
             }
 
-            // 5. Full notification card click if link present
+            // 5. Full notification card click if navigation target or link present
             const notifCard = target.closest('.notif-card.is-clickable');
-            if (notifCard && notifCard.dataset.link && !target.closest('a') && !target.closest('button')) {
-                window.open(notifCard.dataset.link, '_blank');
+            if (notifCard && !target.closest('a') && !target.closest('button')) {
+                const targetType = notifCard.dataset.targetType || '';
+                const targetId = notifCard.dataset.targetId || '';
+                const link = notifCard.dataset.link || '';
+                this.navigateNotification(targetType, targetId, link);
             }
         });
 
@@ -250,10 +293,17 @@ export class NotificationManager {
             notifCard.className = `notif-card ${statusClass} fadeIn-animation`;
             notifCard.dataset.id = notif.id;
 
-            if (notif.link) {
+            const targetType = notif.target_type || '';
+            const targetId = notif.target_id || '';
+            const link = notif.link || '';
+            const isNavigable = Boolean((targetType === 'case' && targetId) || (targetType === 'event' && targetId) || link || (targetType === 'link' && targetId));
+
+            if (isNavigable) {
                 notifCard.classList.add('is-clickable');
-                notifCard.dataset.link = notif.link;
                 notifCard.style.cursor = 'pointer';
+                if (targetType) notifCard.dataset.targetType = targetType;
+                if (targetId) notifCard.dataset.targetId = targetId;
+                if (link) notifCard.dataset.link = link;
             }
 
             const infoStr = notif.info || '';
@@ -272,15 +322,6 @@ export class NotificationManager {
                 ? `<span class="tag is-warning is-rounded" title="Occurred ${notif.count} times">${notif.count}x</span>` 
                 : '';
 
-            const linkButton = notif.link 
-                ? `<div class="mt-2"><a href="${escapeHtml(notif.link)}" target="_blank" class="button is-small is-link is-outlined">
-                    <span class="icon-text">
-                        <span class="icon"><i class="material-icons">open_in_new</i></span>
-                        <span>View</span>
-                    </span>
-                   </a></div>` 
-                : '';
-
             notifCard.innerHTML = `
                 <div class="notif-header">
                     <div class="notif-meta">
@@ -294,7 +335,6 @@ export class NotificationManager {
                     </button>
                 </div>
                 <div class="notif-body">${processedInfo}</div>
-                ${linkButton}
             `;
 
             listDiv.appendChild(notifCard);

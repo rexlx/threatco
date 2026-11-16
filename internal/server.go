@@ -508,17 +508,17 @@ func (s *Server) ProcessTransientResponses() {
 				s.Log.Printf("ERROR: could not store response ID %s: %v", resp.ID, err)
 			}
 			if resp.Notify {
-				err := s.Hub.SendToUser(s.RespCh, resp.Email, Notification{
-					Created: resp.Time,
-					Info:    fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
-					Error:   false,
-				})
+				notif := Notification{
+					ID:         uuid.New().String(),
+					Created:    resp.Time,
+					Info:       fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
+					Error:      false,
+					TargetType: "event",
+					TargetID:   resp.ID,
+				}
+				err := s.Hub.SendToUser(s.RespCh, resp.Email, notif)
 				if err != nil {
-					s.DB.AddNotification(resp.Email, Notification{
-						Created: resp.Time,
-						Info:    fmt.Sprintf("New response from %s with ID %s", resp.Vendor, resp.ID),
-						Error:   false,
-					})
+					s.DB.AddNotification(resp.Email, notif)
 				}
 			}
 			if resp.Log {

@@ -46,9 +46,13 @@ const (
 
 // Notification defines the structure for a real-time message.
 type Notification struct {
-	Created time.Time `json:"created"`
-	Info    string    `json:"info"`
-	Error   bool      `json:"error"`
+	ID         string    `json:"id,omitempty"`
+	Created    time.Time `json:"created"`
+	Info       string    `json:"info"`
+	Error      bool      `json:"error"`
+	TargetType string    `json:"target_type,omitempty"`
+	TargetID   string    `json:"target_id,omitempty"`
+	Link       string    `json:"link,omitempty"`
 }
 
 // upgrader holds the websocket configuration.
@@ -131,17 +135,25 @@ func (h *Hub) Run() {
 }
 
 type jsonNotification struct {
-	Created string `json:"created"`
-	Info    string `json:"info"`
-	Error   bool   `json:"error"`
+	ID         string `json:"id,omitempty"`
+	Created    string `json:"created"`
+	Info       string `json:"info"`
+	Error      bool   `json:"error"`
+	TargetType string `json:"target_type,omitempty"`
+	TargetID   string `json:"target_id,omitempty"`
+	Link       string `json:"link,omitempty"`
 }
 
 // SendToUser sends a notification to all active connections for a specific user.
 func (h *Hub) SendToUser(resch chan ResponseItem, userID string, notification Notification) error {
 	jsonMsg := jsonNotification{
-		Created: notification.Created.Format(time.RFC3339),
-		Info:    notification.Info,
-		Error:   notification.Error,
+		ID:         notification.ID,
+		Created:    notification.Created.Format(time.RFC3339),
+		Info:       notification.Info,
+		Error:      notification.Error,
+		TargetType: notification.TargetType,
+		TargetID:   notification.TargetID,
+		Link:       notification.Link,
 	}
 	message, err := json.Marshal(jsonMsg)
 	if err != nil {

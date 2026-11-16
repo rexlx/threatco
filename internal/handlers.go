@@ -457,14 +457,23 @@ func (s *Server) GetCaseHandler(w http.ResponseWriter, r *http.Request) {
 
 // sendNotification sends a real-time notification via WebSocket Hub and persists it to the user's notification database.
 func (s *Server) sendNotification(user string, msg string, isError bool) {
+	s.sendNotificationWithTarget(user, msg, isError, "", "", "")
+}
+
+// sendNotificationWithTarget sends a notification with an optional navigation target (e.g., case, event, link).
+func (s *Server) sendNotificationWithTarget(user string, msg string, isError bool, targetType, targetID, link string) {
 	uClean := strings.TrimSpace(user)
 	if uClean == "" {
 		return
 	}
 	n := Notification{
-		Created: time.Now(),
-		Info:    msg,
-		Error:   isError,
+		ID:         uuid.New().String(),
+		Created:    time.Now(),
+		Info:       msg,
+		Error:      isError,
+		TargetType: targetType,
+		TargetID:   targetID,
+		Link:       link,
 	}
 	if s.Hub != nil {
 		_ = s.Hub.SendToUser(s.RespCh, uClean, n)
@@ -548,14 +557,14 @@ func (s *Server) UpdateCaseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		commentNotifMsg := fmt.Sprintf("New comment on case '%s' by %s", caseTitle, email)
 		for recipient := range previousCommenters {
-			s.sendNotification(recipient, commentNotifMsg, false)
+			s.sendNotificationWithTarget(recipient, commentNotifMsg, false, "case", existing.ID, "")
 		}
 	}
 
 	// Notify case creator if they are not the current updater and haven't already received a comment notification
 	if existing.CreatedBy != "" && strings.TrimSpace(strings.ToLower(existing.CreatedBy)) != currentEmailClean {
 		if !previousCommenters[existing.CreatedBy] {
-			s.sendNotification(existing.CreatedBy, fmt.Sprintf("Case '%s' has been updated by user %s", existing.Name, email), false)
+			s.sendNotificationWithTarget(existing.CreatedBy, fmt.Sprintf("Case '%s' has been updated by user %s", existing.Name, email), false, "case", existing.ID, "")
 		}
 	}
 
