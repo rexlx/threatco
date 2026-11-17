@@ -1565,8 +1565,9 @@ func GetMispCategory(attrType string) string {
 
 // and strictly classifies tokens directly as they are.
 func (s *Server) extractIndicators(pr ParserRequest) map[string][]parser.Match {
-	ignoreList := []string{"nullferatu.com", "fairlady.nullferatu.com"}
-	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
+	ignoreList := []string{"nullferatu.com", "openssh.com", "neo.nullferatu.com", "fairlady.nullferatu.com"}
+	emailList := []string{"aes128-gcm@openssh.com"}
+	cx := parser.NewContextualizer(true, ignoreList, emailList)
 
 	if pr.Parsed {
 		results := make(map[string][]parser.Match)

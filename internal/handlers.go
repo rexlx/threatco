@@ -250,8 +250,9 @@ func (s *Server) ParseFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Run the contextualizer on the extracted content
-	domains := []string{"nullferatu.com"}
-	cx := parser.NewContextualizer(true, domains, domains)
+	ignoreList := []string{"nullferatu.com", "openssh.com", "neo.nullferatu.com", "fairlady.nullferatu.com"}
+	emailList := []string{"aes128-gcm@openssh.com"}
+	cx := parser.NewContextualizer(true, ignoreList, emailList)
 	out := cx.ExtractAll(content)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -4051,8 +4052,10 @@ func (s *Server) ParseURLHandler(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
 
 	// Use your existing contextualizer with common CDN noise filters
-	ignoreList := []string{"cloudfront.net", "akamai.net", "google.com"}
-	cx := parser.NewContextualizer(true, ignoreList, ignoreList)
+	// ignoreList := []string{"cloudfront.net", "akamai.net", "google.com", }
+	ignoreList := []string{"nullferatu.com", "openssh.com", "neo.nullferatu.com", "fairlady.nullferatu.com"}
+	emailList := []string{"aes128-gcm@openssh.com"}
+	cx := parser.NewContextualizer(true, ignoreList, emailList)
 
 	// Extract matches from the raw HTML string
 	out := cx.ExtractAll(string(body))

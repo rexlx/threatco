@@ -26,6 +26,18 @@ type Match struct {
 	Type  string
 }
 
+// IsEnrichable returns true if the indicator type has high enough fidelity
+// to justify spending rate-limited external Threat Intel API quota.
+func (m Match) IsEnrichable() bool {
+	switch m.Type {
+	case "sha256", "sha1", "md5", "ipv4", "ipv6", "domain", "base_domain", "url", "cve":
+		return true
+	default:
+		// Bare filenames and filepaths are logged locally without burning TI quota
+		return false
+	}
+}
+
 func NewContextualizer(ignoreIPs bool, ignoreDomains []string, ignoreEmails []string) *Contextualizer {
 	domainMap := make(map[string]struct{}, len(ignoreDomains))
 	for _, d := range ignoreDomains {
@@ -72,6 +84,10 @@ func isHexDigit(b byte) bool {
 }
 
 func (c *Contextualizer) GetMatches(text string, kind string, regex *regexp.Regexp) []Match {
+	if kind == "filename" && isPackageManagerNoise(text) {
+		return nil
+	}
+
 	indices := regex.FindAllStringIndex(text, -1)
 	var results []Match
 
@@ -131,8 +147,9 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 	results := make(map[string][]Match)
 	urlRanges := []indexRange{}
 	hashTracker := make(map[string]string)
+	suppressFilenames := isPackageManagerNoise(cleanText)
 
-	// 2. Handle URLs first to establish "safe zones" for the filepath parser
+	// 2. Handle URLs first to establish "safe zones" for filepath and filename parsers
 	if urlRegex, ok := c.Expressions["url"]; ok {
 		indices := urlRegex.FindAllStringIndex(cleanText, -1)
 		for _, idx := range indices {
@@ -147,6 +164,12 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 
 	for kind, regex := range c.Expressions {
 		if kind == "url" {
+			continue
+		}
+
+		// Skip noisy filename extraction during verified OS/package updates,
+		// while still permitting URL, domain, IP, and hash extraction on the same line.
+		if kind == "filename" && suppressFilenames {
 			continue
 		}
 
@@ -178,8 +201,8 @@ func (c *Contextualizer) ExtractAll(text string) map[string][]Match {
 				hashTracker[prefix] = kind
 			}
 
-			// URL collision check for filepath
-			if kind == "filepath" {
+			// URL collision check for filepath and filename
+			if kind == "filepath" || kind == "filename" {
 				isInsideUrl := false
 				for _, r := range urlRanges {
 					if idx[0] >= r.start && idx[1] <= r.end {
@@ -234,6 +257,31 @@ func (c *Contextualizer) isValidMatch(kind, val string) bool {
 			return false
 		}
 
+	case "filename":
+		// 1. Filter out versioned shared libraries (e.g., libssl.so.1.1) and man pages (e.g., curl.1.gz)
+		if reSharedLibVersion.MatchString(cleanVal) || reManPage.MatchString(cleanVal) {
+			return false
+		}
+
+		// 2. Filter out standard OS/language package archives
+		if rePackageArtifact.MatchString(cleanVal) {
+			return false
+		}
+
+		// 3. Reject emails or valid ICANN domains unless they clearly look like a file (e.g., contain underscores)
+		if strings.Contains(cleanVal, "@") {
+			return false
+		}
+		if c.isValidTLD(cleanVal) && !strings.Contains(cleanVal, "_") {
+			return false
+		}
+
+		// 4. Require an actionable, high-risk extension so benign config/header/doc files don't flood logs
+		ext := filepath.Ext(cleanVal)
+		if _, isHighRisk := highRiskExts[ext]; !isHighRisk {
+			return false
+		}
+
 	case "ipv4":
 		if c.Checks.IgnorePrivateIPs && isPrivateIP(val) {
 			return false
@@ -251,6 +299,42 @@ func (c *Contextualizer) isValidMatch(kind, val string) bool {
 	}
 
 	return true
+}
+
+// isPackageManagerNoise checks whether a log line represents routine system package
+// management activity targeting standard OS directories.
+func isPackageManagerNoise(text string) bool {
+	lower := strings.ToLower(text)
+
+	// Check if the event originates from a known package manager
+	hasPkgMgr := false
+	for _, mgr := range []string{
+		"apt-get", "apt ", "dpkg", "dnf", "yum", "pacman",
+		"zypper", "apk ", "brew ", "snapd", "flatpak", "rpm ",
+	} {
+		if strings.Contains(lower, mgr) {
+			hasPkgMgr = true
+			break
+		}
+	}
+
+	if !hasPkgMgr {
+		return false
+	}
+
+	// Only suppress if the activity references standard system/package directories.
+	// If a package manager touches /tmp, /dev/shm, /home, etc., we still want to inspect filenames.
+	for _, safeDir := range []string{
+		"/usr/lib", "/usr/share", "/usr/include", "/usr/bin", "/usr/sbin",
+		"/var/cache/apt", "/var/lib/dpkg", "/var/cache/dnf", "/var/cache/pacman",
+		"/lib/modules", "/etc/", "/opt/",
+	} {
+		if strings.Contains(lower, safeDir) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isAllDigits(s string) bool {
@@ -354,6 +438,19 @@ func isLikelyFilename(val string) bool {
 }
 
 var (
+	// High-signal executable, script, and archive extensions worth alerting on
+	highRiskExts = map[string]struct{}{
+		".exe": {}, ".dll": {}, ".sys": {}, ".scr": {}, ".cpl": {},
+		".vbs": {}, ".vbe": {}, ".js": {}, ".jse": {}, ".wsf": {}, ".wsh": {},
+		".ps1": {}, ".psm1": {}, ".bat": {}, ".cmd": {}, ".hta": {},
+		".msi": {}, ".msp": {}, ".jar": {}, ".war": {}, ".ear": {},
+		".sh": {}, ".bash": {}, ".zsh": {}, ".py": {}, ".pl": {}, ".rb": {},
+		".elf": {}, ".bin": {}, ".out": {}, ".run": {}, ".appimage": {},
+		".apk": {}, ".dmg": {}, ".pkg": {}, ".iso": {}, ".img": {},
+		".zip": {}, ".7z": {}, ".rar": {}, ".tar": {}, ".tgz": {},
+		".docm": {}, ".xlsm": {}, ".pptm": {}, ".lnk": {}, ".chm": {},
+	}
+
 	// Pre-compile refanging patterns for performance
 	reDots   = regexp.MustCompile(`(?i)\[\.\]|\(\.\)|\{\.\}`)
 	reAt     = regexp.MustCompile(`(?i)\[at\]|\(at\)| @ `)
@@ -366,6 +463,9 @@ var (
 	reLogTokenSuffix    = regexp.MustCompile(`(?i)\.(detection|version|actions)$`)
 	reProcPath          = regexp.MustCompile(`(?i)^/?proc/\d+`)
 	reTimestampFragment = regexp.MustCompile(`(?i)^(\d+[-_T:]?)*\d+\.\d+(z|utc|gmt)$`)
+	reSharedLibVersion  = regexp.MustCompile(`(?i)\.so(\.\d+)+$`)
+	reManPage           = regexp.MustCompile(`(?i)\.\d[a-z]?(\.(gz|xz|bz2|zst))?$`)
+	rePackageArtifact   = regexp.MustCompile(`(?i)\.(deb|rpm|whl|gem|crate|nupkg|tar\.(gz|xz|bz2|zst))$`)
 )
 
 func isNoiseValue(val string) bool {
