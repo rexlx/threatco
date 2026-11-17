@@ -10,6 +10,22 @@ const reSystemdUnit = /\.(service|scope|slice|socket|target|timer|mount|automoun
 const reLogTokenSuffix = /\.(detection|version|actions)$/i;
 const reProcPath = /^\/?proc\/\d+/i;
 const reTimestampFragment = /^(\d+[-_T:]?)*\d+\.\d+(z|utc|gmt)$/i;
+const reSharedLibVersion = /\.so(\.\d+)+$/i;
+const reManPage = /\.\d[a-z]?(\.(gz|xz|bz2|zst))?$/i;
+const rePackageArtifact = /\.(deb|rpm|whl|gem|crate|nupkg|tar\.(gz|xz|bz2|zst))$/i;
+
+// High-signal executable, script, and archive extensions worth alerting on
+const HIGH_RISK_EXTS = new Set([
+  '.exe', '.dll', '.sys', '.scr', '.cpl',
+  '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh',
+  '.ps1', '.psm1', '.bat', '.cmd', '.hta',
+  '.msi', '.msp', '.jar', '.war', '.ear',
+  '.sh', '.bash', '.zsh', '.py', '.pl', '.rb',
+  '.elf', '.bin', '.out', '.run', '.appimage',
+  '.apk', '.dmg', '.pkg', '.iso', '.img',
+  '.zip', '.7z', '.rar', '.tar', '.tgz',
+  '.docm', '.xlsm', '.pptm', '.lnk', '.chm'
+]);
 
 const FILE_EXTS = new Set([
   '.exe', '.dll', '.bin', '.dat', '.sys', '.tmp', '.log', '.cfg', '.ini', '.vbs',
@@ -21,6 +37,15 @@ const FILE_EXTS = new Set([
   '.sqlite', '.md', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.html', '.htm',
   '.so', '.service', '.scope', '.socket', '.target', '.rules'
 ]);
+
+const ENRICHABLE_TYPES = new Set([
+  'sha256', 'sha1', 'md5', 'ipv4', 'ipv6', 'domain', 'base_domain', 'url', 'cve'
+]);
+
+export function isEnrichable(matchOrType) {
+  const kind = typeof matchOrType === 'string' ? matchOrType : matchOrType?.type;
+  return ENRICHABLE_TYPES.has(kind);
+}
 
 export function refang(text) {
   if (!text) return "";
@@ -44,6 +69,27 @@ export function isNoiseValue(val) {
   if (lower.startsWith('org.freedesktop')) return true;
 
   return false;
+}
+
+export function isPackageManagerNoise(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+
+  const pkgManagers = [
+    'apt-get', 'apt ', 'dpkg', 'dnf', 'yum', 'pacman',
+    'zypper', 'apk ', 'brew ', 'snapd', 'flatpak', 'rpm '
+  ];
+
+  const hasPkgMgr = pkgManagers.some(mgr => lower.includes(mgr));
+  if (!hasPkgMgr) return false;
+
+  const safeDirs = [
+    '/usr/lib', '/usr/share', '/usr/include', '/usr/bin', '/usr/sbin',
+    '/var/cache/apt', '/var/lib/dpkg', '/var/cache/dnf', '/var/cache/pacman',
+    '/lib/modules', '/etc/', '/opt/'
+  ];
+
+  return safeDirs.some(dir => lower.includes(dir));
 }
 
 export function isLikelyFilename(val) {
@@ -151,6 +197,7 @@ export class Contextualizer {
 
   isValidTLD(domain) {
     const parts = domain.split('.');
+    if (parts.length < 2) return false;
     const suffix = parts[parts.length - 1];
     if (FILE_EXTS.has('.' + suffix)) return false;
     return suffix.length >= 2 && suffix.length <= 24 && !/^\d+$/.test(suffix);
@@ -188,6 +235,36 @@ export class Contextualizer {
         }
         break;
       }
+      case "filename": {
+        // 1. Filter out versioned shared libraries (e.g., libssl.so.1.1) and man pages (e.g., curl.1.gz)
+        if (reSharedLibVersion.test(cleanVal) || reManPage.test(cleanVal)) {
+          return false;
+        }
+
+        // 2. Filter out standard OS/language package archives
+        if (rePackageArtifact.test(cleanVal)) {
+          return false;
+        }
+
+        // 3. Reject emails or valid domains unless they clearly look like a file (e.g., contain underscores)
+        if (cleanVal.includes("@")) {
+          return false;
+        }
+        if (this.isValidTLD(cleanVal) && !cleanVal.includes("_")) {
+          return false;
+        }
+
+        // 4. Require an actionable, high-risk extension
+        const lastDot = cleanVal.lastIndexOf('.');
+        if (lastDot === -1) {
+          return false;
+        }
+        const ext = cleanVal.slice(lastDot);
+        if (!HIGH_RISK_EXTS.has(ext)) {
+          return false;
+        }
+        break;
+      }
       case "ipv4": {
         if (this.ignorePrivateIPs && this.isPrivateIP(val)) {
           return false;
@@ -212,6 +289,10 @@ export class Contextualizer {
   }
 
   getMatches(text, kind, regex = null) {
+    if (kind === "filename" && isPackageManagerNoise(text)) {
+      return [];
+    }
+
     const rx = regex
       ? new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : regex.flags + 'g')
       : new RegExp(this.expressions[kind].source, this.expressions[kind].flags);
@@ -242,19 +323,23 @@ export class Contextualizer {
       if (kind === "domain") {
         const baseDomain = this.extractSecondLevelDomain(cleanMatch);
         if (baseDomain && !this.isDomainIgnored(baseDomain) && !isNoiseValue(baseDomain) && this.isValidTLD(baseDomain)) {
-          results.push({ value: baseDomain, type: "base_domain" });
+          results.push({ value: baseDomain, type: "base_domain", enrichable: true });
         }
       }
 
       let finalValue = val;
-      if (kind === "domain" || kind == "email" || this.isHashType(kind)) {
+      if (kind === "domain" || kind === "email" || this.isHashType(kind)) {
         finalValue = cleanMatch;
       } else if (kind === "cve") {
         finalValue = val.toUpperCase();
       }
 
       if (finalValue) {
-        results.push({ value: finalValue, type: kind });
+        results.push({
+          value: finalValue,
+          type: kind,
+          enrichable: isEnrichable(kind)
+        });
       }
     }
 
@@ -266,8 +351,9 @@ export class Contextualizer {
     const results = {};
     const urlRanges = [];
     const hashTracker = {};
+    const suppressFilenames = isPackageManagerNoise(cleanText);
 
-    // 1. Process URLs first to establish safe zones for filepath
+    // 1. Process URLs first to establish safe zones for filepath and filename
     if (this.expressions["url"]) {
       const urlRegex = new RegExp(this.expressions["url"].source, this.expressions["url"].flags);
       let urlMatch;
@@ -275,13 +361,19 @@ export class Contextualizer {
         let val = urlMatch[0].replace(/[/.,;:]+$/, '');
         urlRanges.push({ start: urlMatch.index, end: urlMatch.index + val.length });
         if (!results["url"]) results["url"] = [];
-        results["url"].push({ value: val, type: "url" });
+        results["url"].push({ value: val, type: "url", enrichable: true });
       }
     }
 
     // 2. Process all other types
     for (const [kind, expr] of Object.entries(this.expressions)) {
       if (kind === "url") continue;
+
+      // Skip noisy filename extraction during verified OS/package updates,
+      // while still permitting URL, domain, IP, and hash extraction on the same line.
+      if (kind === "filename" && suppressFilenames) {
+        continue;
+      }
 
       const regex = new RegExp(expr.source, expr.flags.includes('g') ? expr.flags : expr.flags + 'g');
       let match;
@@ -311,8 +403,8 @@ export class Contextualizer {
           hashTracker[prefix] = kind;
         }
 
-        // URL collision check for filepath
-        if (kind === "filepath") {
+        // URL collision check for filepath and filename
+        if (kind === "filepath" || kind === "filename") {
           let isInsideUrl = false;
           for (const r of urlRanges) {
             if (start >= r.start && end <= r.end) {
@@ -334,7 +426,11 @@ export class Contextualizer {
         }
 
         if (!results[kind]) results[kind] = [];
-        results[kind].push({ value: outVal, type: kind });
+        results[kind].push({
+          value: outVal,
+          type: kind,
+          enrichable: isEnrichable(kind)
+        });
       }
     }
 
