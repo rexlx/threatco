@@ -4,7 +4,7 @@ go 1.27.1
 
 require (
 	github.com/alexedwards/scs/v2 v2.9.0
-	github.com/chromedp/chromedp v0.23.1
+	github.com/chromedp/chromedp v0.24.0
 	github.com/go-echarts/go-echarts/v2 v2.7.3
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
@@ -12,14 +12,14 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	go.etcd.io/bbolt v1.5.0
 	golang.org/x/crypto v0.59.0
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/time v0.16.0
 )
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/chromedp/cdproto v0.160.3 // indirect
+	github.com/chromedp/cdproto v0.160.8 // indirect
 	github.com/go-json-experiment/json v1.27.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

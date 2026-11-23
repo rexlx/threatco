@@ -24,7 +24,8 @@ const HIGH_RISK_EXTS = new Set([
   '.elf', '.bin', '.out', '.run', '.appimage',
   '.apk', '.dmg', '.pkg', '.iso', '.img',
   '.zip', '.7z', '.rar', '.tar', '.tgz',
-  '.docm', '.xlsm', '.pptm', '.lnk', '.chm'
+  '.docm', '.xlsm', '.pptm', '.lnk', '.chm',
+  '.so'
 ]);
 
 const FILE_EXTS = new Set([
@@ -106,7 +107,7 @@ export function isLikelyFilename(val) {
   const lastDot = val.lastIndexOf('.');
   if (lastDot !== -1) {
     const ext = val.slice(lastDot);
-    if (FILE_EXTS.has(ext)) {
+    if (FILE_EXTS.has(ext) || HIGH_RISK_EXTS.has(ext)) {
       return true;
     }
   }
@@ -237,7 +238,7 @@ export class Contextualizer {
       }
       case "filename": {
         // 1. Filter out versioned shared libraries (e.g., libssl.so.1.1) and man pages (e.g., curl.1.gz)
-        if (reSharedLibVersion.test(cleanVal) || reManPage.test(cleanVal)) {
+        if (reSharedLibVersion.test(cleanVal) || (reManPage.test(cleanVal) && !cleanVal.endsWith(".7z"))) {
           return false;
         }
 
@@ -246,11 +247,11 @@ export class Contextualizer {
           return false;
         }
 
-        // 3. Reject emails or valid domains unless they clearly look like a file (e.g., contain underscores)
+        // 3. Reject emails or valid domains unless they clearly look like a file
         if (cleanVal.includes("@")) {
           return false;
         }
-        if (this.isValidTLD(cleanVal) && !cleanVal.includes("_")) {
+        if (this.isValidTLD(cleanVal) && !this.isLikelyFilename(cleanVal)) {
           return false;
         }
 

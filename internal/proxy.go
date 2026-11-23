@@ -522,9 +522,9 @@ func VirusTotalProxyHelper(resch chan ResponseItem, ep *Endpoint, req ProxyReque
 		return CreateAndWriteSummarizedEvent(req, true, fmt.Sprintf("bad vendor response %v", err))
 	}
 
-	displayValue := response.Data.ID
+	displayValue := req.Value
 	if displayValue == "" {
-		displayValue = req.Value
+		displayValue = response.Data.ID
 	}
 
 	stats := response.Data.Attributes.LastAnalysisStats

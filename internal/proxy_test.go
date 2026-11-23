@@ -67,6 +67,10 @@ func TestVirusTotalProxyHelper_GTI(t *testing.T) {
 		t.Fatalf("Failed to unmarshal summary: %v", err)
 	}
 
+	if sum.Value != req.Value {
+		t.Errorf("Expected sum.Value to be %q, got %q", req.Value, sum.Value)
+	}
+
 	if !sum.Matched {
 		t.Errorf("Expected sum.Matched to be true")
 	}

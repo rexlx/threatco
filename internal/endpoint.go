@@ -25,14 +25,72 @@ type Endpoint struct {
 	RateMark      time.Time         `json:"-"`
 	RateLimited   bool              `json:"-"`
 	InFlight      int               `json:"-"`
+	WindowCount   int               `json:"-"`
 	MaxRequests   int               `json:"-"`
-	RefillRate    time.Duration     `json:"-"`
 	Backlog       []*http.Request   `json:"-"`
+	RefillRate    time.Duration     `json:"-"`
 	Auth          AuthMethod        `json:"-"`
 	Path          string            `json:"path"`
 	URL           string            `json:"url"`
 	Key           string            `json:"key"`
 	Gateway       *http.Client      `json:"-"`
+}
+
+func (e *Endpoint) Do(userID string, req *http.Request) ([]byte, error) {
+	e.Auth.Apply(req)
+
+	if e.RateLimited {
+		e.Memory.Lock()
+		// Start a new window if one isn't active or if the previous window has expired
+		if e.RateMark.IsZero() || time.Since(e.RateMark) >= e.RefillRate {
+			e.RateMark = time.Now()
+			e.WindowCount = 0
+		}
+
+		// Drop the request if we've hit the cap for this window
+		if e.WindowCount >= e.MaxRequests {
+			e.Memory.Unlock()
+			if userID != "" {
+				_ = GlobalNotify(userID, fmt.Sprintf("Endpoint '%s' is currently rate limited. Your request has been dropped.", e.GetURL()), true)
+			}
+			fmt.Println("--------------------------------------------Rate limited")
+			return []byte{}, ErrRateLimited
+		}
+
+		e.WindowCount++
+		e.Memory.Unlock()
+	}
+
+	// Track active in-flight HTTP calls independently of the rate limit window
+	e.Memory.Lock()
+	e.InFlight++
+	e.Memory.Unlock()
+	defer func() {
+		e.Memory.Lock()
+		e.InFlight--
+		e.Memory.Unlock()
+	}()
+
+	resp, err := e.Gateway.Do(req)
+	if err != nil {
+		if userID != "" {
+			_ = GlobalNotify(userID, fmt.Sprintf("Error performing request to endpoint '%s': %s", e.GetURL(), err.Error()), true)
+		}
+		connErr := CheckConnectivity(e.URL)
+		if connErr != nil {
+			fmt.Println("CheckConnectivity -> Endpoint.Do: error doing request", connErr)
+		} else {
+			fmt.Println("Endpoint.Do: failed to perform request but passed connectivity check...")
+		}
+		return []byte(err.Error()), err
+	}
+	defer resp.Body.Close()
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
+		return []byte(err.Error()), err
+	}
+	return buf.Bytes(), nil
 }
 
 func NewEndpoint(url string, auth AuthMethod, insecure bool, respch chan ResponseItem, name string) *Endpoint {
@@ -75,55 +133,6 @@ func (e *Endpoint) GetURL() string {
 }
 
 var ErrRateLimited = fmt.Errorf("request dropped due to rate limiting")
-
-func (e *Endpoint) Do(userID string, req *http.Request) ([]byte, error) {
-	e.Auth.Apply(req)
-	if e.RateLimited {
-		e.Memory.Lock()
-		// Check if we need to refill first
-		if !e.RateMark.IsZero() && time.Since(e.RateMark) > e.RefillRate {
-			fmt.Println("--------------------------------------------Refilling")
-			e.InFlight = 0
-			e.RateMark = time.Time{}
-		}
-		// Now check if we're at capacity
-		if e.InFlight >= e.MaxRequests {
-			if e.RateMark.IsZero() {
-				e.RateMark = time.Now()
-			}
-			if userID != "" {
-				_ = GlobalNotify(userID, fmt.Sprintf("Endpoint '%s' is currently rate limited. Your request has been dropped.", e.GetURL()), true)
-			}
-			fmt.Println("--------------------------------------------Rate limited")
-			e.Memory.Unlock()
-			return []byte{}, ErrRateLimited
-		}
-		e.InFlight++
-		e.Memory.Unlock()
-		defer func() {
-			e.Memory.Lock()
-			e.InFlight--
-			e.Memory.Unlock()
-		}()
-	}
-	resp, err := e.Gateway.Do(req)
-	if err != nil {
-		if userID != "" {
-			_ = GlobalNotify(userID, fmt.Sprintf("Error performing request to endpoint '%s': %s", e.GetURL(), err.Error()), true)
-		}
-		e := CheckConnectivity(e.URL)
-		if e != nil {
-			fmt.Println("CheckConnectivity -> Endpoint.Do: error doing request", e)
-		} else {
-			fmt.Println("Endpoint.Do: failed to perorm request but passed connectivity check...")
-		}
-		return []byte(err.Error()), err
-	}
-	defer resp.Body.Close()
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-	return buf.Bytes(), nil
-}
 
 func (e *Endpoint) ProcessQueue(id string) {
 	if len(e.Backlog) == 0 || e.InFlight >= e.MaxRequests {

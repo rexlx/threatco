@@ -259,7 +259,7 @@ func (c *Contextualizer) isValidMatch(kind, val string) bool {
 
 	case "filename":
 		// 1. Filter out versioned shared libraries (e.g., libssl.so.1.1) and man pages (e.g., curl.1.gz)
-		if reSharedLibVersion.MatchString(cleanVal) || reManPage.MatchString(cleanVal) {
+		if reSharedLibVersion.MatchString(cleanVal) || (reManPage.MatchString(cleanVal) && !strings.HasSuffix(cleanVal, ".7z")) {
 			return false
 		}
 
@@ -268,11 +268,11 @@ func (c *Contextualizer) isValidMatch(kind, val string) bool {
 			return false
 		}
 
-		// 3. Reject emails or valid ICANN domains unless they clearly look like a file (e.g., contain underscores)
+		// 3. Reject emails or valid ICANN domains unless they clearly look like a file
 		if strings.Contains(cleanVal, "@") {
 			return false
 		}
-		if c.isValidTLD(cleanVal) && !strings.Contains(cleanVal, "_") {
+		if c.isValidTLD(cleanVal) && !isLikelyFilename(cleanVal) {
 			return false
 		}
 
@@ -428,6 +428,9 @@ func isLikelyFilename(val string) bool {
 	if _, exists := fileExts[ext]; exists {
 		return true
 	}
+	if _, exists := highRiskExts[ext]; exists {
+		return true
+	}
 
 	// Versioned files (e.g., app.v1.0.2) often have many dots.
 	if strings.Count(val, ".") > 3 {
@@ -449,6 +452,7 @@ var (
 		".apk": {}, ".dmg": {}, ".pkg": {}, ".iso": {}, ".img": {},
 		".zip": {}, ".7z": {}, ".rar": {}, ".tar": {}, ".tgz": {},
 		".docm": {}, ".xlsm": {}, ".pptm": {}, ".lnk": {}, ".chm": {},
+		".so": {},
 	}
 
 	// Pre-compile refanging patterns for performance
