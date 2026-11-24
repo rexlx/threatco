@@ -1915,6 +1915,27 @@ pre {
     font-size: 0.8rem;
 }
 
+.feed-nav-bar .terminal-search {
+    background-color: #000000 !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    color: #f1f5f9 !important;
+    font-family: 'IBMPlexMono', monospace !important;
+    font-size: 0.8rem;
+}
+
+.feed-nav-bar .terminal-search:focus {
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
+}
+
+.feed-nav-bar .terminal-search::placeholder {
+    color: #64748b !important;
+}
+
+.feed-nav-bar .control.has-icons-left .icon.is-left {
+    color: #64748b;
+}
+
 .feed-window {
     background: #000000 !important;
     border: 1px solid rgba(56, 189, 248, 0.22) !important;

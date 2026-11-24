@@ -17,6 +17,7 @@ export class FeedController {
         this.contextualizer = new Contextualizer();
         this.feedItems = []; // Store raw items for dynamic filtering
         this.currentFilter = 'All'; // Track current filter state
+        this.searchQuery = ''; // Track search keyword filter
 
         // Standardized 25-item tracking dictionary for tooltips
         this.cweDescriptions = {
@@ -47,6 +48,79 @@ export class FeedController {
             "CWE-862":  "Missing Authorization",
             "CWE-863":  "Incorrect Authorization"
         };
+    }
+
+    /**
+     * Checks if a vulnerability item matches the search query.
+     * Performs a case-insensitive check across title, description, source, URL,
+     * CWEs and descriptive labels, campaigns, CAPEC attack patterns, IOCs, and case associations.
+     * @param {Object} item - Vulnerability item
+     * @param {string} query - Search string
+     * @returns {boolean}
+     */
+    matchesSearch(item, query) {
+        if (!query) return true;
+        const trimmed = query.trim().toLowerCase();
+        if (!trimmed) return true;
+
+        const tokens = trimmed.split(/\s+/).filter(Boolean);
+        if (tokens.length === 0) return true;
+
+        const fragments = [
+            item.title,
+            item.description,
+            item.source,
+            item.url,
+            item.case_name,
+            item.case_id,
+            item.matched_by
+        ];
+
+        if (Array.isArray(item.cwes)) {
+            for (const cwe of item.cwes) {
+                if (!cwe) continue;
+                fragments.push(cwe);
+                if (this.cweDescriptions && this.cweDescriptions[cwe]) {
+                    fragments.push(this.cweDescriptions[cwe]);
+                }
+            }
+        }
+
+        if (Array.isArray(item.campaigns)) {
+            for (const camp of item.campaigns) {
+                if (camp) fragments.push(camp);
+            }
+        }
+
+        if (Array.isArray(item.capec)) {
+            for (const c of item.capec) {
+                if (typeof c === 'string') {
+                    fragments.push(c);
+                } else if (c && typeof c === 'object') {
+                    if (c.id) fragments.push(c.id);
+                    if (c.name) fragments.push(c.name);
+                    if (c.summary) fragments.push(c.summary);
+                }
+            }
+        }
+
+        if (Array.isArray(item.iocs)) {
+            for (const ioc of item.iocs) {
+                if (ioc) fragments.push(ioc);
+            }
+        }
+
+        const fullText = fragments.filter(Boolean).join(' ').toLowerCase();
+
+        return tokens.every(token => {
+            if (fullText.includes(token)) return true;
+            // Also tolerate trailing colons or punctuation (e.g. "keycloak:" or "mariadb:")
+            if (token.endsWith(':') && token.length > 2) {
+                const stripped = token.replace(/[:]+$/, '');
+                if (fullText.includes(stripped)) return true;
+            }
+            return false;
+        });
     }
 
     /**
@@ -209,6 +283,17 @@ export class FeedController {
                     </div>
                 </div>
                 <div class="users-nav-right">
+                    <div class="field mb-0">
+                        <div class="control has-icons-left has-icons-right">
+                            <input class="input is-small terminal-search" type="text" id="feedSearchInput" placeholder="Filter alerts (e.g. mariadb, perl)..." autocomplete="off" value="${escapeHtml(this.searchQuery)}">
+                            <span class="icon is-small is-left">
+                                <i class="material-icons" style="font-size: 14px;">search</i>
+                            </span>
+                            <span class="icon is-small is-right is-clickable ${this.searchQuery ? '' : 'is-hidden'}" id="feedSearchClearBtn" title="Clear search" style="pointer-events: all; cursor: pointer; color: #94a3b8;">
+                                <i class="material-icons" style="font-size: 14px;">close</i>
+                            </span>
+                        </div>
+                    </div>
                     <div class="field mb-0">
                         <div class="control has-icons-left">
                             <div class="select is-small terminal-select">
@@ -400,6 +485,48 @@ export class FeedController {
             });
         }
 
+        // Bind search input and clear button
+        const searchInput = document.getElementById('feedSearchInput');
+        const searchClearBtn = document.getElementById('feedSearchClearBtn');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchQuery = e.target.value;
+                if (searchClearBtn) {
+                    if (this.searchQuery.trim()) {
+                        searchClearBtn.classList.remove('is-hidden');
+                    } else {
+                        searchClearBtn.classList.add('is-hidden');
+                    }
+                }
+                this.updateList();
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (this.searchQuery) {
+                        this.searchQuery = '';
+                        searchInput.value = '';
+                        if (searchClearBtn) searchClearBtn.classList.add('is-hidden');
+                        this.updateList();
+                        e.stopPropagation();
+                    }
+                }
+            });
+        }
+
+        if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', () => {
+                this.searchQuery = '';
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.focus();
+                }
+                searchClearBtn.classList.add('is-hidden');
+                this.updateList();
+            });
+        }
+
         // Bind refresh button
         const refreshBtn = document.getElementById('feedRefreshBtn');
         if (refreshBtn) {
@@ -417,33 +544,72 @@ export class FeedController {
         const tableBody = document.getElementById('feedTableBody');
         if (!tableBody) return;
 
-        // Filter feed items safely by testing source matching
+        // Filter feed items safely by testing source matching and search query
         const filteredItems = this.feedItems.filter(item => {
-            if (this.currentFilter === 'All') return true;
-            return item.source === this.currentFilter;
+            if (this.currentFilter !== 'All' && item.source !== this.currentFilter) {
+                return false;
+            }
+            return this.matchesSearch(item, this.searchQuery);
         });
+
+        const hasSearch = Boolean(this.searchQuery && this.searchQuery.trim());
+        const hasSource = this.currentFilter !== 'All';
+        const isFiltered = hasSearch || hasSource;
 
         // Update count badge & statusbar text
         const badge = document.getElementById('feedCountBadge');
         if (badge) {
-            badge.textContent = this.currentFilter === 'All'
+            badge.textContent = !isFiltered
                 ? `${filteredItems.length} alerts`
                 : `${filteredItems.length} / ${this.feedItems.length} alerts`;
         }
 
         const statusText = document.getElementById('feedStatusbarText');
         if (statusText) {
-            statusText.textContent = `Showing ${filteredItems.length} of ${this.feedItems.length} alerts • Filter: ${this.currentFilter}`;
+            const filterParts = [];
+            if (hasSource) filterParts.push(`Source: ${this.currentFilter}`);
+            if (hasSearch) filterParts.push(`Search: "${this.searchQuery.trim()}"`);
+            const filterSuffix = filterParts.length > 0 ? ` • ${filterParts.join(' • ')}` : '';
+            statusText.textContent = `Showing ${filteredItems.length} of ${this.feedItems.length} alerts${filterSuffix}`;
         }
 
         if (filteredItems.length === 0) {
+            let emptyMsg = 'No vulnerabilities match the selected filter.';
+            if (hasSearch && hasSource) {
+                emptyMsg = `No vulnerabilities match "${escapeHtml(this.searchQuery.trim())}" from source "${escapeHtml(this.currentFilter)}".`;
+            } else if (hasSearch) {
+                emptyMsg = `No vulnerabilities match "${escapeHtml(this.searchQuery.trim())}".`;
+            } else if (hasSource) {
+                emptyMsg = `No vulnerabilities match source "${escapeHtml(this.currentFilter)}".`;
+            }
+
             tableBody.innerHTML = `
                 <tr class="terminal-table-row">
                     <td colspan="4" class="terminal-placeholder" style="text-align: center; padding: 2.5rem; color: #64748b;">
-                        No vulnerabilities match the selected source filter.
+                        <p class="mb-2">${emptyMsg}</p>
+                        ${isFiltered ? `
+                            <button type="button" class="button is-small is-dark is-outlined mt-2" id="feedClearAllFiltersBtn">
+                                Reset Filters
+                            </button>
+                        ` : ''}
                     </td>
                 </tr>
             `;
+
+            const resetBtn = document.getElementById('feedClearAllFiltersBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
+                    this.searchQuery = '';
+                    this.currentFilter = 'All';
+                    const sInput = document.getElementById('feedSearchInput');
+                    if (sInput) sInput.value = '';
+                    const cBtn = document.getElementById('feedSearchClearBtn');
+                    if (cBtn) cBtn.classList.add('is-hidden');
+                    const fSelect = document.getElementById('feedSourceFilter');
+                    if (fSelect) fSelect.value = 'All';
+                    this.updateList();
+                });
+            }
             return;
         }
 
